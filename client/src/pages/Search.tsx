@@ -1,4 +1,5 @@
 import { BottomNav } from "@/components/layout/BottomNav";
+import { Header } from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
 import { Search as SearchIcon } from "lucide-react";
 import { motion } from "framer-motion";
@@ -9,16 +10,7 @@ export default function Search() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md p-4">
-        <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-          <Input 
-            placeholder="Search" 
-            className="pl-10 rounded-xl bg-muted border-none focus-visible:ring-1 focus-visible:ring-primary"
-          />
-        </div>
-      </div>
-
+      <Header />
       <div className="grid grid-cols-3 gap-0.5 md:gap-4 p-0.5 md:p-4">
         {posts?.map((post, i) => (
           <motion.div

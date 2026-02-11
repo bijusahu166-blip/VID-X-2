@@ -1,4 +1,5 @@
 import { BottomNav } from "@/components/layout/BottomNav";
+import { Header } from "@/components/layout/Header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,17 +17,7 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <header className="p-4 flex justify-between items-center border-b sticky top-0 bg-background/95 backdrop-blur z-10">
-        <h1 className="text-lg font-bold flex items-center gap-1">
-          {user?.username || "Profile"}
-        </h1>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={() => logout()}>
-             <Settings className="w-6 h-6" />
-          </Button>
-        </div>
-      </header>
-
+      <Header />
       <main>
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -61,7 +52,7 @@ export default function Profile() {
 
           <div className="flex gap-2 mb-6">
             <Button className="flex-1 rounded-lg font-semibold h-9" variant="default">Edit Profile</Button>
-            <Button className="flex-1 rounded-lg font-semibold h-9" variant="secondary">Share Profile</Button>
+            <Button className="flex-1 rounded-lg font-semibold h-9" variant="secondary" onClick={() => logout()}>Logout</Button>
           </div>
         </div>
 

@@ -12,6 +12,7 @@ import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Reels from "@/pages/Reels";
 import Profile from "@/pages/Profile";
+import Messages from "@/pages/Messages";
 
 function Router() {
   const { user, isLoading } = useAuth();
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/search" component={Search} />
       <Route path="/reels" component={Reels} />
+      <Route path="/messages" component={Messages} />
       <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>

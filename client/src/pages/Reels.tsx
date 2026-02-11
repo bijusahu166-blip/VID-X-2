@@ -1,10 +1,14 @@
 import { BottomNav } from "@/components/layout/BottomNav";
+import { Header } from "@/components/layout/Header";
 import { Heart, MessageCircle, Share2, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Reels() {
   return (
     <div className="h-screen bg-black text-white flex flex-col">
+      <div className="relative z-50 bg-black">
+        <Header />
+      </div>
       <div className="flex-1 relative snap-y snap-mandatory overflow-y-scroll no-scrollbar">
         {[1, 2, 3].map((i) => (
           <div key={i} className="snap-start h-full w-full relative flex items-center justify-center bg-zinc-900">

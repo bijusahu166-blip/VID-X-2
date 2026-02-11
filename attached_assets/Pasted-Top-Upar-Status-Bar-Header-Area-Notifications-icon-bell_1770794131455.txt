@@ -1,0 +1,23 @@
+Top (Upar) – Status Bar / Header Area:
+Notifications icon (bell) → Top-right corner mein (ab yaha moved hai taaki bottom bar clean rahe).
+Create/Upload button (+) → Top-left corner mein (Home feed, Reels tab, ya Profile tab pe dikhta hai). Yeh naya change hai – pehle bottom center mein tha, ab top-left pe shift ho gaya hai taaki DMs aur Reels ko zyada priority mile.
+Other top elements: Search bar (kabhi-kabhi center mein), ya profile-specific options.
+
+Bottom (Niche) – Navigation Bar / Upload Related:
+Bottom bar ab 5 icons wala hai (swipeable tabs): Home (Feed/Stories) → Reels → DMs (Messages – center mein prime spot) → Search/Explore → Profile.
+Upload/Create button (+) ab bottom mein nahi hai – woh top-left pe chala gaya hai (Instagram ke 2025-2026 redesign mein permanent change).
+Upload karne ke liye: Top-left + icon tap karo, phir Post/Reel/Story choose karo.
+
+
+4K Quality Only Upload ke liye (agar tu high-res photos/videos upload karna chahta hai):
+
+Instagram ab supports high-resolution uploads (up to 4K for photos in some cases, Reels/Stories mein bhi better quality).
+App settings mein jaake ensure kar: Settings > Account > Data usage > High-quality uploads (enable kar do) – yeh on karne se photos/videos 4K/HD quality mein upload hote hain (compressed nahi hote zyada).
+Upload karte time: Gallery se select karo high-res file (phone camera se 4K video ya photo), app automatically best quality use karega agar setting on hai.
+Note: Instagram internally compress karta hai (even 4K upload pe bhi thoda downscale hota hai server pe), lekin enable karne se original quality zyada retain hoti hai – best for professional/creators.
+
+Yeh latest 2026 layout hai (DMs center bottom, Create top-left, swipe tabs). Agar tu apne AI + Instagram-like app mein yeh copy karna chahta hai:
+
+Upar (top): Status bar jaisa header rakh – notifications right, create (+) left.
+Niche (bottom): 5-tab nav bar (Home, Reels/AI Generate, DM/Chat, Explore, Profile).
+Upload ko top-left pe prominent bana (neon button) taaki attractive lage.

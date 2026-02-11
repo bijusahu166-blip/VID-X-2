@@ -1,6 +1,7 @@
 import { usePosts } from "@/hooks/use-posts";
 import { PostCard } from "@/components/feed/PostCard";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { Header } from "@/components/layout/Header";
 import { AIChatDrawer } from "@/components/chat/AIChatDrawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -13,17 +14,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-muted/10 pb-20">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-40 bg-background/80 backdrop-blur-md border-b px-4 h-14 flex items-center justify-between">
-        <h1 className="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-          SocialApp
-        </h1>
-        <div className="flex gap-2">
-          <AIChatDrawer />
-        </div>
-      </header>
-
-      <main className="max-w-md mx-auto pt-16 px-0 sm:px-4">
+      <Header />
+      <main className="max-w-md mx-auto pt-4 px-0 sm:px-4">
         {/* Stories/Status Bar */}
         <div className="mb-6 px-4 sm:px-0">
           <ScrollArea className="w-full whitespace-nowrap">
