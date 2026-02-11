@@ -3,14 +3,37 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAuth } from "@/hooks/use-auth";
+import { Loader2 } from "lucide-react";
+
 import NotFound from "@/pages/not-found";
+import Landing from "@/pages/Landing";
+import Home from "@/pages/Home";
+import Search from "@/pages/Search";
+import Reels from "@/pages/Reels";
+import Profile from "@/pages/Profile";
 
 function Router() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Landing />;
+  }
+
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/" component={Home} />
+      <Route path="/search" component={Search} />
+      <Route path="/reels" component={Reels} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );

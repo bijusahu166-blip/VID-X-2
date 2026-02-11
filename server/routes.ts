@@ -1,16 +1,167 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { authStorage } from "./replit_integrations/auth/storage";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { registerChatRoutes } from "./replit_integrations/chat";
+import { registerImageRoutes } from "./replit_integrations/image";
+import { api } from "@shared/routes";
+import { z } from "zod";
+import { users } from "@shared/models/auth";
+import { posts, comments } from "@shared/schema";
+import { db } from "./db";
+
+async function seed() {
+  const existingUsers = await db.select().from(users).limit(1);
+  if (existingUsers.length > 0) return;
+
+  console.log("Seeding database...");
+
+  // Seed users
+  const [user1] = await db.insert(users).values({
+      email: "alice@example.com",
+      firstName: "Alice",
+      lastName: "Wonder",
+      profileImageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice",
+  }).returning();
+
+  const [user2] = await db.insert(users).values({
+      email: "bob@example.com",
+      firstName: "Bob",
+      lastName: "Builder",
+      profileImageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob",
+  }).returning();
+
+  // Seed posts
+  const [post1] = await db.insert(posts).values({ 
+    userId: user1.id, 
+    imageUrl: "https://images.unsplash.com/photo-1506744038136-46273834b3fb", 
+    caption: "Yosemite is breathtaking! 🏞️ #nature #travel", 
+    type: "post" 
+  }).returning();
+
+  const [post2] = await db.insert(posts).values({ 
+    userId: user2.id, 
+    imageUrl: "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe", 
+    caption: "Healthy breakfast to start the day 🥑🍳", 
+    type: "post" 
+  }).returning();
+  
+  const [post3] = await db.insert(posts).values({ 
+    userId: user1.id, 
+    imageUrl: "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba", 
+    caption: "Starry nights ✨", 
+    type: "post" 
+  }).returning();
+
+  // Seed comments
+  await db.insert(comments).values([
+    { postId: post1.id, userId: user2.id, content: "Wow, amazing shot!" },
+    { postId: post2.id, userId: user1.id, content: "Looks delicious!" },
+  ]);
+  
+  console.log("Database seeded!");
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  // Setup Auth
+  await setupAuth(app);
+  registerAuthRoutes(app);
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  // Setup Integrations
+  registerChatRoutes(app);
+  registerImageRoutes(app);
+
+  // Seed Data
+  seed().catch(console.error);
+
+  // Posts
+  app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
+    const posts = await storage.getAllPosts();
+    // Enrich with user data and likes (inefficient N+1 but ok for MVP)
+    const enrichedPosts = await Promise.all(posts.map(async (post) => {
+      const user = await authStorage.getUser(post.userId);
+      const likesCount = await storage.getLikesCount(post.id);
+      const comments = await storage.getComments(post.id);
+      const hasLiked = req.user ? await storage.hasLiked(post.id, (req.user as any).claims.sub) : false;
+      return {
+        ...post,
+        user,
+        likesCount,
+        commentsCount: comments.length,
+        hasLiked
+      };
+    }));
+    res.json(enrichedPosts);
+  });
+
+  app.post(api.posts.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.posts.create.input.parse(req.body);
+      const post = await storage.createPost({
+        ...input,
+        userId: (req.user as any).claims.sub
+      });
+      res.status(201).json(post);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.get(api.posts.get.path, isAuthenticated, async (req, res) => {
+    const post = await storage.getPost(Number(req.params.id));
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+    const user = await authStorage.getUser(post.userId);
+    const likesCount = await storage.getLikesCount(post.id);
+    const comments = await storage.getComments(post.id);
+    const hasLiked = req.user ? await storage.hasLiked(post.id, (req.user as any).claims.sub) : false;
+    
+    res.json({
+      ...post,
+      user,
+      likesCount,
+      commentsCount: comments.length,
+      hasLiked
+    });
+  });
+
+  app.post(api.posts.like.path, isAuthenticated, async (req, res) => {
+    const postId = Number(req.params.id);
+    const userId = (req.user as any).claims.sub;
+    const { added, count } = await storage.toggleLike(postId, userId);
+    res.json({ success: true, likesCount: count, added });
+  });
+
+  app.post(api.posts.comment.path, isAuthenticated, async (req, res) => {
+    const postId = Number(req.params.id);
+    const userId = (req.user as any).claims.sub;
+    const { content } = req.body;
+    
+    if (!content) return res.status(400).json({ message: "Content required" });
+
+    const comment = await storage.createComment(postId, userId, content);
+    res.status(201).json(comment);
+  });
+
+  // Users
+  app.get(api.users.get.path, isAuthenticated, async (req, res) => {
+    const user = await authStorage.getUser(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  });
 
   return httpServer;
 }

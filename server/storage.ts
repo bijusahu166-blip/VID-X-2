@@ -1,38 +1,79 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { posts, comments, likes, type Post, type InsertPost, type Comment, type Like } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Posts
+  createPost(post: InsertPost): Promise<Post>;
+  getAllPosts(): Promise<Post[]>;
+  getPost(id: number): Promise<Post | undefined>;
+  
+  // Comments
+  createComment(postId: number, userId: string, content: string): Promise<Comment>;
+  getComments(postId: number): Promise<Comment[]>;
+
+  // Likes
+  toggleLike(postId: number, userId: string): Promise<{ added: boolean, count: number }>;
+  getLikesCount(postId: number): Promise<number>;
+  hasLiked(postId: number, userId: string): Promise<boolean>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async createPost(post: InsertPost): Promise<Post> {
+    const [newPost] = await db.insert(posts).values(post).returning();
+    return newPost;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getAllPosts(): Promise<Post[]> {
+    return db.select().from(posts).orderBy(desc(posts.createdAt));
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+  async getPost(id: number): Promise<Post | undefined> {
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+    return post;
+  }
+
+  async createComment(postId: number, userId: string, content: string): Promise<Comment> {
+    const [comment] = await db.insert(comments).values({
+      postId,
+      userId,
+      content
+    }).returning();
+    return comment;
+  }
+
+  async getComments(postId: number): Promise<Comment[]> {
+    return db.select().from(comments).where(eq(comments.postId, postId)).orderBy(desc(comments.createdAt));
+  }
+
+  async toggleLike(postId: number, userId: string): Promise<{ added: boolean, count: number }> {
+    const existing = await db.select().from(likes).where(
+      sql`${likes.postId} = ${postId} AND ${likes.userId} = ${userId}`
     );
+
+    let added = false;
+    if (existing.length > 0) {
+      await db.delete(likes).where(sql`${likes.id} = ${existing[0].id}`);
+    } else {
+      await db.insert(likes).values({ postId, userId });
+      added = true;
+    }
+
+    const count = await this.getLikesCount(postId);
+    return { added, count };
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getLikesCount(postId: number): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(likes).where(eq(likes.postId, postId));
+    return Number(result[0]?.count || 0);
+  }
+
+  async hasLiked(postId: number, userId: string): Promise<boolean> {
+    const result = await db.select().from(likes).where(
+      sql`${likes.postId} = ${postId} AND ${likes.userId} = ${userId}`
+    );
+    return result.length > 0;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
