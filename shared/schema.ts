@@ -71,7 +71,9 @@ export const insertLikeSchema = createInsertSchema(likes).omit({ id: true });
 export type Post = typeof posts.$inferSelect;
 export type InsertPost = z.infer<typeof insertPostSchema>;
 export type Comment = typeof comments.$inferSelect;
+export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Like = typeof likes.$inferSelect;
+export type InsertLike = z.infer<typeof insertLikeSchema>;
 
 // API Types
 export type CreatePostRequest = InsertPost;

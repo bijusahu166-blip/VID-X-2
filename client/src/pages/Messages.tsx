@@ -4,7 +4,7 @@ import { MessageSquare } from "lucide-react";
 
 export default function Messages() {
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-20 pt-14">
       <Header />
       <main className="max-w-md mx-auto p-4">
         <div className="flex flex-col items-center justify-center py-20 text-center">

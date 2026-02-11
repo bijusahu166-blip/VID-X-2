@@ -16,7 +16,7 @@ export default function Profile() {
   const myPosts = posts || [];
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-20 pt-14">
       <Header />
       <main>
         <div className="p-6">

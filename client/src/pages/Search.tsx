@@ -9,7 +9,7 @@ export default function Search() {
   const { data: posts } = usePosts();
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-20 pt-14">
       <Header />
       <div className="grid grid-cols-3 gap-0.5 md:gap-4 p-0.5 md:p-4">
         {posts?.map((post, i) => (
