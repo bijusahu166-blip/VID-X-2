@@ -10,6 +10,7 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
+import Reading from "@/pages/Reading";
 import Reels from "@/pages/Reels";
 import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
@@ -33,6 +34,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/search" component={Search} />
+      <Route path="/reading" component={Reading} />
       <Route path="/reels" component={Reels} />
       <Route path="/messages" component={Messages} />
       <Route path="/profile" component={Profile} />
