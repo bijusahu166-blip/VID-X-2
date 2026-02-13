@@ -1,4 +1,8 @@
-import { posts, comments, likes, type Post, type InsertPost, type InsertComment, type InsertLike, type Comment, type Like } from "@shared/schema";
+import { 
+  posts, comments, likes, books,
+  type Post, type InsertPost, type InsertComment, type InsertLike, 
+  type Comment, type Like, type Book, type InsertBook 
+} from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 
@@ -16,6 +20,10 @@ export interface IStorage {
   toggleLike(postId: number, userId: string): Promise<{ added: boolean, count: number }>;
   getLikesCount(postId: number): Promise<number>;
   hasLiked(postId: number, userId: string): Promise<boolean>;
+
+  // Books
+  createBook(book: InsertBook): Promise<Book>;
+  getBooks(type?: string): Promise<Book[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -73,6 +81,18 @@ export class DatabaseStorage implements IStorage {
       sql`${likes.postId} = ${postId} AND ${likes.userId} = ${userId}`
     );
     return result.length > 0;
+  }
+
+  async createBook(book: InsertBook): Promise<Book> {
+    const [newBook] = await db.insert(books).values(book).returning();
+    return newBook;
+  }
+
+  async getBooks(type?: string): Promise<Book[]> {
+    if (type) {
+      return db.select().from(books).where(eq(books.type, type)).orderBy(desc(books.createdAt));
+    }
+    return db.select().from(books).orderBy(desc(books.createdAt));
   }
 }
 

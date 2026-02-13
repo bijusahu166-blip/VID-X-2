@@ -62,10 +62,21 @@ export const likesRelations = relations(likes, ({ one }) => ({
   }),
 }));
 
+export const books = pgTable("books", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  author: text("author"),
+  content: text("content").notNull(),
+  imageUrl: text("image_url"),
+  type: text("type").notNull(), // 'book' or 'news'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Schemas
 export const insertPostSchema = createInsertSchema(posts).omit({ id: true, createdAt: true });
 export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true });
 export const insertLikeSchema = createInsertSchema(likes).omit({ id: true });
+export const insertBookSchema = createInsertSchema(books).omit({ id: true, createdAt: true });
 
 // Types
 export type Post = typeof posts.$inferSelect;
@@ -74,10 +85,13 @@ export type Comment = typeof comments.$inferSelect;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Like = typeof likes.$inferSelect;
 export type InsertLike = z.infer<typeof insertLikeSchema>;
+export type Book = typeof books.$inferSelect;
+export type InsertBook = z.infer<typeof insertBookSchema>;
 
 // API Types
 export type CreatePostRequest = InsertPost;
 export type CreateCommentRequest = InsertComment;
+export type CreateBookRequest = InsertBook;
 
 export interface PostResponse extends Post {
   user?: typeof users.$inferSelect;

@@ -163,5 +163,17 @@ export async function registerRoutes(
     res.json(user);
   });
 
+  // Books & News
+  app.get("/api/books", isAuthenticated, async (req, res) => {
+    const type = req.query.type as string;
+    const books = await storage.getBooks(type);
+    res.json(books);
+  });
+
+  app.post("/api/books", isAuthenticated, async (req, res) => {
+    const book = await storage.createBook(req.body);
+    res.status(201).json(book);
+  });
+
   return httpServer;
 }
