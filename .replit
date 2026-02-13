@@ -40,3 +40,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
+
+[userenv]
+
+[userenv.shared]
+sk-proj-ljk8Hw7DWNaqDw6Qg7xs3S6mHoG0tkMW2ShYeG2NF49zGjsbeUhK0lZXnu60JU7F4z_OyLKYgmT3BlbkFJCaSazC1cNW0n71Qshcw438EFbXibxqhfHw-Jd2 = "123432214454"
