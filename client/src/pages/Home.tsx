@@ -17,40 +17,41 @@ export default function Home() {
       <Header />
       <main className="max-w-md mx-auto pt-16 px-0 sm:px-4">
         {/* Stories/Status Bar */}
-        <div className="mb-6 px-4 sm:px-0">
+        <div className="mb-8 px-4 sm:px-0">
           <ScrollArea className="w-full whitespace-nowrap">
-            <div className="flex space-x-4">
+            <div className="flex space-x-6 px-2 py-4">
               {/* My Story */}
-              <div className="flex flex-col items-center space-y-1">
-                <div className="relative w-16 h-16 rounded-full p-[2px] border-2 border-dashed border-muted-foreground/30">
-                  <div className="w-full h-full rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                     {user?.profileImageUrl ? (
-                       <img src={user.profileImageUrl} alt="Me" className="w-full h-full object-cover" />
-                     ) : (
-                       <Plus className="w-6 h-6 text-muted-foreground" />
-                     )}
+              <div className="flex flex-col items-center space-y-2">
+                <div className="relative w-20 h-20 p-[3px] premium-status-ring clip-pentagon shadow-lg">
+                  <div className="w-full h-full bg-background clip-pentagon p-[2px]">
+                    <div className="w-full h-full bg-muted flex items-center justify-center overflow-hidden clip-pentagon">
+                       {user?.profileImageUrl ? (
+                         <img src={user.profileImageUrl} alt="Me" className="w-full h-full object-cover" />
+                       ) : (
+                         <Plus className="w-8 h-8 text-muted-foreground" />
+                       )}
+                    </div>
                   </div>
-                  <div className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-0.5 border-2 border-background">
-                    <Plus className="w-3 h-3" />
+                  <div className="absolute -bottom-1 -right-1 bg-primary text-white rounded-full p-1 border-2 border-background shadow-md">
+                    <Plus className="w-4 h-4" />
                   </div>
                 </div>
-                <span className="text-xs">Your Story</span>
+                <span className="text-xs font-semibold tracking-tight">Your Story</span>
               </div>
 
               {/* Fake Stories */}
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex flex-col items-center space-y-1">
-                  <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500">
-                    <div className="w-full h-full rounded-full bg-background p-0.5">
+                <div key={i} className="flex flex-col items-center space-y-2">
+                  <div className="w-20 h-20 p-[3px] premium-status-ring clip-pentagon shadow-lg hover:scale-105 transition-transform duration-300">
+                    <div className="w-full h-full bg-background clip-pentagon p-[2px]">
                       <img 
-                        src={`https://images.unsplash.com/photo-${1500000000000 + i}?w=100&h=100&fit=crop`} 
+                        src={`https://images.unsplash.com/photo-${1500000000000 + i}?w=150&h=150&fit=crop`} 
                         alt="Story" 
-                        className="w-full h-full rounded-full object-cover"
+                        className="w-full h-full object-cover clip-pentagon"
                       />
-                      {/* Unsplash random placeholder logic */}
                     </div>
                   </div>
-                  <span className="text-xs">User {i}</span>
+                  <span className="text-xs font-medium opacity-80">User {i}</span>
                 </div>
               ))}
             </div>

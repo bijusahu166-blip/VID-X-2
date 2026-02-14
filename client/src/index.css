@@ -101,3 +101,14 @@
     scrollbar-width: none;
   }
 }
+
+@layer utilities {
+  .clip-pentagon {
+    clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+  }
+
+  .premium-status-ring {
+    background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+    filter: drop-shadow(0 0 8px rgba(220, 39, 67, 0.4));
+  }
+}
