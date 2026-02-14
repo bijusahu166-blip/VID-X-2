@@ -22,7 +22,7 @@ export default function Home() {
             <div className="flex space-x-6 px-2 py-4">
               {/* My Story */}
               <div className="flex flex-col items-center space-y-2">
-                <div className="relative w-20 h-20 p-[3px] premium-status-ring clip-pentagon shadow-lg">
+                <div className="relative w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg">
                   <div className="w-full h-full bg-background clip-pentagon p-[2px]">
                     <div className="w-full h-full bg-muted flex items-center justify-center overflow-hidden clip-pentagon">
                        {user?.profileImageUrl ? (
@@ -32,7 +32,7 @@ export default function Home() {
                        )}
                     </div>
                   </div>
-                  <div className="absolute -bottom-1 -right-1 bg-primary text-white rounded-full p-1 border-2 border-background shadow-md">
+                  <div className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 border-2 border-background shadow-md">
                     <Plus className="w-4 h-4" />
                   </div>
                 </div>
@@ -42,7 +42,7 @@ export default function Home() {
               {/* Fake Stories */}
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="flex flex-col items-center space-y-2">
-                  <div className="w-20 h-20 p-[3px] premium-status-ring clip-pentagon shadow-lg hover:scale-105 transition-transform duration-300">
+                  <div className="w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg hover:scale-105 transition-transform duration-300">
                     <div className="w-full h-full bg-background clip-pentagon p-[2px]">
                       <img 
                         src={`https://images.unsplash.com/photo-${1500000000000 + i}?w=150&h=150&fit=crop`} 
