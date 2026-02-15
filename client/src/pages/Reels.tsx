@@ -42,7 +42,7 @@ export default function Reels() {
             </div>
 
             {/* Overlay Info */}
-            <div className="absolute left-4 bottom-20 max-w-[70%]">
+            <div className="absolute left-4 bottom-20 max-w-[70%] text-[#b026bdf0] bg-[#1c141400]">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-zinc-700 rounded-full" />
                 <span className="font-semibold text-sm">username</span>
