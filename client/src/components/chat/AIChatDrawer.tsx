@@ -84,12 +84,7 @@ export function AIChatDrawer() {
                     )}>
                       {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                     </div>
-                    <div className={cn(
-                      "p-3 rounded-2xl text-sm",
-                      msg.role === "user" 
-                        ? "bg-primary text-primary-foreground rounded-tr-sm" 
-                        : "bg-muted text-foreground rounded-tl-sm"
-                    )}>
+                    <div className="p-3 rounded-2xl text-sm bg-muted text-foreground rounded-tl-sm font-bold">
                       {msg.content}
                     </div>
                   </div>
