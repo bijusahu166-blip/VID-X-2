@@ -17,7 +17,7 @@ export default function Reels() {
             </div>
 
             {/* Overlay Actions */}
-            <div className="absolute right-4 bottom-20 flex flex-col gap-6 items-center">
+            <div className="absolute right-4 bottom-20 flex flex-col gap-6 items-center text-[#e566ff]">
               <div className="flex flex-col items-center gap-1">
                 <Button size="icon" variant="ghost" className="rounded-full hover:bg-white/20">
                   <Heart className="w-7 h-7" />
@@ -55,7 +55,6 @@ export default function Reels() {
           </div>
         ))}
       </div>
-      
       <div className="relative z-50">
         <BottomNav />
       </div>
