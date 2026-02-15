@@ -7,7 +7,7 @@ export default function Messages() {
     <div className="min-h-screen bg-background pb-20 pt-14">
       <Header />
       <main className="max-w-md mx-auto p-4">
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex flex-col items-center justify-center py-20 text-center font-extrabold">
           <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
             <MessageSquare className="w-8 h-8 text-muted-foreground" />
           </div>
