@@ -79,7 +79,7 @@ export default function Profile() {
           </TabsList>
           
           <TabsContent value="posts" className="mt-0">
-             <div className="grid grid-cols-3 gap-0.5">
+             <div className="grid grid-cols-3 gap-0.5 bg-[#17333821]">
                 {myPosts.map((post) => (
                   <div key={post.id} className="aspect-square bg-muted relative group cursor-pointer">
                     <img src={post.imageUrl} className="w-full h-full object-cover" />
