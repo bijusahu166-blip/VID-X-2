@@ -23,7 +23,7 @@ export function Header() {
         </Button>
 
         {/* Center: Logo */}
-        <h1 className="text-xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent truncate">
+        <h1 className="font-display bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent truncate font-extrabold text-[29px] text-left">
           SocialApp
         </h1>
 
@@ -41,7 +41,6 @@ export function Header() {
           </Button>
         </div>
       </div>
-
       <CreatePostDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
     </header>
   );
