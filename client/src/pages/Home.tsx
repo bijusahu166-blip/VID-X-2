@@ -51,7 +51,7 @@ export default function Home() {
                       />
                     </div>
                   </div>
-                  <span className="text-xs font-medium opacity-80">User {i}</span>
+                  <span className="text-xs font-medium opacity-80 bg-[#bda0ba]">User {i}</span>
                 </div>
               ))}
             </div>
@@ -87,7 +87,6 @@ export default function Home() {
           )}
         </div>
       </main>
-
       <BottomNav />
     </div>
   );
