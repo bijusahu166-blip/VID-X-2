@@ -48,7 +48,6 @@ export function PostCard({ post }: PostCardProps) {
           </p>
         </div>
       </CardHeader>
-      
       <div className="relative aspect-square bg-muted" onDoubleClick={handleLike}>
         {/* Placeholder for actual image loading */}
         <img 
@@ -72,8 +71,7 @@ export function PostCard({ post }: PostCardProps) {
           )}
         </AnimatePresence>
       </div>
-
-      <CardContent className="p-4 pb-2">
+      <CardContent className="p-4 pb-2 bg-[#594f4f5c]">
         <div className="flex justify-between items-center mb-4">
           <div className="flex space-x-4">
             <Button 
@@ -112,7 +110,6 @@ export function PostCard({ post }: PostCardProps) {
           )}
         </div>
       </CardContent>
-
       <CardFooter className="p-4 pt-0">
         <form onSubmit={handleComment} className="w-full flex gap-2 items-center">
           <Input 
