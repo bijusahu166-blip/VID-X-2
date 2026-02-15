@@ -20,7 +20,7 @@ export default function Profile() {
       <Header />
       <main>
         <div className="p-6 text-[19px] font-extrabold text-right bg-[#737d7c4d]">
-          <div className="flex items-center justify-between mb-6 bg-[#a9c7bfd6]">
+          <div className="flex items-center justify-between bg-[#a9c7bfd6] mt-[-3px] mb-[-3px] ml-[-18px] mr-[-18px] pl-[0px] pr-[0px] pt-[37px] pb-[37px]">
             <Avatar className="w-20 h-20 sm:w-24 sm:h-24 ring-2 ring-primary ring-offset-2 ring-offset-background">
               <AvatarImage src={user?.profileImageUrl || undefined} />
               <AvatarFallback className="text-2xl">{user?.firstName?.[0]}</AvatarFallback>
