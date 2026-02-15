@@ -51,7 +51,7 @@ export default function Home() {
                       />
                     </div>
                   </div>
-                  <span className="text-xs font-medium opacity-80 bg-[#bda0ba0d]">User {i}</span>
+                  <span className="text-xs font-medium opacity-80 bg-[#bda0ba08]">User {i}</span>
                 </div>
               ))}
             </div>
