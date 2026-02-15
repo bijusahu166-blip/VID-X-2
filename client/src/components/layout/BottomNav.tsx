@@ -23,14 +23,7 @@ export function BottomNav() {
           
           const content = (
             <div
-              className={cn(
-                "flex flex-col items-center justify-center w-10 h-10 rounded-full transition-all duration-200 cursor-pointer",
-                isActive 
-                  ? "text-primary scale-110" 
-                  : "text-muted-foreground hover:text-foreground",
-                item.isFilter && "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20",
-                index === 3 && "text-primary" // Highlight DMs center spot (now index 3)
-              )}
+              className="flex flex-col items-center justify-center w-10 h-10 rounded-full transition-all duration-200 cursor-pointer text-muted-foreground hover:text-foreground bg-[#0000000a]"
               data-testid={`link-${item.label.toLowerCase()}`}
             >
               <Icon className={cn("w-6 h-6", isActive && "fill-current", item.isFilter && "w-7 h-7")} />
