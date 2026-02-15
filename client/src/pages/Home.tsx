@@ -41,7 +41,7 @@ export default function Home() {
 
               {/* Fake Stories */}
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex flex-col items-center space-y-2">
+                <div key={i} className="flex flex-col items-center space-y-2 font-black">
                   <div className="w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg hover:scale-105 transition-transform duration-300">
                     <div className="w-full h-full bg-background clip-pentagon p-[2px]">
                       <img 
