@@ -23,7 +23,7 @@ export function BottomNav() {
           
           const content = (
             <div
-              className="flex flex-col items-center justify-center w-10 h-10 rounded-full transition-all duration-200 cursor-pointer text-muted-foreground hover:text-foreground bg-[#0000000a]"
+              className="flex flex-col items-center justify-center w-10 h-10 rounded-full transition-all duration-200 cursor-pointer text-muted-foreground hover:text-foreground bg-[#e60ff714]"
               data-testid={`link-${item.label.toLowerCase()}`}
             >
               <Icon className={cn("w-6 h-6", isActive && "fill-current", item.isFilter && "w-7 h-7")} />
