@@ -42,7 +42,7 @@ export default function Home() {
               {/* Fake Stories */}
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="flex flex-col items-center space-y-2 font-black">
-                  <div className="w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg hover:scale-105 transition-transform duration-300">
+                  <div className="w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg hover:scale-105 transition-transform duration-300 pl-[5px] pr-[5px] pt-[3px] pb-[3px]">
                     <div className="w-full h-full bg-background clip-pentagon p-[2px]">
                       <img 
                         src={`https://images.unsplash.com/photo-${1500000000000 + i}?w=150&h=150&fit=crop`} 
