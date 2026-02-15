@@ -69,7 +69,7 @@ export function AIChatDrawer() {
           <div className="absolute inset-0 flex flex-col">
              {/* Chat Area */}
             <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-              <div className="space-y-4 pb-4">
+              <div className="space-y-4 pb-4 bg-[#000000c4]">
                 {conversationData?.messages.map((msg) => (
                   <div
                     key={msg.id}
