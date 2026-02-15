@@ -36,7 +36,7 @@ export default function Home() {
                     <Plus className="w-4 h-4" />
                   </div>
                 </div>
-                <span className="text-xs font-semibold tracking-tight">Your Story</span>
+                <span className="text-xs tracking-tight font-extrabold bg-[#ffb8b8] ml-[4px] mr-[4px] pl-[0px] pr-[0px] pt-[0px] pb-[0px]">Your Story</span>
               </div>
 
               {/* Fake Stories */}
