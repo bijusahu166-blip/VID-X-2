@@ -22,7 +22,7 @@ export default function Home() {
             <div className="flex space-x-6 px-2 py-4">
               {/* My Story */}
               <div className="flex flex-col items-center space-y-2">
-                <div className="relative w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg">
+                <div className="relative w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg pl-[7px] pr-[7px] pt-[7px] pb-[7px]">
                   <div className="w-full h-full bg-background clip-pentagon p-[2px]">
                     <div className="w-full h-full bg-muted flex items-center justify-center overflow-hidden clip-pentagon">
                        {user?.profileImageUrl ? (
