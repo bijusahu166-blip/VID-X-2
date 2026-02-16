@@ -15,7 +15,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#bda0ba05] ml-[162.876px] mr-[162.876px] mt-[0px] mb-[0px] pt-[0px] pb-[0px]">
       <Header />
-      <main className="max-w-md mx-auto pt-16 px-0 sm:px-4">
+      <main className="max-w-md mx-auto px-0 sm:px-4 ml-[-177px] mr-[-177px] mt-[0px] mb-[0px] pl-[0px] pr-[0px] pt-[0px] pb-[0px]">
         {/* Stories/Status Bar */}
         <div className="mb-8 px-4 sm:px-0">
           <ScrollArea className="w-full whitespace-nowrap">
