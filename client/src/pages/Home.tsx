@@ -19,7 +19,7 @@ export default function Home() {
         {/* Stories/Status Bar */}
         <div className="mb-8 px-4 sm:px-0">
           <ScrollArea className="w-full whitespace-nowrap">
-            <div className="flex space-x-6 px-2 py-4 ml-[-8px] mr-[-8px] pt-[-24px] pb-[-24px] mt-[-3px] mb-[-3px] pl-[4px] pr-[4px]">
+            <div className="flex space-x-6 px-2 py-4 ml-[-8px] mr-[-8px] pt-[-24px] pb-[-24px] mt-[-3px] mb-[-3px] pl-[4px] pr-[4px] text-center">
               {/* My Story */}
               <div className="flex flex-col items-center space-y-2 font-extrabold text-[19px] text-left ml-[2px] mr-[2px] mt-[-7px] mb-[-7px] pt-[-10px] pb-[-10px] pl-[7px] pr-[7px]">
                 <div className="relative w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg ml-[13px] mr-[13px] mt-[3px] mb-[3px] pl-[3px] pr-[3px] pt-[1px] pb-[1px]">
