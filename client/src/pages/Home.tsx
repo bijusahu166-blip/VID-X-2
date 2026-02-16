@@ -32,7 +32,7 @@ export default function Home() {
                        )}
                     </div>
                   </div>
-                  <div className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 border-2 border-background shadow-md">
+                  <div className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 border-2 border-background shadow-md ml-[14px] mr-[14px] mt-[-2px] mb-[-2px] pt-[8px] pb-[8px] pl-[2px] pr-[2px]">
                     <Plus className="w-4 h-4" />
                   </div>
                 </div>
