@@ -47,7 +47,7 @@ export default function Home() {
                       <img 
                         src={`https://images.unsplash.com/photo-${1500000000000 + i}?w=150&h=150&fit=crop`} 
                         alt="Story" 
-                        className="w-full h-full object-cover clip-pentagon"
+                        className="w-full h-full object-cover clip-pentagon ml-[-1px] mr-[-1px] pl-[-5px] pr-[-5px] mt-[15px] mb-[15px] pt-[26px] pb-[26px]"
                       />
                     </div>
                   </div>
