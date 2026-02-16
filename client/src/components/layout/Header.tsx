@@ -23,9 +23,7 @@ export function Header() {
         </Button>
 
         {/* Center: Logo */}
-        <h1 className="font-display bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent truncate font-extrabold text-[29px] text-left">
-          SocialApp
-        </h1>
+        <h1 className="font-display bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent truncate font-extrabold text-[29px] text-left">LITLink</h1>
 
         {/* Right: AI Assistant & Notifications */}
         <div className="flex items-center gap-1">
