@@ -13,7 +13,7 @@ export default function Home() {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen pb-20 bg-[#bda0ba05]">
+    <div className="min-h-screen pb-20 bg-[#bda0ba05] ml-[2px] mr-[2px]">
       <Header />
       <main className="max-w-md mx-auto pt-16 px-0 sm:px-4">
         {/* Stories/Status Bar */}
