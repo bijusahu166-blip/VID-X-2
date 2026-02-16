@@ -21,7 +21,7 @@ export default function Home() {
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex space-x-6 px-2 py-4">
               {/* My Story */}
-              <div className="flex flex-col items-center space-y-2">
+              <div className="flex flex-col items-center space-y-2 font-extrabold text-[19px] text-left ml-[2px] mr-[2px] mt-[-7px] mb-[-7px] pt-[-10px] pb-[-10px] pl-[7px] pr-[7px]">
                 <div className="relative w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg ml-[13px] mr-[13px] mt-[3px] mb-[3px] pl-[3px] pr-[3px] pt-[1px] pb-[1px]">
                   <div className="w-full h-full bg-background clip-pentagon p-[2px]">
                     <div className="w-full h-full bg-muted flex items-center justify-center overflow-hidden clip-pentagon">
