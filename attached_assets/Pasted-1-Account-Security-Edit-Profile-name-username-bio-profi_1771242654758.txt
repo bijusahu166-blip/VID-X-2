@@ -1,0 +1,89 @@
+1. Account & Security
+
+Edit Profile (name, username, bio, profile photo, cover photo change)
+Change Password
+Two-Factor Authentication (2FA) on/off
+Login Activity / Where You're Logged In
+Logout from all devices
+Deactivate / Delete Account
+Download Your Data (posts, chats, photos download karne ka option)
+
+2. Privacy (sabse important section)
+
+Account Privacy → Private/Public (sirf approved followers dekh sakein ya sab dekh sakein)
+Who can see your posts/stories/reels (Everyone / Friends / Followers / Custom)
+Who can send you messages/DMs (Everyone / People you follow / No one)
+Who can tag you in posts/photos
+Who can see your friends/followers list
+Activity Status / Last Seen (online dikhe ya na dikhe)
+Story / Post visibility (kon resharing kar sake)
+Blocked Accounts list
+Restricted Accounts
+Muted Words / Accounts
+
+3. Notifications
+
+Push Notifications on/off
+Likes, Comments, Mentions, New Followers ke notifications
+Direct Messages notifications
+Group chat notifications
+Live / Stories notifications
+Pause All Notifications (ya Sleep mode / Do Not Disturb time set karna)
+
+4. Content & Display
+
+Dark Mode / Light Mode
+Language change
+Font size / Text scaling
+Media Quality (upload/download high quality ya data save mode)
+Autoplay videos (Wi-Fi pe ya mobile data pe)
+Content Preferences (sensitive content show/hide)
+
+5. Interactions & Safety
+
+Comments control (approve manually, filter bad words)
+Message Requests (filter spam)
+Who can add you to groups
+Report & Block tools (shortcut)
+Hidden Words / Profanity Filter
+
+6. Media & Location
+
+Location Services (posts mein location tag on/off)
+Photo Tagging approval
+Camera / Microphone / Storage permissions (app level pe)
+
+7. Data & Ads
+
+Ad Preferences / Personalized Ads on/off
+Data Usage (how much data app use kar raha)
+Clear Cache
+Manage Connected Apps (third-party login remove)
+
+8. Help & About
+
+App Version
+Help Center / FAQ
+Report a Problem
+Terms of Service / Privacy Policy
+Community Guidelines
+
+9. Extra (agar chatting/social app hai to)
+
+Chat Backup (cloud pe)
+Chat Privacy (end-to-end encryption info)
+Message Timer / Disappearing Messages
+Status Privacy (24 hours story jaise)
+
+Tumhare app ke liye suggestion (simple social app ban rahe ho to shuru mein yeh 8-10 sabse zaroori daal do):
+
+Edit Profile
+Privacy (Private Account toggle + Who can message/tag)
+Notifications (main categories on/off)
+Dark Mode
+Change Password / Logout
+Blocked Users
+Activity Status hide
+Help & Report
+About App (version + policy links)
+Delete Account (legal requirement bhi hota hai)
