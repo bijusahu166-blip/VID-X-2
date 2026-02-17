@@ -69,7 +69,30 @@ export function AIChatDrawer() {
           <div className="absolute inset-0 flex flex-col">
              {/* Chat Area */}
             <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-              <div className="space-y-4 pb-4 bg-[#000000c4]">
+              {/* Status Section above chat */}
+              <div className="mb-4">
+                <ScrollArea className="w-full whitespace-nowrap">
+                  <div className="flex space-x-4 p-2">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="flex flex-col items-center space-y-1">
+                        <div className="w-14 h-14 p-[2px] bg-gradient-to-br from-emerald-400 to-cyan-500 clip-pentagon shadow-lg hover:scale-105 transition-transform cursor-pointer">
+                          <div className="w-full h-full bg-background clip-pentagon p-[1px]">
+                            <img 
+                              src={`https://images.unsplash.com/photo-${1500000000000 + i}?w=100&h=100&fit=crop`} 
+                              alt="Story" 
+                              className="w-full h-full object-cover clip-pentagon"
+                            />
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-white/70">User {i}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <ScrollBar orientation="horizontal" className="hidden" />
+                </ScrollArea>
+              </div>
+
+              <div className="space-y-4 pb-4 bg-[#000000c4] rounded-2xl p-4">
                 {conversationData?.messages.map((msg) => (
                   <div
                     key={msg.id}
