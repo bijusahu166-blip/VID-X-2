@@ -58,7 +58,7 @@ export function AIChatDrawer() {
         </Button>
       </SheetTrigger>
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 h-full">
-        <SheetHeader className="p-4 border-b">
+        <SheetHeader className="p-4 border-b bg-[#65ad948a]">
           <SheetTitle className="flex items-center gap-2 font-display">
             <Sparkles className="w-5 h-5 text-primary" />
             AI Assistant
