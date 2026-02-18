@@ -80,7 +80,7 @@ export function AIChatDrawer() {
                             <img 
                               src={`https://images.unsplash.com/photo-${1500000000000 + i}?w=100&h=100&fit=crop`} 
                               alt="Story" 
-                              className="w-full h-full object-cover clip-pentagon"
+                              className="w-full h-full object-cover clip-pentagon ml-[1px] mr-[1px] mt-[7px] mb-[7px]"
                             />
                           </div>
                         </div>
