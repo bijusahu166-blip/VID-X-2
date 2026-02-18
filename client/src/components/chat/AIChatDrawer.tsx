@@ -72,7 +72,7 @@ export function AIChatDrawer() {
               {/* Status Section above chat */}
               <div className="mb-4">
                 <ScrollArea className="w-full whitespace-nowrap">
-                  <div className="flex space-x-4 p-2">
+                  <div className="flex space-x-4 p-2 ml-[3px] mr-[3px] mt-[-1px] mb-[-1px] pl-[35px] pr-[35px] pt-[-10px] pb-[-10px]">
                     {[1, 2, 3, 4, 5].map((i) => (
                       <div key={i} className="flex flex-col items-center space-y-1">
                         <div className="w-14 h-14 p-[2px] bg-gradient-to-br from-emerald-400 to-cyan-500 clip-pentagon shadow-lg hover:scale-105 transition-transform cursor-pointer">
