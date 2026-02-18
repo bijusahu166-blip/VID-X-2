@@ -18,7 +18,7 @@ export default function Home() {
       <main className="max-w-md mx-auto px-0 sm:px-4 pl-[0px] pr-[0px] text-left mt-[100px] mb-[100px] pt-[1px] pb-[1px] ml-[-144px] mr-[-144px]">
         {/* Stories/Status Bar - Only My Story */}
         <div className="mb-8 px-4 sm:px-0">
-          <div className="flex space-x-6 px-2 py-4 ml-[-8px] mr-[-8px] mt-[-3px] mb-[-3px] pl-[4px] pr-[4px] text-center">
+          <div className="flex space-x-6 px-2 py-4 pl-[4px] pr-[4px] text-center ml-[-34px] mr-[-34px] mt-[-46px] mb-[-46px]">
             {/* My Story */}
             <div className="flex flex-col items-center space-y-2 font-extrabold text-[19px] text-left ml-[2px] mr-[2px] mt-[-7px] mb-[-7px] pt-[-10px] pb-[-10px] pl-[7px] pr-[7px]">
               <div className="relative w-20 h-20 p-[3px] bg-status-premium clip-pentagon shadow-lg ml-[13px] mr-[13px] mt-[3px] mb-[3px] pl-[3px] pr-[3px] pt-[1px] pb-[1px]">
