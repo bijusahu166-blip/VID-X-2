@@ -3,13 +3,24 @@ import { Header } from "@/components/layout/Header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { Settings, Grid, Bookmark, Users } from "lucide-react";
+import { Settings, Grid, Bookmark, Users, PawPrint } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePosts } from "@/hooks/use-posts";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea as ScrollAreaUI } from "@/components/ui/scroll-area";
+
+const PET_NAMES = [
+  "Buddy", "Charlie", "Max", "Bella", "Lucy", "Rocky", "Daisy", "Coco", 
+  "Milo", "Luna", "Teddy", "Simba", "Oliver", "Leo", "Rosie", "Ruby", 
+  "Jack", "Tiger", "Bruno", "Shadow", "Snowy", "Ginger", "Pepper", 
+  "Lucky", "Angel", "Honey", "Tommy", "Oscar", "Prince", "Princess"
+];
 
 export default function Profile() {
   const { user, logout } = useAuth();
   const { data: posts } = usePosts();
+  const [selectedPet, setSelectedPet] = useState<string | null>(null);
 
   // Filter posts by current user (in real app, use useUserPosts hook)
   // For now, showing all posts in profile for demo
@@ -20,11 +31,19 @@ export default function Profile() {
       <Header />
       <main>
         <div className="p-6 text-[19px] font-extrabold text-right bg-[#737d7c4d]">
-          <div className="flex items-center justify-between bg-[#a9c7bfd6] mt-[-3px] mb-[-3px] ml-[-18px] mr-[-18px] pl-[0px] pr-[0px] pt-[37px] pb-[37px]">
-            <Avatar className="w-20 h-20 sm:w-24 sm:h-24 ring-2 ring-primary ring-offset-2 ring-offset-background">
-              <AvatarImage src={user?.profileImageUrl || undefined} />
-              <AvatarFallback className="text-2xl">{user?.firstName?.[0]}</AvatarFallback>
-            </Avatar>
+          <div className="flex items-center justify-between bg-[#a9c7bfd6] mt-[-3px] mb-[-3px] ml-[-18px] mr-[-18px] pl-[0px] pr-[0px] pt-[37px] pb-[37px] relative">
+            <div className="relative">
+              <Avatar className="w-20 h-20 sm:w-24 sm:h-24 ring-2 ring-primary ring-offset-2 ring-offset-background">
+                <AvatarImage src={user?.profileImageUrl || undefined} />
+                <AvatarFallback className="text-2xl">{user?.firstName?.[0]}</AvatarFallback>
+              </Avatar>
+              {selectedPet && (
+                <div className="absolute -top-4 -right-2 bg-background rounded-full p-1 shadow-lg animate-bounce">
+                  <div className="text-[24px]">🐾</div>
+                  <div className="text-[8px] font-black uppercase text-center">{selectedPet}</div>
+                </div>
+              )}
+            </div>
             
             <div className="flex gap-6 text-center">
               <div>
@@ -42,8 +61,11 @@ export default function Profile() {
             </div>
           </div>
 
-          <div className="space-y-1 mb-6">
-            <h2 className="font-bold text-lg">{user?.firstName} {user?.lastName}</h2>
+          <div className="space-y-1 mb-6 mt-4">
+            <div className="flex items-center justify-end gap-2">
+              <h2 className="font-bold text-lg">{user?.firstName} {user?.lastName}</h2>
+              <Settings className="w-5 h-5 text-muted-foreground cursor-pointer hover:rotate-90 transition-transform duration-500" />
+            </div>
             <p className="text-sm text-muted-foreground">
               Digital Creator 📸 <br />
               Capturing moments from around the world.
@@ -52,7 +74,43 @@ export default function Profile() {
 
           <div className="flex gap-2 mb-6">
             <Button className="flex-1 rounded-lg font-semibold h-9" variant="default">Edit Profile</Button>
-            <Button className="flex-1 rounded-lg font-semibold h-9" variant="secondary" onClick={() => logout()}>Logout</Button>
+            
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="flex-1 rounded-lg font-semibold h-9 bg-emerald-500 hover:bg-emerald-600 text-white gap-2">
+                  <PawPrint className="w-4 h-4" /> Own Pet
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border-none shadow-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-center font-display text-xl">Select Your 3D Pet</DialogTitle>
+                </DialogHeader>
+                <ScrollAreaUI className="h-[300px] mt-4">
+                  <div className="grid grid-cols-3 gap-3 p-1">
+                    {PET_NAMES.map((name) => (
+                      <Button
+                        key={name}
+                        variant={selectedPet === name ? "default" : "outline"}
+                        className="h-auto py-4 flex flex-col gap-2 rounded-xl"
+                        onClick={() => setSelectedPet(name)}
+                      >
+                        <span className="text-2xl">🐶</span>
+                        <span className="text-[10px] font-bold">{name}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </ScrollAreaUI>
+                <Button 
+                  className="w-full mt-4" 
+                  onClick={() => setSelectedPet(null)}
+                  variant="ghost"
+                >
+                  Remove Pet
+                </Button>
+              </DialogContent>
+            </Dialog>
+
+            <Button className="rounded-lg font-semibold h-9" variant="secondary" onClick={() => logout()}>Logout</Button>
           </div>
         </div>
 
