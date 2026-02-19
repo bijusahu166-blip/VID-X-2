@@ -25,9 +25,8 @@ export function Header() {
         {/* Center: Logo */}
         <h1 className="font-display bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent truncate font-extrabold text-[29px] text-left">LITLink</h1>
 
-        {/* Right: AI Assistant & Notifications */}
+        {/* Right: Notifications only (AI Assistant moved to Messages) */}
         <div className="flex items-center gap-1">
-          <AIChatDrawer />
           <Button
             size="icon"
             variant="ghost"
