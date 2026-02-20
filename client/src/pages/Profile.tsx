@@ -60,7 +60,7 @@ export default function Profile() {
       <Header />
       <main>
         <div className="p-6 text-[19px] font-extrabold text-right bg-[#737d7c4d]">
-          <div className="flex items-center justify-between bg-[#a9c7bfd6] mt-[-3px] mb-[-3px] ml-[-18px] mr-[-18px] pl-[0px] pr-[0px] pt-[37px] pb-[37px] relative">
+          <div className="flex items-center justify-between mt-[-3px] mb-[-3px] pl-[0px] pr-[0px] relative bg-[#49825e47] pt-[7px] pb-[7px] ml-[-20px] mr-[-20px]">
             <div className="relative">
               <Avatar className="w-20 h-20 sm:w-24 sm:h-24 ring-2 ring-primary ring-offset-2 ring-offset-background">
                 <AvatarImage src={user?.profileImageUrl || undefined} />
