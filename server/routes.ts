@@ -8,7 +8,7 @@ import { registerImageRoutes } from "./replit_integrations/image";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { users } from "@shared/models/auth";
-import { posts, comments } from "@shared/schema";
+import { posts, comments, ads } from "@shared/schema";
 import { db } from "./db";
 
 async function seed() {

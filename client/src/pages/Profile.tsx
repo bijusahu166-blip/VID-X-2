@@ -13,17 +13,43 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-const PET_NAMES = [
-  "Buddy", "Charlie", "Max", "Bella", "Lucy", "Rocky", "Daisy", "Coco", 
-  "Milo", "Luna", "Teddy", "Simba", "Oliver", "Leo", "Rosie", "Ruby", 
-  "Jack", "Tiger", "Bruno", "Shadow", "Snowy", "Ginger", "Pepper", 
-  "Lucky", "Angel", "Honey", "Tommy", "Oscar", "Prince", "Princess"
+const PETS = [
+  { name: "Buddy", emoji: "🐶" },
+  { name: "Charlie", emoji: "🐱" },
+  { name: "Max", emoji: "🐹" },
+  { name: "Bella", emoji: "🐰" },
+  { name: "Lucy", emoji: "🦊" },
+  { name: "Rocky", emoji: "🐻" },
+  { name: "Daisy", emoji: "🐼" },
+  { name: "Coco", emoji: "🐨" },
+  { name: "Milo", emoji: "🐯" },
+  { name: "Luna", emoji: "🦁" },
+  { name: "Teddy", emoji: "🐮" },
+  { name: "Simba", emoji: "🐷" },
+  { name: "Oliver", emoji: "🐸" },
+  { name: "Leo", emoji: "🐵" },
+  { name: "Rosie", emoji: "🦄" },
+  { name: "Ruby", emoji: "🦖" },
+  { name: "Jack", emoji: "🐉" },
+  { name: "Tiger", emoji: "🐆" },
+  { name: "Bruno", emoji: "🐘" },
+  { name: "Shadow", emoji: "🦒" },
+  { name: "Snowy", emoji: "🦜" },
+  { name: "Ginger", emoji: "🦩" },
+  { name: "Pepper", emoji: "🦚" },
+  { name: "Lucky", emoji: "🦢" },
+  { name: "Angel", emoji: "🐝" },
+  { name: "Honey", emoji: "🦋" },
+  { name: "Tommy", emoji: "🐙" },
+  { name: "Oscar", emoji: "🦑" },
+  { name: "Prince", emoji: "🐠" },
+  { name: "Princess", emoji: "🐬" }
 ];
 
 export default function Profile() {
   const { user, logout } = useAuth();
   const { data: posts } = usePosts();
-  const [selectedPet, setSelectedPet] = useState<string | null>(null);
+  const [selectedPet, setSelectedPet] = useState<{ name: string, emoji: string } | null>(null);
 
   // Filter posts by current user (in real app, use useUserPosts hook)
   // For now, showing all posts in profile for demo
@@ -42,8 +68,8 @@ export default function Profile() {
               </Avatar>
               {selectedPet && (
                 <div className="absolute -top-4 -right-2 bg-background rounded-full p-1 shadow-lg animate-bounce">
-                  <div className="text-[24px]">🐾</div>
-                  <div className="text-[8px] font-black uppercase text-center">{selectedPet}</div>
+                  <div className="text-[24px]">{selectedPet.emoji}</div>
+                  <div className="text-[8px] font-black uppercase text-center">{selectedPet.name}</div>
                 </div>
               )}
             </div>
@@ -125,15 +151,15 @@ export default function Profile() {
                 </DialogHeader>
                 <ScrollAreaUI className="h-[300px] mt-4">
                   <div className="grid grid-cols-3 gap-3 p-1">
-                    {PET_NAMES.map((name) => (
+                    {PETS.map((pet) => (
                       <Button
-                        key={name}
-                        variant={selectedPet === name ? "default" : "outline"}
+                        key={pet.name}
+                        variant={selectedPet?.name === pet.name ? "default" : "outline"}
                         className="h-auto py-4 flex flex-col gap-2 rounded-xl"
-                        onClick={() => setSelectedPet(name)}
+                        onClick={() => setSelectedPet(pet)}
                       >
-                        <span className="text-2xl">🐶</span>
-                        <span className="text-[10px] font-bold">{name}</span>
+                        <span className="text-2xl">{pet.emoji}</span>
+                        <span className="text-[10px] font-bold">{pet.name}</span>
                       </Button>
                     ))}
                   </div>
