@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { BannerAd } from "@/components/ads/BannerAd";
 
 interface Book {
   id: number;
@@ -185,6 +186,8 @@ export default function Reading() {
               <div className="bg-muted/50 rounded-2xl p-6 text-lg leading-relaxed font-serif">
                 {selectedBook.content}
               </div>
+
+              <BannerAd placement="reading" />
 
               {/* Controls */}
               <Card className="border-border/50 bg-card/50 backdrop-blur">

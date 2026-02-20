@@ -9,6 +9,9 @@ import { usePosts } from "@/hooks/use-posts";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea as ScrollAreaUI } from "@/components/ui/scroll-area";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const PET_NAMES = [
   "Buddy", "Charlie", "Max", "Bella", "Lucy", "Rocky", "Daisy", "Coco", 
@@ -64,7 +67,42 @@ export default function Profile() {
           <div className="space-y-1 mb-6 mt-4">
             <div className="flex items-center justify-end gap-2">
               <h2 className="font-bold text-lg">{user?.firstName} {user?.lastName}</h2>
-              <Settings className="w-5 h-5 text-muted-foreground cursor-pointer hover:rotate-90 transition-transform duration-500" />
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Settings className="w-5 h-5 text-muted-foreground cursor-pointer hover:rotate-90 transition-transform duration-500" />
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md bg-card border-none shadow-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-display">Ads Preferences</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-6 py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5 text-left">
+                        <Label className="text-base">Personalized Ads</Label>
+                        <p className="text-xs text-muted-foreground">Show ads based on your interests</p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
+                    <div className="space-y-3 text-left">
+                      <Label className="text-base">Ad Frequency</Label>
+                      <RadioGroup defaultValue="medium" className="grid grid-cols-3 gap-4 mt-2">
+                        <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
+                          <RadioGroupItem value="low" id="low" />
+                          <Label htmlFor="low" className="cursor-pointer">Low</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
+                          <RadioGroupItem value="medium" id="medium" />
+                          <Label htmlFor="medium" className="cursor-pointer">Med</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
+                          <RadioGroupItem value="high" id="high" />
+                          <Label htmlFor="high" className="cursor-pointer">High</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
             <p className="text-sm text-muted-foreground">
               Digital Creator 📸 <br />

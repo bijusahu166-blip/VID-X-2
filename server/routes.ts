@@ -60,6 +60,45 @@ async function seed() {
     { postId: post2.id, userId: user1.id, content: "Looks delicious!" },
   ]);
   
+  // Seed Ads
+  const existingAds = await db.select().from(ads).limit(1);
+  if (existingAds.length === 0) {
+    await db.insert(ads).values([
+      {
+        title: "Summer Collection 2026",
+        description: "Check out our new sustainable summer outfits. Shop now!",
+        linkUrl: "https://example.com/shop",
+        type: "native",
+        placement: "feed",
+        imageUrl: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800"
+      },
+      {
+        title: "LITLink Premium",
+        description: "Get rid of ads and unlock exclusive 3D pets!",
+        linkUrl: "https://replit.com",
+        type: "banner",
+        placement: "feed",
+        imageUrl: "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=200"
+      },
+      {
+        title: "Master TypeScript",
+        description: "New advanced course available. Enroll today for 50% off.",
+        linkUrl: "https://example.com/learn",
+        type: "banner",
+        placement: "reading",
+        imageUrl: "https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=200"
+      },
+      {
+        title: "Amazing Travel App",
+        description: "Plan your next adventure with ease. Free download.",
+        linkUrl: "https://example.com/travel",
+        type: "interstitial",
+        placement: "transition",
+        imageUrl: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=1080"
+      }
+    ]);
+  }
+
   console.log("Database seeded!");
 }
 
@@ -156,7 +195,8 @@ export async function registerRoutes(
 
   // Users
   app.get(api.users.get.path, isAuthenticated, async (req, res) => {
-    const user = await authStorage.getUser(req.params.id);
+    const userId = req.params.id as string;
+    const user = await authStorage.getUser(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -177,7 +217,8 @@ export async function registerRoutes(
 
   // Ads
   app.get("/api/ads/:placement", isAuthenticated, async (req, res) => {
-    const ads = await storage.getAdsByPlacement(req.params.placement);
+    const placement = req.params.placement as string;
+    const ads = await storage.getAdsByPlacement(placement);
     res.json(ads);
   });
 
