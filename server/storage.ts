@@ -1,10 +1,10 @@
 import { 
-  posts, comments, likes, books,
+  posts, comments, likes, books, ads,
   type Post, type InsertPost, type InsertComment, type InsertLike, 
-  type Comment, type Like, type Book, type InsertBook 
+  type Comment, type Like, type Book, type InsertBook, type Ad, type InsertAd
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 
 export interface IStorage {
   // Posts
@@ -24,6 +24,10 @@ export interface IStorage {
   // Books
   createBook(book: InsertBook): Promise<Book>;
   getBooks(type?: string): Promise<Book[]>;
+
+  // Ads
+  getAdsByPlacement(placement: string): Promise<Ad[]>;
+  createAd(ad: InsertAd): Promise<Ad>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -93,6 +97,15 @@ export class DatabaseStorage implements IStorage {
       return db.select().from(books).where(eq(books.type, type)).orderBy(desc(books.createdAt));
     }
     return db.select().from(books).orderBy(desc(books.createdAt));
+  }
+
+  async getAdsByPlacement(placement: string): Promise<Ad[]> {
+    return db.select().from(ads).where(eq(ads.placement, placement));
+  }
+
+  async createAd(ad: InsertAd): Promise<Ad> {
+    const [newAd] = await db.insert(ads).values(ad).returning();
+    return newAd;
   }
 }
 

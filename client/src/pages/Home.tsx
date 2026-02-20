@@ -7,6 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { BannerAd } from "@/components/ads/BannerAd";
+import { NativeAd } from "@/components/ads/NativeAd";
 
 export default function Home() {
   const { data: posts, isLoading } = usePosts();
@@ -42,6 +44,7 @@ export default function Home() {
 
         {/* Feed */}
         <div className="space-y-4">
+          <BannerAd placement="feed" />
           {isLoading ? (
             Array(3).fill(0).map((_, i) => (
               <div key={i} className="space-y-4 mb-8 p-4 bg-card rounded-3xl">
@@ -62,8 +65,11 @@ export default function Home() {
               <p className="text-muted-foreground">No posts yet. Be the first!</p>
             </div>
           ) : (
-            posts?.map((post) => (
-              <PostCard key={post.id} post={post} />
+            posts?.map((post, index) => (
+              <div key={post.id}>
+                <PostCard post={post} />
+                {index === 0 && <NativeAd />}
+              </div>
             ))
           )}
         </div>

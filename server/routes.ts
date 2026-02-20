@@ -175,5 +175,16 @@ export async function registerRoutes(
     res.status(201).json(book);
   });
 
+  // Ads
+  app.get("/api/ads/:placement", isAuthenticated, async (req, res) => {
+    const ads = await storage.getAdsByPlacement(req.params.placement);
+    res.json(ads);
+  });
+
+  app.post("/api/ads", isAuthenticated, async (req, res) => {
+    const ad = await storage.createAd(req.body);
+    res.status(201).json(ad);
+  });
+
   return httpServer;
 }

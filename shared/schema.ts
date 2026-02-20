@@ -72,11 +72,27 @@ export const books = pgTable("books", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const ads = pgTable("ads", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  linkUrl: text("link_url").notNull(),
+  type: text("type").notNull(), // 'banner', 'interstitial', 'rewarded', 'native'
+  placement: text("placement").notNull(), // 'feed', 'reading', 'upload', 'transition'
+  rewardType: text("reward_type"), // 'coins', 'premium', 'unlock'
+  targetingArea: text("targeting_area"), // JSON string or plain text for area
+  frequencyCap: integer("frequency_cap").default(3),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Schemas
 export const insertPostSchema = createInsertSchema(posts).omit({ id: true, createdAt: true });
 export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true });
 export const insertLikeSchema = createInsertSchema(likes).omit({ id: true });
 export const insertBookSchema = createInsertSchema(books).omit({ id: true, createdAt: true });
+export const insertAdSchema = createInsertSchema(ads).omit({ id: true, createdAt: true });
 
 // Types
 export type Post = typeof posts.$inferSelect;
@@ -87,6 +103,8 @@ export type Like = typeof likes.$inferSelect;
 export type InsertLike = z.infer<typeof insertLikeSchema>;
 export type Book = typeof books.$inferSelect;
 export type InsertBook = z.infer<typeof insertBookSchema>;
+export type Ad = typeof ads.$inferSelect;
+export type InsertAd = z.infer<typeof insertAdSchema>;
 
 // API Types
 export type CreatePostRequest = InsertPost;
