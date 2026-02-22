@@ -33,7 +33,7 @@ export function PostCard({ post }: PostCardProps) {
   };
 
   return (
-    <Card className="border-0 shadow-none sm:border sm:shadow-sm rounded-none sm:rounded-3xl mb-4 overflow-hidden bg-card">
+    <Card className="border border-border/40 shadow-none sm:border sm:shadow-sm rounded-none sm:rounded-3xl mb-4 overflow-hidden bg-card">
       <CardHeader className="flex flex-row items-center space-x-4 p-4">
         <Avatar className="w-10 h-10 ring-2 ring-transparent hover:ring-primary transition-all cursor-pointer">
           <AvatarImage src={post.user?.profileImageUrl || undefined} />
