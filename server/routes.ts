@@ -22,6 +22,7 @@ async function seed() {
       email: "alice@example.com",
       firstName: "Alice",
       lastName: "Wonder",
+      isCelebrity: true,
       profileImageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice",
   }).returning();
 

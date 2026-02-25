@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Heart, MessageCircle, Send, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Send, Bookmark, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useLikePost, useAddComment } from "@/hooks/use-posts";
@@ -57,9 +57,14 @@ export function PostCard({ post }: PostCardProps) {
           <AvatarFallback>{post.user?.firstName?.[0] || "U"}</AvatarFallback>
         </Avatar>
         <div className="flex flex-col">
-          <p className="text-sm font-semibold hover:underline cursor-pointer">
-            {post.user?.firstName || "Anonymous"} {post.user?.lastName}
-          </p>
+          <div className="flex items-center gap-1">
+            <p className="text-sm font-semibold hover:underline cursor-pointer">
+              {post.user?.firstName || "Anonymous"} {post.user?.lastName}
+            </p>
+            {post.user?.isCelebrity && (
+              <CheckCircle2 className="w-3.5 h-3.5 fill-blue-500 text-white" />
+            )}
+          </div>
           <p className="text-xs text-muted-foreground">
             {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
           </p>
