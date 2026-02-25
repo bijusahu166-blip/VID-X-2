@@ -28,6 +28,10 @@ export interface IStorage {
   // Ads
   getAdsByPlacement(placement: string): Promise<Ad[]>;
   createAd(ad: InsertAd): Promise<Ad>;
+  
+  // History
+  createHistory(entry: InsertHistory): Promise<History>;
+  getHistory(userId: string): Promise<History[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -106,6 +110,15 @@ export class DatabaseStorage implements IStorage {
   async createAd(ad: InsertAd): Promise<Ad> {
     const [newAd] = await db.insert(ads).values(ad).returning();
     return newAd;
+  }
+
+  async createHistory(entry: InsertHistory): Promise<History> {
+    const [newEntry] = await db.insert(history).values(entry).returning();
+    return newEntry;
+  }
+
+  async getHistory(userId: string): Promise<History[]> {
+    return db.select().from(history).where(eq(history.userId, userId)).orderBy(desc(history.createdAt)).limit(50);
   }
 }
 

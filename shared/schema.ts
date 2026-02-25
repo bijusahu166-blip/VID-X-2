@@ -87,7 +87,18 @@ export const ads = pgTable("ads", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Schemas
+export const history = pgTable("history", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  action: text("action").notNull(), // 'view_post', 'view_book', 'search'
+  targetId: text("target_id"), // ID of post, book, etc.
+  metadata: text("metadata"), // Extra info like search query
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertHistorySchema = createInsertSchema(history).omit({ id: true, createdAt: true });
+export type History = typeof history.$inferSelect;
+export type InsertHistory = z.infer<typeof insertHistorySchema>;
 export const insertPostSchema = createInsertSchema(posts).omit({ id: true, createdAt: true });
 export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true });
 export const insertLikeSchema = createInsertSchema(likes).omit({ id: true });

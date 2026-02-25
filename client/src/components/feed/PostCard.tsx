@@ -8,6 +8,9 @@ import { formatDistanceToNow } from "date-fns";
 import { useLikePost, useAddComment } from "@/hooks/use-posts";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useEffect } from "react";
 
 interface PostCardProps {
   post: any; // Type from API
@@ -24,6 +27,20 @@ export function PostCard({ post }: PostCardProps) {
     setShowHeart(true);
     setTimeout(() => setShowHeart(false), 800);
   };
+
+  const historyMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/history", {
+        action: "view_post",
+        targetId: post.id.toString(),
+        metadata: `Viewed post by ${post.user?.firstName || 'User'}`,
+      });
+    },
+  });
+
+  useEffect(() => {
+    historyMutation.mutate();
+  }, []);
 
   const handleComment = (e: React.FormEvent) => {
     e.preventDefault();

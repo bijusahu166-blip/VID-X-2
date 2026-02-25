@@ -3,7 +3,7 @@ import { Header } from "@/components/layout/Header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { Settings, Grid, Bookmark, Users, PawPrint } from "lucide-react";
+import { Settings, Grid, Bookmark, Users, PawPrint, History as HistoryIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePosts } from "@/hooks/use-posts";
 import { useState } from "react";
@@ -12,6 +12,8 @@ import { ScrollArea as ScrollAreaUI } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useQuery } from "@tanstack/react-query";
+import { formatDistanceToNow } from "date-fns";
 
 const PETS = [
   { name: "Buddy", emoji: "🐶" },
@@ -50,6 +52,10 @@ export default function Profile() {
   const { user, logout } = useAuth();
   const { data: posts } = usePosts();
   const [selectedPet, setSelectedPet] = useState<{ name: string, emoji: string } | null>(null);
+
+  const { data: history } = useQuery<any[]>({
+    queryKey: ["/api/history"],
+  });
 
   // Filter posts by current user (in real app, use useUserPosts hook)
   // For now, showing all posts in profile for demo
@@ -179,7 +185,7 @@ export default function Profile() {
         </div>
 
         <Tabs defaultValue="posts" className="w-full">
-          <TabsList className="w-full grid grid-cols-3 rounded-none h-12 bg-transparent border-b">
+          <TabsList className="w-full grid grid-cols-4 rounded-none h-12 bg-transparent border-b">
             <TabsTrigger 
               value="posts" 
               className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:shadow-none"
@@ -198,6 +204,12 @@ export default function Profile() {
             >
               <Bookmark className="w-5 h-5" />
             </TabsTrigger>
+            <TabsTrigger 
+              value="history" 
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:shadow-none"
+            >
+              <HistoryIcon className="w-5 h-5" />
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="posts" className="mt-0">
@@ -215,6 +227,32 @@ export default function Profile() {
           </TabsContent>
           <TabsContent value="saved" className="py-20 text-center text-muted-foreground">
             No saved posts
+          </TabsContent>
+          <TabsContent value="history" className="p-4">
+            <div className="space-y-4">
+              {history && history.length > 0 ? (
+                history.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl border border-border/40">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-full">
+                        <HistoryIcon className="w-4 h-4 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold capitalize">{item.action.replace('_', ' ')}</div>
+                        <div className="text-xs text-muted-foreground">{item.metadata || 'No details available'}</div>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-20 text-center text-muted-foreground">
+                  Your activity history will appear here.
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </main>

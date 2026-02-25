@@ -44,6 +44,22 @@ export default function Reading() {
     queryKey: ["/api/books"],
   });
 
+  const historyMutation = useMutation({
+    mutationFn: async (book: Book) => {
+      await apiRequest("POST", "/api/history", {
+        action: "view_book",
+        targetId: book.id.toString(),
+        metadata: `Read book: ${book.title}`,
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (selectedBook) {
+      historyMutation.mutate(selectedBook);
+    }
+  }, [selectedBook]);
+
   const uploadMutation = useMutation({
     mutationFn: async (newBook: any) => {
       const res = await fetch("/api/books", {

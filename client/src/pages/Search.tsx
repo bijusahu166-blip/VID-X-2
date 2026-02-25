@@ -5,9 +5,35 @@ import { Search as SearchIcon, BookOpen, Newspaper } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePosts } from "@/hooks/use-posts";
 import { Link } from "wouter";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Search() {
   const { data: posts } = usePosts();
+  const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
+
+  const historyMutation = useMutation({
+    mutationFn: async (query: string) => {
+      await apiRequest("POST", "/api/history", {
+        action: "search",
+        metadata: `Searched for: ${query}`,
+      });
+    },
+  });
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      historyMutation.mutate(searchQuery);
+      toast({
+        title: "Searching...",
+        description: `Looking for "${searchQuery}"`,
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20 pt-14">
@@ -36,13 +62,15 @@ export default function Search() {
       </div>
 
       <div className="px-4 py-4">
-        <div className="relative">
+        <form onSubmit={handleSearch} className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input 
             placeholder="Search accounts or posts..." 
             className="pl-10 rounded-xl bg-muted/50 border-none h-11"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
-        </div>
+        </form>
       </div>
 
       <div className="grid grid-cols-3 gap-0.5 md:gap-4 p-0.5 md:p-4 pt-0">

@@ -227,5 +227,21 @@ export async function registerRoutes(
     res.status(201).json(ad);
   });
 
+  // History
+  app.get("/api/history", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const history = await storage.getHistory(userId);
+    res.json(history);
+  });
+
+  app.post("/api/history", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const entry = await storage.createHistory({
+      ...req.body,
+      userId
+    });
+    res.status(201).json(entry);
+  });
+
   return httpServer;
 }
