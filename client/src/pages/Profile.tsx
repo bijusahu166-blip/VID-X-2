@@ -74,7 +74,7 @@ export default function Profile() {
               </Avatar>
               {selectedPet && (
                 <div className="absolute -top-4 -right-2 bg-background rounded-full p-1 shadow-lg animate-bounce">
-                  <div className="text-[24px] bg-[#0cfa0c] mt-[0px] mb-[0px] pt-[0px] pb-[0px] pl-[-18px] pr-[-18px] ml-[0px] mr-[0px]">{selectedPet.emoji}</div>
+                  <div className="text-[24px] mt-[0px] mb-[0px] pt-[0px] pb-[0px] pl-[-18px] pr-[-18px] ml-[0px] mr-[0px] bg-[#fa0c0c00]">{selectedPet.emoji}</div>
                   <div className="text-[8px] font-black uppercase text-center">{selectedPet.name}</div>
                 </div>
               )}
