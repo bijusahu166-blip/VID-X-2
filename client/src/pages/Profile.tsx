@@ -62,7 +62,14 @@ export default function Profile() {
   const myPosts = posts || [];
 
   return (
-    <div className="min-h-screen bg-background pb-20 pt-14">
+    <div className="min-h-screen bg-background pb-20 pt-14 relative overflow-hidden">
+      {/* Animated Multi-color Background Blobs */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[80px] animate-pulse" />
+        <div className="absolute top-[20%] -right-[10%] w-[50%] h-[50%] bg-accent/20 rounded-full blur-[100px] animate-bounce [animation-duration:8s]" />
+        <div className="absolute -bottom-[10%] left-[20%] w-[45%] h-[45%] bg-emerald-500/10 rounded-full blur-[90px] animate-pulse [animation-duration:6s]" />
+        <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] bg-blue-500/5 rounded-full blur-[120px]" />
+      </div>
       <Header />
       <main>
         <div className="p-6 text-[19px] font-extrabold text-right bg-[#737d7c4d]">
