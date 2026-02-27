@@ -8,7 +8,7 @@
   --font-sans: 'Inter', sans-serif;
   --font-display: 'Outfit', sans-serif;
 
-  /* Modern Social Palette - Light Mode */
+  /* Vibrant Social Palette - Light Mode */
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
   
@@ -18,7 +18,7 @@
   --popover: 0 0% 100%;
   --popover-foreground: 240 10% 3.9%;
   
-  --primary: 326 100% 60%; /* Vibrant Pink/Red */
+  --primary: 280 100% 65%; /* Vibrant Purple */
   --primary-foreground: 0 0% 98%;
   
   --secondary: 240 4.8% 95.9%;
@@ -27,7 +27,7 @@
   --muted: 240 4.8% 95.9%;
   --muted-foreground: 240 3.8% 46.1%;
   
-  --accent: 270 100% 60%; /* Purple for gradients */
+  --accent: 330 100% 65%; /* Vibrant Pink */
   --accent-foreground: 0 0% 98%;
   
   --destructive: 0 84.2% 60.2%;
@@ -41,7 +41,7 @@
 }
 
 .dark {
-  /* Modern Social Palette - Dark Mode */
+  /* Vibrant Social Palette - Dark Mode */
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
   
@@ -51,7 +51,7 @@
   --popover: 240 10% 3.9%;
   --popover-foreground: 0 0% 98%;
   
-  --primary: 326 100% 60%;
+  --primary: 280 100% 70%; /* Lighter Vibrant Purple */
   --primary-foreground: 0 0% 98%;
   
   --secondary: 240 3.7% 15.9%;
@@ -60,7 +60,7 @@
   --muted: 240 3.7% 15.9%;
   --muted-foreground: 240 5% 64.9%;
   
-  --accent: 270 100% 60%;
+  --accent: 330 100% 70%; /* Lighter Vibrant Pink */
   --accent-foreground: 0 0% 98%;
   
   --destructive: 0 62.8% 30.6%;
