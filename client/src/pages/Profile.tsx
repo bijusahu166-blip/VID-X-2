@@ -29,7 +29,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePosts } from "@/hooks/use-posts";
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea as ScrollAreaUI } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -135,6 +135,7 @@ export default function Profile() {
                 <DialogContent className="sm:max-w-md bg-card border-none shadow-2xl p-0 overflow-hidden">
                   <DialogHeader className="p-6 pb-2">
                     <DialogTitle className="text-xl font-display">Settings</DialogTitle>
+                    <DialogDescription className="sr-only">Manage your account settings and privacy preferences.</DialogDescription>
                   </DialogHeader>
                   <ScrollAreaUI className="max-h-[80vh] px-2 pb-6">
                     <div className="space-y-6 p-4">
