@@ -3,7 +3,29 @@ import { Header } from "@/components/layout/Header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { Settings, Grid, Bookmark, Users, PawPrint, History as HistoryIcon } from "lucide-react";
+import { 
+  Settings, 
+  Grid, 
+  Bookmark, 
+  Users, 
+  PawPrint, 
+  History as HistoryIcon,
+  BarChart3,
+  ChevronRight,
+  UserCheck,
+  CreditCard,
+  BadgeCheck,
+  Lock,
+  Star,
+  Users2,
+  Ban,
+  EyeOff,
+  UserPlus,
+  MessageSquare,
+  AtSign,
+  MessageCircle,
+  Share2
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePosts } from "@/hooks/use-posts";
 import { useState } from "react";
@@ -110,36 +132,180 @@ export default function Profile() {
                 <DialogTrigger asChild>
                   <Settings className="w-5 h-5 text-muted-foreground cursor-pointer hover:rotate-90 transition-transform duration-500" />
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md bg-card border-none shadow-2xl">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl font-display">Ads Preferences</DialogTitle>
+                <DialogContent className="sm:max-w-md bg-card border-none shadow-2xl p-0 overflow-hidden">
+                  <DialogHeader className="p-6 pb-2">
+                    <DialogTitle className="text-xl font-display">Settings</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-6 py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5 text-left">
-                        <Label className="text-base">Personalized Ads</Label>
-                        <p className="text-xs text-muted-foreground">Show ads based on your interests</p>
-                      </div>
-                      <Switch defaultChecked />
+                  <ScrollAreaUI className="max-h-[80vh] px-2 pb-6">
+                    <div className="space-y-6 p-4">
+                      {/* Professional Section */}
+                      <section className="space-y-1">
+                        <h3 className="text-xs font-bold text-muted-foreground px-2 py-2 uppercase tracking-wider">How you use RoboApp</h3>
+                        <div className="space-y-1">
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <BarChart3 className="w-5 h-5" />
+                              <span className="font-medium">Insights</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </section>
+
+                      {/* For Professionals */}
+                      <section className="space-y-1">
+                        <h3 className="text-xs font-bold text-muted-foreground px-2 py-2 uppercase tracking-wider">For professionals</h3>
+                        <div className="space-y-1">
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <UserCheck className="w-5 h-5" />
+                              <span className="font-medium">Account type and tools</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <CreditCard className="w-5 h-5" />
+                              <span className="font-medium">Ads payments</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <BadgeCheck className="w-5 h-5" />
+                              <div className="flex flex-col items-start">
+                                <span className="font-medium">Meta Verified</span>
+                                <span className="text-[10px] text-primary font-bold">Subscribed</span>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </section>
+
+                      {/* Who can see your content */}
+                      <section className="space-y-1">
+                        <h3 className="text-xs font-bold text-muted-foreground px-2 py-2 uppercase tracking-wider">Who can see your content</h3>
+                        <div className="space-y-1">
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <Lock className="w-5 h-5" />
+                              <div className="flex flex-col items-start">
+                                <span className="font-medium">Account privacy</span>
+                                <span className="text-[10px] text-muted-foreground">Public</span>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <Star className="w-5 h-5" />
+                              <div className="flex flex-col items-start">
+                                <span className="font-medium">Close Friends</span>
+                                <span className="text-[10px] text-muted-foreground">15 members</span>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <Users2 className="w-5 h-5" />
+                              <span className="font-medium">Crossposting</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <Ban className="w-5 h-5" />
+                              <div className="flex flex-col items-start">
+                                <span className="font-medium">Blocked</span>
+                                <span className="text-[10px] text-muted-foreground">3 accounts</span>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <EyeOff className="w-5 h-5" />
+                              <span className="font-medium">Hide story and live</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <UserPlus className="w-5 h-5" />
+                              <span className="font-medium">Activity in Friends tab</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </section>
+
+                      {/* How others can interact with you */}
+                      <section className="space-y-1">
+                        <h3 className="text-xs font-bold text-muted-foreground px-2 py-2 uppercase tracking-wider">How others can interact with you</h3>
+                        <div className="space-y-1">
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <MessageSquare className="w-5 h-5" />
+                              <span className="font-medium">Messages and story replies</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <AtSign className="w-5 h-5" />
+                              <span className="font-medium">Tags and mentions</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <MessageCircle className="w-5 h-5" />
+                              <span className="font-medium">Comments</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" className="w-full justify-between h-12 rounded-xl px-2">
+                            <div className="flex items-center gap-3">
+                              <Share2 className="w-5 h-5" />
+                              <span className="font-medium">Sharing and reuse</span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </section>
+
+                      {/* Original Ads Section */}
+                      <section className="space-y-4 pt-4 border-t">
+                        <h3 className="text-xs font-bold text-muted-foreground px-2 uppercase tracking-wider">Ads Preferences</h3>
+                        <div className="flex items-center justify-between px-2">
+                          <div className="space-y-0.5 text-left">
+                            <Label className="text-base">Personalized Ads</Label>
+                            <p className="text-xs text-muted-foreground">Show ads based on your interests</p>
+                          </div>
+                          <Switch defaultChecked />
+                        </div>
+                        <div className="space-y-3 text-left px-2 pb-6">
+                          <Label className="text-base">Ad Frequency</Label>
+                          <RadioGroup defaultValue="medium" className="grid grid-cols-3 gap-4 mt-2">
+                            <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
+                              <RadioGroupItem value="low" id="low" />
+                              <Label htmlFor="low" className="cursor-pointer">Low</Label>
+                            </div>
+                            <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
+                              <RadioGroupItem value="medium" id="medium" />
+                              <Label htmlFor="medium" className="cursor-pointer">Med</Label>
+                            </div>
+                            <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
+                              <RadioGroupItem value="high" id="high" />
+                              <Label htmlFor="high" className="cursor-pointer">High</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      </section>
                     </div>
-                    <div className="space-y-3 text-left">
-                      <Label className="text-base">Ad Frequency</Label>
-                      <RadioGroup defaultValue="medium" className="grid grid-cols-3 gap-4 mt-2">
-                        <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
-                          <RadioGroupItem value="low" id="low" />
-                          <Label htmlFor="low" className="cursor-pointer">Low</Label>
-                        </div>
-                        <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
-                          <RadioGroupItem value="medium" id="medium" />
-                          <Label htmlFor="medium" className="cursor-pointer">Med</Label>
-                        </div>
-                        <div className="flex items-center space-x-2 bg-muted/50 p-3 rounded-xl cursor-pointer">
-                          <RadioGroupItem value="high" id="high" />
-                          <Label htmlFor="high" className="cursor-pointer">High</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  </div>
+                  </ScrollAreaUI>
                 </DialogContent>
               </Dialog>
             </div>
