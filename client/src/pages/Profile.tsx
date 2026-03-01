@@ -174,7 +174,7 @@ export default function Profile() {
                             <div className="flex items-center gap-3">
                               <BadgeCheck className="w-5 h-5" />
                               <div className="flex flex-col items-start">
-                                <span className="font-medium">Meta Verified</span>
+                                <span className="font-medium">LITLink Verified</span>
                                 <span className="text-[10px] text-primary font-bold">Subscribed</span>
                               </div>
                             </div>
