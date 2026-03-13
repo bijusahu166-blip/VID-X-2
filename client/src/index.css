@@ -72,9 +72,34 @@
 }
 
 @layer base {
+  html {
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #1a1a1a #000000;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #000000;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2a;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3a;
+  }
+
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
     font-family: var(--font-sans);
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
