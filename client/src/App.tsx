@@ -44,6 +44,11 @@ function Router() {
 }
 
 function App() {
+  // Force permanent dark mode
+  if (typeof document !== "undefined") {
+    document.documentElement.classList.add("dark");
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
