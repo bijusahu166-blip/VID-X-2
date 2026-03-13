@@ -18,7 +18,7 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50">
       {/* Centered pill container */}
       <div className="flex justify-center pb-3 pt-1 px-4">
-        <div className="flex items-center justify-between gap-1 bg-black border border-white/10 rounded-2xl px-3 py-2 shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between gap-1 bg-black rounded-2xl px-3 py-2 shadow-2xl w-full max-w-sm">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.href !== "#" && item.href === location;
