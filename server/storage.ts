@@ -1,7 +1,8 @@
 import { 
-  posts, comments, likes, books, ads,
+  posts, comments, likes, books, ads, history,
   type Post, type InsertPost, type InsertComment, type InsertLike, 
-  type Comment, type Like, type Book, type InsertBook, type Ad, type InsertAd
+  type Comment, type Like, type Book, type InsertBook, type Ad, type InsertAd,
+  type History, type InsertHistory
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and } from "drizzle-orm";
