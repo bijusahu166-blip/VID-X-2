@@ -24,17 +24,19 @@ export function BottomNav() {
             const isActive = item.href !== "#" && item.href === location;
 
             const inner = (
-              <div
-                data-testid={`link-${item.label.toLowerCase()}`}
-                className={cn(
-                  "flex flex-col items-center justify-center w-11 h-11 rounded-xl transition-all duration-200",
-                  isActive
-                    ? "bg-primary/20 text-primary"
-                    : "text-zinc-400 hover:text-white hover:bg-white/10"
-                )}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-[9px] mt-0.5 font-medium">{item.label}</span>
+              <div className="nav-spin-border">
+                <div
+                  data-testid={`link-${item.label.toLowerCase()}`}
+                  className={cn(
+                    "flex flex-col items-center justify-center w-11 h-11 rounded-xl transition-all duration-200",
+                    isActive
+                      ? "bg-primary/20 text-primary"
+                      : "text-zinc-400 hover:text-white hover:bg-white/10"
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[9px] mt-0.5 font-medium">{item.label}</span>
+                </div>
               </div>
             );
 
