@@ -9,7 +9,7 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border/40 h-14">
-      <div className="flex items-center justify-between gap-4 h-full px-4 max-w-md mx-auto ml-[14px] mr-[14px] mt-[0px] mb-[0px]">
+      <div className="flex items-center justify-between gap-4 h-full px-4 max-w-sm mx-auto">
         {/* Left: Neon Create Button */}
         <Button
           size="icon"

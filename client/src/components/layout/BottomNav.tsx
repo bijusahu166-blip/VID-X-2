@@ -2,45 +2,53 @@ import { Link, useLocation } from "wouter";
 import { Home, PlaySquare, MessageCircle, Search, User, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const navItems = [
+  { icon: Home, label: "Home", href: "/" },
+  { icon: Search, label: "Explore", href: "/search" },
+  { icon: Camera, label: "Filter", href: "#" },
+  { icon: MessageCircle, label: "DMs", href: "/messages" },
+  { icon: PlaySquare, label: "Reels", href: "/reels" },
+  { icon: User, label: "Profile", href: "/profile" },
+];
+
 export function BottomNav() {
   const [location] = useLocation();
 
-  const navItems = [
-    { icon: Home, label: "Home", href: "/" },
-    { icon: Search, label: "Explore", href: "/search" },
-    { icon: Camera, label: "Filter", href: "#", isFilter: true }, // Camera Filter Option
-    { icon: MessageCircle, label: "DMs", href: "/messages" }, // Prime center spot
-    { icon: PlaySquare, label: "Reels", href: "/reels" },
-    { icon: User, label: "Profile", href: "/profile" },
-  ];
-
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-lg border-t border-border/40 pb-safe">
-      <div className="flex justify-around items-center h-16 max-w-md mx-auto px-1 font-extrabold bg-[#fffafa] text-center mt-[-54px] mb-[-54px] pt-[0px] pb-[0px] pl-[22px] pr-[22px] ml-[0px] mr-[0px]">
-        {navItems.map((item, index) => {
-          const Icon = item.icon;
-          const isActive = item.href === location;
-          
-          const content = (
-            <div
-              className="flex flex-col items-center justify-center w-10 h-10 rounded-full transition-all duration-200 cursor-pointer text-muted-foreground hover:text-foreground bg-[#e60ff714]"
-              data-testid={`link-${item.label.toLowerCase()}`}
-            >
-              <Icon className={cn("w-6 h-6", isActive && "fill-current", item.isFilter && "w-7 h-7")} />
-              <span className="sr-only">{item.label}</span>
-            </div>
-          );
+    <nav className="fixed bottom-0 left-0 right-0 z-50">
+      {/* Centered pill container */}
+      <div className="flex justify-center pb-3 pt-1 px-4">
+        <div className="flex items-center justify-between gap-1 bg-black border border-white/10 rounded-2xl px-3 py-2 shadow-2xl w-full max-w-sm">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = item.href !== "#" && item.href === location;
 
-          if (item.href === "#") {
-            return <div key={item.label}>{content}</div>;
-          }
+            const inner = (
+              <div
+                data-testid={`link-${item.label.toLowerCase()}`}
+                className={cn(
+                  "flex flex-col items-center justify-center w-11 h-11 rounded-xl transition-all duration-200",
+                  isActive
+                    ? "bg-primary/20 text-primary"
+                    : "text-zinc-400 hover:text-white hover:bg-white/10"
+                )}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[9px] mt-0.5 font-medium">{item.label}</span>
+              </div>
+            );
 
-          return (
-            <Link key={item.href} href={item.href}>
-              {content}
-            </Link>
-          );
-        })}
+            if (item.href === "#") {
+              return <div key={item.label}>{inner}</div>;
+            }
+
+            return (
+              <Link key={item.href} href={item.href}>
+                {inner}
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
