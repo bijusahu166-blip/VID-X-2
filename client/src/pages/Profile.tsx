@@ -42,7 +42,7 @@ const PETS = [
 const ACHIEVEMENTS = [
   { icon: Trophy, label: "Champion", color: "#fbbf24" },
   { icon: Flame, label: "On Fire", color: "#f97316" },
-  { icon: Shield, label: "Defender", color: "#60a5fa" },
+  { icon: Shield, label: "Defender", color: "#f472b6" },
   { icon: Sword, label: "Warrior", color: "#c084fc" },
   { icon: Target, label: "Sharpshot", color: "#34d399" },
   { icon: Crown, label: "Royalty", color: "#f472b6" },
@@ -76,7 +76,7 @@ export default function Profile() {
   const xpMax = 10000;
   const level = 42;
   const rank = "DIAMOND";
-  const rankColor = "#60a5fa";
+  const rankColor = "#f472b6";
 
   return (
     <div className="min-h-screen bg-black pb-28 relative">
