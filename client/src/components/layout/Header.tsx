@@ -23,9 +23,7 @@ export function Header() {
         </Button>
 
         {/* Center: Logo */}
-        <h1 className="font-display bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent font-extrabold text-[26px] leading-none">
-          LITLink
-        </h1>
+        <h1 className="font-display bg-clip-text bg-gradient-to-r from-primary to-accent text-[26px] leading-none font-semibold text-[transparent]">VID-X</h1>
 
         {/* Right: Video Call + Notifications */}
         <div className="flex items-center gap-2 shrink-0">
