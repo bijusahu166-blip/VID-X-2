@@ -106,7 +106,7 @@ export default function Profile() {
         <div className="absolute -top-5 right-0 w-56 h-56 rounded-full opacity-20"
           style={{ background: "radial-gradient(circle, #db2777, transparent 70%)" }} />
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-72 h-24 opacity-40"
-          style={{ background: "radial-gradient(ellipse, #1d4ed8, transparent 70%)" }} />
+          style={{ background: "radial-gradient(ellipse, #be185d, transparent 70%)" }} />
 
         {/* Scan lines */}
         <div className="absolute inset-0 pointer-events-none"
@@ -117,7 +117,7 @@ export default function Profile() {
 
         {/* Top HUD bar */}
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-14 pb-2">
-          <div className="flex items-center gap-1 text-cyan-400 text-[10px] font-mono font-bold">
+          <div className="flex items-center gap-1 text-pink-400 text-[10px] font-mono font-bold">
             <Signal className="w-3 h-3" />
             <span>5G</span>
             <Wifi className="w-3 h-3 ml-1" />
@@ -129,7 +129,7 @@ export default function Profile() {
             {/* Settings */}
             <Dialog>
               <DialogTrigger asChild>
-                <Button size="icon" variant="ghost" className="w-8 h-8 rounded-full text-cyan-400 hover:bg-cyan-400/10">
+                <Button size="icon" variant="ghost" className="w-8 h-8 rounded-full text-pink-400 hover:bg-pink-400/10">
                   <Settings className="w-4 h-4" />
                 </Button>
               </DialogTrigger>
@@ -189,7 +189,7 @@ export default function Profile() {
               </DialogContent>
             </Dialog>
 
-            <Button size="icon" variant="ghost" className="w-8 h-8 rounded-full text-cyan-400 hover:bg-cyan-400/10">
+            <Button size="icon" variant="ghost" className="w-8 h-8 rounded-full text-pink-400 hover:bg-pink-400/10">
               <Menu className="w-4 h-4" />
             </Button>
           </div>
@@ -212,9 +212,9 @@ export default function Profile() {
           }}>
 
           {/* Corner decorators */}
-          <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-cyan-500/60 rounded-tl-2xl" />
+          <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-pink-500/60 rounded-tl-2xl" />
           <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-purple-500/60 rounded-tr-2xl" />
-          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-cyan-500/60 rounded-bl-2xl" />
+          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-pink-500/60 rounded-bl-2xl" />
           <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-purple-500/60 rounded-br-2xl" />
 
           <div className="p-4 pt-5">
@@ -224,7 +224,7 @@ export default function Profile() {
               <div className="relative shrink-0">
                 <div className="w-[72px] h-[72px] rounded-2xl p-[3px] relative"
                   style={{
-                    background: "linear-gradient(135deg, #7c3aed, #db2777, #2563eb, #7c3aed)",
+                    background: "linear-gradient(135deg, #7c3aed, #db2777, #db2777, #7c3aed)",
                     backgroundSize: "300% 300%",
                     animation: "gradientShift 3s ease infinite",
                     boxShadow: "0 0 20px rgba(124,58,237,0.6), 0 0 40px rgba(219,39,119,0.3)",
@@ -232,7 +232,7 @@ export default function Profile() {
                   <div className="w-full h-full rounded-xl overflow-hidden bg-black">
                     <Avatar className="w-full h-full rounded-xl">
                       <AvatarImage src={user?.profileImageUrl || undefined} className="rounded-xl" />
-                      <AvatarFallback className="text-2xl rounded-xl bg-gradient-to-br from-purple-900 to-blue-900">
+                      <AvatarFallback className="text-2xl rounded-xl bg-gradient-to-br from-purple-900 to-pink-900">
                         {user?.firstName?.[0]}
                       </AvatarFallback>
                     </Avatar>
@@ -260,7 +260,7 @@ export default function Profile() {
                     <span className="text-[9px] font-black text-yellow-400">LV.{level}</span>
                   </div>
                 </div>
-                <p className="text-[11px] text-cyan-400/70 font-mono mt-0.5">@{user?.firstName?.toLowerCase()}_litlink</p>
+                <p className="text-[11px] text-pink-400/70 font-mono mt-0.5">@{user?.firstName?.toLowerCase()}_litlink</p>
                 <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
                   📸 Digital Creator · Content Warrior<br />Capturing worlds, one frame at a time.
                 </p>
@@ -270,14 +270,14 @@ export default function Profile() {
             {/* XP Progress bar */}
             <div className="mt-4 space-y-1">
               <div className="flex justify-between items-center">
-                <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest font-mono">XP Progress</span>
+                <span className="text-[9px] font-black text-pink-400 uppercase tracking-widest font-mono">XP Progress</span>
                 <span className="text-[9px] font-mono text-zinc-400">{xp.toLocaleString()} / {xpMax.toLocaleString()}</span>
               </div>
               <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
                 <div className="h-full rounded-full relative overflow-hidden"
                   style={{
                     width: `${(xp / xpMax) * 100}%`,
-                    background: "linear-gradient(90deg, #7c3aed, #2563eb, #06b6d4)",
+                    background: "linear-gradient(90deg, #7c3aed, #db2777, #ec4899)",
                     boxShadow: "0 0 8px rgba(6,182,212,0.8)",
                     transition: "width 1s ease",
                   }}>
@@ -401,7 +401,7 @@ export default function Profile() {
               { value: "history", icon: HistoryIcon, label: "LOG" },
             ].map(({ value, icon: Icon, label }) => (
               <TabsTrigger key={value} value={value}
-                className="flex flex-col gap-0.5 rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-400 data-[state=active]:shadow-none text-zinc-600 transition-colors h-10"
+                className="flex flex-col gap-0.5 rounded-none border-b-2 border-transparent data-[state=active]:border-pink-400 data-[state=active]:text-pink-400 data-[state=active]:shadow-none text-zinc-600 transition-colors h-10"
               >
                 <Icon className="w-4 h-4" />
                 <span className="text-[7px] font-black tracking-widest hidden">{label}</span>
@@ -421,7 +421,7 @@ export default function Profile() {
                   <div key={post.id} className="aspect-square bg-zinc-900 relative group cursor-pointer overflow-hidden">
                     <img src={post.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="absolute inset-0 border border-cyan-500/0 group-hover:border-cyan-500/40 transition-colors" />
+                    <div className="absolute inset-0 border border-pink-500/0 group-hover:border-pink-500/40 transition-colors" />
                   </div>
                 ))}
               </div>
@@ -443,10 +443,10 @@ export default function Profile() {
               history.slice(0, 20).map((item, i) => (
                 <div key={item.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-white/5 relative overflow-hidden group"
                   style={{ background: "rgba(255,255,255,0.02)" }}>
-                  <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-cyan-500/40" />
+                  <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-pink-500/40" />
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-lg bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
-                      <HistoryIcon className="w-3 h-3 text-cyan-400" />
+                    <div className="w-6 h-6 rounded-lg bg-pink-500/10 flex items-center justify-center border border-pink-500/20">
+                      <HistoryIcon className="w-3 h-3 text-pink-400" />
                     </div>
                     <div>
                       <div className="text-[11px] font-bold text-zinc-300 uppercase tracking-wide font-mono">

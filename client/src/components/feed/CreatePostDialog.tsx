@@ -1,23 +1,15 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { useCreatePost } from "@/hooks/use-posts";
-import { 
-  ImagePlus, 
-  Loader2, 
-  Video, 
-  Layout, 
-  PenTool, 
-  Radio, 
-  Music, 
-  Scissors, 
-  Type, 
-  Smile, 
-  Sparkles,
-  Pentagon
+import {
+  ImagePlus, Loader2, Video, Layout, Radio,
+  Music, Scissors, Type, Smile, Sparkles, Pentagon,
+  Upload, Film, Globe, Lock, Users, ChevronRight,
+  Tag, AlignLeft, Captions, ListVideo, PenTool, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,45 +18,119 @@ interface CreatePostDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type UploadType = "post" | "reel" | "story" | "live" | "editing";
+type UploadType = "post" | "video" | "reel" | "story" | "live" | "editing";
+
+const CATEGORIES = ["Vlog", "Gaming", "Music", "Travel", "Food", "Tech", "Education", "Comedy", "Fitness", "Fashion"];
+const VISIBILITY = [
+  { id: "public", label: "Public", icon: Globe, desc: "Everyone can see" },
+  { id: "private", label: "Private", icon: Lock, desc: "Only you" },
+  { id: "followers", label: "Followers", icon: Users, desc: "Your followers only" },
+];
+
+const UPLOAD_OPTIONS = [
+  {
+    id: "video",
+    label: "Video",
+    icon: Film,
+    desc: "Upload a vlog or long video",
+    gradient: "from-red-500 to-orange-500",
+    bg: "rgba(239,68,68,0.12)",
+    border: "rgba(239,68,68,0.4)",
+    glow: "rgba(239,68,68,0.2)",
+    featured: true,
+  },
+  {
+    id: "post",
+    label: "Photo Post",
+    icon: ImagePlus,
+    desc: "Share a photo",
+    gradient: "from-purple-500 to-pink-500",
+    bg: "rgba(168,85,247,0.1)",
+    border: "rgba(168,85,247,0.35)",
+    glow: "rgba(168,85,247,0.15)",
+    featured: false,
+  },
+  {
+    id: "reel",
+    label: "Reel",
+    icon: Video,
+    desc: "Short vertical clip",
+    gradient: "from-pink-500 to-rose-500",
+    bg: "rgba(236,72,153,0.1)",
+    border: "rgba(236,72,153,0.35)",
+    glow: "rgba(236,72,153,0.15)",
+    featured: false,
+  },
+  {
+    id: "story",
+    label: "Story",
+    icon: Layout,
+    desc: "Disappears in 24h",
+    gradient: "from-yellow-400 to-orange-500",
+    bg: "rgba(234,179,8,0.1)",
+    border: "rgba(234,179,8,0.35)",
+    glow: "rgba(234,179,8,0.15)",
+    featured: false,
+  },
+  {
+    id: "live",
+    label: "Go Live",
+    icon: Radio,
+    desc: "Stream in real-time",
+    gradient: "from-red-600 to-pink-600",
+    bg: "rgba(220,38,38,0.1)",
+    border: "rgba(220,38,38,0.4)",
+    glow: "rgba(220,38,38,0.2)",
+    featured: false,
+  },
+];
+
+const EDITING_TOOLS = [
+  { icon: Music, label: "Music" },
+  { icon: Scissors, label: "Trim" },
+  { icon: Type, label: "Text" },
+  { icon: Smile, label: "Stickers" },
+  { icon: Sparkles, label: "Effects" },
+];
 
 export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) {
-  const [step, setStep] = useState<"select" | "edit" | "details">("select");
+  const [step, setStep] = useState<"select" | "edit" | "video-details" | "details">("select");
   const [uploadType, setUploadType] = useState<UploadType>("post");
   const [imageUrl, setImageUrl] = useState("");
   const [caption, setCaption] = useState("");
+  // Video-specific state
+  const [videoTitle, setVideoTitle] = useState("");
+  const [videoDesc, setVideoDesc] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Vlog");
+  const [visibility, setVisibility] = useState("public");
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [storyShape, setStoryShape] = useState<"circle" | "pentagon">("circle");
   const [storyColor, setStoryColor] = useState<"default" | "violet" | "teal">("default");
-  
+
   const createPost = useCreatePost();
 
   const handleTypeSelect = (type: UploadType) => {
     setUploadType(type);
-    if (type === "live") {
-      // Live might go to a different flow, but for now just details
-      setStep("details");
-    } else if (type === "editing" || type === "reel" || type === "story") {
-      setStep("edit");
-    } else {
-      setStep("details");
-    }
+    if (type === "video") setStep("video-details");
+    else if (type === "live") setStep("details");
+    else if (type === "editing" || type === "reel" || type === "story") setStep("edit");
+    else setStep("details");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imageUrl && uploadType !== "live") return;
-
+    const finalCaption = uploadType === "video"
+      ? `${videoTitle}${videoDesc ? `\n${videoDesc}` : ""}`
+      : caption;
     try {
       await createPost.mutateAsync({
-        imageUrl: imageUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60", // Placeholder for non-image types
-        caption,
+        imageUrl: thumbnailUrl || imageUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60",
+        caption: finalCaption,
         userId: "temp",
-        type: uploadType
+        type: uploadType === "video" ? "post" : uploadType,
       });
       handleClose();
-    } catch (error) {
-      // Error handled by hook
-    }
+    } catch {}
   };
 
   const handleClose = () => {
@@ -74,197 +140,260 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setUploadType("post");
       setImageUrl("");
       setCaption("");
-      setStoryShape("circle");
-      setStoryColor("default");
+      setVideoTitle("");
+      setVideoDesc("");
+      setSelectedCategory("Vlog");
+      setVisibility("public");
+      setThumbnailUrl("");
     }, 300);
   };
 
-  const uploadOptions = [
-    { id: "post", label: "Post", icon: Layout, color: "text-blue-500" },
-    { id: "reel", label: "Reels", icon: Video, color: "text-purple-500" },
-    { id: "story", label: "Story", icon: Layout, color: "text-pink-500" },
-    { id: "editing", label: "Editing", icon: PenTool, color: "text-orange-500" },
-    { id: "live", label: "Live", icon: Radio, color: "text-red-500" },
-  ];
-
-  const editingTools = [
-    { icon: Music, label: "Music" },
-    { icon: Scissors, label: "Edit" },
-    { icon: Type, label: "Text" },
-    { icon: Smile, label: "Stickers" },
-    { icon: Sparkles, label: "Effects" },
-  ];
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border-none shadow-2xl overflow-hidden p-0">
-        <DialogHeader className="p-6 border-b border-border/50">
-          <DialogTitle className="text-center font-display text-xl">
-            {step === "select" && "Create New"}
-            {step === "edit" && `Edit ${uploadType.charAt(0).toUpperCase() + uploadType.slice(1)}`}
-            {step === "details" && "Final Details"}
-          </DialogTitle>
+      <DialogContent className="sm:max-w-md bg-black border border-white/10 shadow-2xl overflow-hidden p-0 rounded-2xl">
+        <DialogDescription className="sr-only">Create new content</DialogDescription>
+
+        {/* Header */}
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-white/8 flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            {step !== "select" && (
+              <button onClick={() => setStep(step === "video-details" || step === "details" ? "select" : "select")}
+                className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors mr-1">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <DialogTitle className="text-base font-bold text-white">
+              {step === "select" && "Create"}
+              {step === "video-details" && "Upload Video"}
+              {step === "edit" && `Edit ${uploadType.charAt(0).toUpperCase() + uploadType.slice(1)}`}
+              {step === "details" && "Final Details"}
+            </DialogTitle>
+          </div>
         </DialogHeader>
-        
-        <div className="p-6">
+
+        <div className="p-4 max-h-[80vh] overflow-y-auto">
+
+          {/* ── STEP: SELECT TYPE ── */}
           {step === "select" && (
-            <div className="grid grid-cols-2 gap-4">
-              {uploadOptions.map((opt) => (
-                <Button
-                  key={opt.id}
-                  variant="outline"
-                  className="h-24 flex flex-col gap-2 rounded-2xl hover:bg-muted/50 border-border/50"
-                  onClick={() => handleTypeSelect(opt.id as UploadType)}
-                >
-                  <opt.icon className={cn("w-8 h-8", opt.color)} />
-                  <span className="font-semibold">{opt.label}</span>
-                </Button>
-              ))}
-            </div>
-          )}
-
-          {step === "edit" && (
-            <div className="space-y-6">
-              <div className="aspect-[9/16] rounded-2xl bg-muted relative overflow-hidden flex items-center justify-center border-2 border-dashed border-border">
-                {imageUrl ? (
-                  <>
-                    <img 
-                      src={imageUrl} 
-                      alt="Preview" 
-                      className={cn(
-                        "w-full h-full object-cover",
-                        uploadType === "story" && storyShape === "pentagon" && "clip-pentagon"
-                      )} 
-                    />
-                    {uploadType === "story" && storyColor !== "default" && (
-                      <div className={cn(
-                        "absolute inset-0 opacity-20",
-                        storyColor === "violet" && "bg-violet-500",
-                        storyColor === "teal" && "bg-teal-500"
-                      )} />
-                    )}
-                  </>
-                ) : (
-                  <div className="text-center space-y-2">
-                    <ImagePlus className="w-12 h-12 text-muted-foreground mx-auto" />
-                    <p className="text-sm text-muted-foreground">Select media to start editing</p>
-                    <Input
-                      type="file"
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                      onChange={(e) => {
-                        // For demo, just set a random image if they try to upload
-                        setImageUrl("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800");
-                      }}
-                    />
+            <div className="space-y-2.5">
+              {/* Featured: Video */}
+              {UPLOAD_OPTIONS.filter(o => o.featured).map((opt) => (
+                <button key={opt.id} onClick={() => handleTypeSelect(opt.id as UploadType)}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.01] active:scale-[0.99] text-left"
+                  style={{ background: opt.bg, borderColor: opt.border, boxShadow: `0 0 20px ${opt.glow}` }}>
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${opt.gradient} flex items-center justify-center shrink-0 shadow-lg`}>
+                    <opt.icon className="w-7 h-7 text-white" />
                   </div>
-                )}
-              </div>
-
-              {/* Editing Tools */}
-              <div className="flex justify-between items-center px-2">
-                {editingTools.map((tool) => (
-                  <button
-                    key={tool.label}
-                    className="flex flex-col items-center gap-1 group"
-                  >
-                    <div className="p-3 rounded-full bg-secondary group-hover:bg-primary/10 transition-colors">
-                      <tool.icon className="w-5 h-5 text-foreground" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-sm">{opt.label}</span>
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-wide">Creator</span>
                     </div>
-                    <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">{tool.label}</span>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">{opt.desc} — ideal for vlogs, tutorials & more</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+                </button>
+              ))}
+
+              {/* Other options grid */}
+              <div className="grid grid-cols-2 gap-2.5 mt-1">
+                {UPLOAD_OPTIONS.filter(o => !o.featured).map((opt) => (
+                  <button key={opt.id} onClick={() => handleTypeSelect(opt.id as UploadType)}
+                    className="flex flex-col items-center gap-2.5 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] text-center"
+                    style={{ background: opt.bg, borderColor: opt.border, boxShadow: `0 0 15px ${opt.glow}` }}>
+                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${opt.gradient} flex items-center justify-center shadow-lg`}>
+                      <opt.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white text-sm">{opt.label}</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">{opt.desc}</div>
+                    </div>
                   </button>
                 ))}
               </div>
+            </div>
+          )}
 
-              {/* Story Specific Customization */}
-              {uploadType === "story" && (
-                <div className="space-y-4 pt-4 border-t border-border">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">Shape Style</span>
-                    <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant={storyShape === "circle" ? "default" : "outline"}
-                        onClick={() => setStoryShape("circle")}
-                        className="rounded-full w-8 h-8 p-0"
-                      >
-                        C
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant={storyShape === "pentagon" ? "default" : "outline"}
-                        onClick={() => setStoryShape("pentagon")}
-                        className="rounded-full w-8 h-8 p-0"
-                      >
-                        <Pentagon className="w-4 h-4" />
-                      </Button>
-                    </div>
+          {/* ── STEP: VIDEO UPLOAD DETAILS ── */}
+          {step === "video-details" && (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Upload area */}
+              <div className="relative w-full h-36 rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-red-500/40 hover:bg-red-500/5 transition-all group">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Upload className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-white">Drop video file here</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">MP4, MOV, AVI up to 4GB</p>
+                </div>
+                <input type="file" accept="video/*" className="absolute inset-0 opacity-0 cursor-pointer" />
+              </div>
+
+              {/* Title */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <AlignLeft className="w-3 h-3" /> Title *
+                </Label>
+                <Input
+                  placeholder="Add a catchy title for your video..."
+                  value={videoTitle}
+                  onChange={(e) => setVideoTitle(e.target.value)}
+                  className="bg-white/5 border-white/10 focus:border-red-500/50 rounded-xl text-white placeholder:text-zinc-600"
+                  maxLength={100}
+                />
+                <p className="text-[10px] text-zinc-600 text-right">{videoTitle.length}/100</p>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Captions className="w-3 h-3" /> Description
+                </Label>
+                <Textarea
+                  placeholder="Tell viewers about your video — add hashtags, links, chapters..."
+                  value={videoDesc}
+                  onChange={(e) => setVideoDesc(e.target.value)}
+                  className="bg-white/5 border-white/10 focus:border-red-500/50 rounded-xl text-white placeholder:text-zinc-600 resize-none min-h-[90px]"
+                  maxLength={500}
+                />
+              </div>
+
+              {/* Thumbnail */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <ImagePlus className="w-3 h-3" /> Thumbnail URL
+                </Label>
+                <Input
+                  placeholder="https://... (leave blank for auto-thumbnail)"
+                  value={thumbnailUrl}
+                  onChange={(e) => setThumbnailUrl(e.target.value)}
+                  className="bg-white/5 border-white/10 focus:border-red-500/50 rounded-xl text-white placeholder:text-zinc-600 text-[12px]"
+                />
+              </div>
+
+              {/* Category */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Tag className="w-3 h-3" /> Category
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {CATEGORIES.map((cat) => (
+                    <button key={cat} type="button" onClick={() => setSelectedCategory(cat)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                        selectedCategory === cat
+                          ? "bg-red-500/20 border-red-500/60 text-red-300"
+                          : "bg-white/5 border-white/10 text-zinc-500 hover:border-white/25 hover:text-white"
+                      }`}>
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Visibility */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <ListVideo className="w-3 h-3" /> Visibility
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {VISIBILITY.map((v) => {
+                    const Icon = v.icon;
+                    return (
+                      <button key={v.id} type="button" onClick={() => setVisibility(v.id)}
+                        className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all ${
+                          visibility === v.id
+                            ? "bg-red-500/15 border-red-500/50 text-red-300"
+                            : "bg-white/3 border-white/8 text-zinc-500 hover:border-white/20"
+                        }`}>
+                        <Icon className="w-4 h-4" />
+                        <span className="text-[10px] font-bold">{v.label}</span>
+                        <span className="text-[8px] text-zinc-600">{v.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Submit */}
+              <button type="submit" disabled={!videoTitle || createPost.isPending}
+                className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                style={{
+                  background: videoTitle ? "linear-gradient(135deg, #ef4444, #f97316)" : "rgba(255,255,255,0.05)",
+                  boxShadow: videoTitle ? "0 0 20px rgba(239,68,68,0.4)" : "none",
+                  color: "white",
+                }}>
+                {createPost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Upload className="w-4 h-4" /> Publish Video</>}
+              </button>
+            </form>
+          )}
+
+          {/* ── STEP: EDIT (Reel / Story) ── */}
+          {step === "edit" && (
+            <div className="space-y-5">
+              <div className="aspect-[9/16] rounded-2xl bg-white/5 relative overflow-hidden flex items-center justify-center border border-dashed border-white/15">
+                {imageUrl ? (
+                  <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-center space-y-2 relative">
+                    <ImagePlus className="w-10 h-10 text-zinc-600 mx-auto" />
+                    <p className="text-xs text-zinc-600">Tap to select media</p>
+                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer"
+                      onChange={() => setImageUrl("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800")} />
                   </div>
+                )}
+              </div>
+              <div className="flex justify-between px-2">
+                {EDITING_TOOLS.map((tool) => (
+                  <button key={tool.label} className="flex flex-col items-center gap-1 group">
+                    <div className="p-3 rounded-full bg-white/8 group-hover:bg-white/15 transition-colors">
+                      <tool.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-[9px] text-zinc-500 font-bold uppercase">{tool.label}</span>
+                  </button>
+                ))}
+              </div>
+              {uploadType === "story" && (
+                <div className="space-y-3 pt-3 border-t border-white/8">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">Accent Color</span>
+                    <span className="text-xs font-semibold text-zinc-400">Shape</span>
                     <div className="flex gap-2">
-                      <button 
-                        className={cn("w-6 h-6 rounded-full border-2", storyColor === "default" ? "border-primary" : "border-transparent")}
-                        onClick={() => setStoryColor("default")}
-                        style={{ background: "linear-gradient(to right, #833ab4, #fd1d1d, #fcb045)" }}
-                      />
-                      <button 
-                        className={cn("w-6 h-6 rounded-full bg-violet-500 border-2", storyColor === "violet" ? "border-primary" : "border-transparent")}
-                        onClick={() => setStoryColor("violet")}
-                      />
-                      <button 
-                        className={cn("w-6 h-6 rounded-full bg-teal-500 border-2", storyColor === "teal" ? "border-primary" : "border-transparent")}
-                        onClick={() => setStoryColor("teal")}
-                      />
+                      {["circle", "pentagon"].map(s => (
+                        <Button key={s} size="sm" variant={storyShape === s ? "default" : "outline"}
+                          onClick={() => setStoryShape(s as any)} className="rounded-full w-8 h-8 p-0 text-[10px]">
+                          {s === "circle" ? "○" : <Pentagon className="w-3 h-3" />}
+                        </Button>
+                      ))}
                     </div>
                   </div>
                 </div>
               )}
-
-              <Button 
-                className="w-full h-12 rounded-xl font-bold text-lg"
-                onClick={() => setStep("details")}
-                disabled={!imageUrl}
-              >
+              <Button className="w-full h-11 rounded-xl font-bold" onClick={() => setStep("details")} disabled={!imageUrl}>
                 Next
               </Button>
             </div>
           )}
 
-          {step === "details" && (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="flex gap-4">
-                <div className="w-20 h-20 rounded-lg bg-muted overflow-hidden flex-shrink-0">
-                  {imageUrl && <img src={imageUrl} alt="Thumbnail" className="w-full h-full object-cover" />}
+          {/* ── STEP: DETAILS (Post / Live) ── */}
+          {step === "details" && uploadType !== "video" && (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="flex gap-3">
+                <div className="w-20 h-20 rounded-xl bg-white/8 overflow-hidden shrink-0 border border-white/10">
+                  {imageUrl && <img src={imageUrl} alt="thumb" className="w-full h-full object-cover" />}
                 </div>
                 <Textarea
-                  placeholder="Write a caption..."
+                  placeholder={uploadType === "live" ? "What's your stream about?" : "Write a caption..."}
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  className="flex-1 resize-none border-none bg-muted/50 focus:ring-0 min-h-[80px]"
+                  className="flex-1 resize-none bg-white/5 border-white/10 rounded-xl placeholder:text-zinc-600 min-h-[80px]"
                 />
               </div>
-
-              <div className="space-y-4">
-                <Button 
-                  type="submit" 
-                  className="w-full bg-gradient-social hover:opacity-90 transition-opacity h-12 rounded-xl font-bold text-lg"
-                  disabled={createPost.isPending}
-                >
-                  {createPost.isPending ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    uploadType === "live" ? "Go Live" : "Share"
-                  )}
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  className="w-full"
-                  onClick={() => setStep(uploadType === "post" || uploadType === "live" ? "select" : "edit")}
-                >
-                  Back
-                </Button>
-              </div>
+              {uploadType !== "live" && (
+                <Input placeholder="Image URL..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
+                  className="bg-white/5 border-white/10 rounded-xl placeholder:text-zinc-600 text-sm" />
+              )}
+              <Button type="submit" className="w-full h-11 rounded-xl font-bold bg-gradient-to-r from-primary to-accent" disabled={createPost.isPending}>
+                {createPost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : uploadType === "live" ? "🔴 Go Live" : "Share"}
+              </Button>
             </form>
           )}
         </div>
@@ -272,4 +401,3 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     </Dialog>
   );
 }
-
