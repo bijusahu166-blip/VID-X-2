@@ -6,10 +6,10 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { useCreatePost } from "@/hooks/use-posts";
 import {
-  ImagePlus, Loader2, Video, Layout, Radio,
-  Music, Scissors, Type, Smile, Sparkles, Pentagon,
+  ImagePlus, Loader2, Video, Radio,
+  Music, Scissors, Type, Smile, Sparkles,
   Upload, Film, Globe, Lock, Users, ChevronRight,
-  Tag, AlignLeft, Captions, ListVideo, PenTool, X
+  Tag, AlignLeft, Captions, ListVideo, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ interface CreatePostDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type UploadType = "post" | "video" | "reel" | "story" | "live" | "editing";
+type UploadType = "post" | "video" | "reel" | "live" | "editing";
 
 const CATEGORIES = ["Vlog", "Gaming", "Music", "Travel", "Food", "Tech", "Education", "Comedy", "Fitness", "Fashion"];
 const VISIBILITY = [
@@ -62,17 +62,6 @@ const UPLOAD_OPTIONS = [
     featured: false,
   },
   {
-    id: "story",
-    label: "Story",
-    icon: Layout,
-    desc: "Disappears in 24h",
-    gradient: "from-yellow-400 to-orange-500",
-    bg: "rgba(234,179,8,0.1)",
-    border: "rgba(234,179,8,0.35)",
-    glow: "rgba(234,179,8,0.15)",
-    featured: false,
-  },
-  {
     id: "live",
     label: "Go Live",
     icon: Radio,
@@ -104,8 +93,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [selectedCategory, setSelectedCategory] = useState("Vlog");
   const [visibility, setVisibility] = useState("public");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
-  const [storyShape, setStoryShape] = useState<"circle" | "pentagon">("circle");
-  const [storyColor, setStoryColor] = useState<"default" | "violet" | "teal">("default");
 
   const createPost = useCreatePost();
 
@@ -113,7 +100,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     setUploadType(type);
     if (type === "video") setStep("video-details");
     else if (type === "live") setStep("details");
-    else if (type === "editing" || type === "reel" || type === "story") setStep("edit");
+    else if (type === "editing" || type === "reel") setStep("edit");
     else setStep("details");
   };
 
@@ -352,21 +339,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   </button>
                 ))}
               </div>
-              {uploadType === "story" && (
-                <div className="space-y-3 pt-3 border-t border-white/8">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-zinc-400">Shape</span>
-                    <div className="flex gap-2">
-                      {["circle", "pentagon"].map(s => (
-                        <Button key={s} size="sm" variant={storyShape === s ? "default" : "outline"}
-                          onClick={() => setStoryShape(s as any)} className="rounded-full w-8 h-8 p-0 text-[10px]">
-                          {s === "circle" ? "○" : <Pentagon className="w-3 h-3" />}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
               <Button className="w-full h-11 rounded-xl font-bold" onClick={() => setStep("details")} disabled={!imageUrl}>
                 Next
               </Button>
