@@ -18,7 +18,7 @@ interface CreatePostDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type UploadType = "post" | "video" | "reel" | "live" | "editing";
+type UploadType = "post" | "video" | "reel" | "story" | "live" | "editing";
 
 const CATEGORIES = ["Vlog", "Gaming", "Music", "Travel", "Food", "Tech", "Education", "Comedy", "Fitness", "Fashion"];
 const VISIBILITY = [
@@ -62,6 +62,17 @@ const UPLOAD_OPTIONS = [
     featured: false,
   },
   {
+    id: "story",
+    label: "Story",
+    icon: Sparkles,
+    desc: "Disappears in 24h",
+    gradient: "from-yellow-400 to-orange-500",
+    bg: "rgba(234,179,8,0.1)",
+    border: "rgba(234,179,8,0.35)",
+    glow: "rgba(234,179,8,0.15)",
+    featured: false,
+  },
+  {
     id: "live",
     label: "Go Live",
     icon: Radio,
@@ -93,6 +104,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [selectedCategory, setSelectedCategory] = useState("Vlog");
   const [visibility, setVisibility] = useState("public");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [storyDuration, setStoryDuration] = useState<"6h" | "12h" | "24h">("24h");
 
   const createPost = useCreatePost();
 
@@ -100,7 +112,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     setUploadType(type);
     if (type === "video") setStep("video-details");
     else if (type === "live") setStep("details");
-    else if (type === "editing" || type === "reel") setStep("edit");
+    else if (type === "editing" || type === "reel" || type === "story") setStep("edit");
     else setStep("details");
   };
 
@@ -339,6 +351,25 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   </button>
                 ))}
               </div>
+              {/* Story-specific: duration picker */}
+              {uploadType === "story" && (
+                <div className="space-y-2 pt-3 border-t border-white/8">
+                  <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Story Duration</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["6h", "12h", "24h"] as const).map((d) => (
+                      <button key={d} type="button" onClick={() => setStoryDuration(d)}
+                        className={`py-2 rounded-xl text-[11px] font-black border transition-all ${
+                          storyDuration === d
+                            ? "bg-yellow-500/20 border-yellow-500/60 text-yellow-300"
+                            : "bg-white/5 border-white/10 text-zinc-500 hover:border-white/25"
+                        }`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <Button className="w-full h-11 rounded-xl font-bold" onClick={() => setStep("details")} disabled={!imageUrl}>
                 Next
               </Button>
