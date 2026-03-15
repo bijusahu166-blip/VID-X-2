@@ -99,15 +99,36 @@ export default function Home() {
 
           {/* Reels horizontal scroll */}
           <div className="flex gap-2.5 overflow-x-auto scrollbar-hide px-3">
-            {/* Add reel button */}
-            <div className="flex flex-col items-center gap-1.5 shrink-0">
-              <div className="w-[88px] h-[148px] rounded-xl bg-white/5 border border-white/10 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/10 transition-colors">
-                <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center">
-                  <Plus className="w-4 h-4 text-primary" />
+            {/* Event / Story card */}
+            <div className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
+              <div className="w-[88px] h-[148px] rounded-xl relative overflow-hidden"
+                style={{
+                  background: "linear-gradient(160deg, #1a0030 0%, #0d001a 50%, #000 100%)",
+                  border: "1px solid rgba(236,72,153,0.3)",
+                  boxShadow: "0 0 18px rgba(236,72,153,0.2)",
+                }}>
+                {/* Animated gradient ring at top */}
+                <div className="absolute top-4 left-1/2 -translate-x-1/2">
+                  <div className="w-14 h-14 rounded-full p-[2.5px] group-hover:scale-105 transition-transform"
+                    style={{
+                      background: "conic-gradient(from 0deg, #ec4899, #a855f7, #f97316, #ec4899)",
+                      animation: "spin 3s linear infinite",
+                    }}>
+                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
+                      <Plus className="w-5 h-5 text-pink-400" />
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[9px] text-zinc-500 font-semibold">Create</span>
+                {/* Glow orb */}
+                <div className="absolute inset-0 opacity-30"
+                  style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(236,72,153,0.5), transparent 65%)" }} />
+                {/* Bottom label */}
+                <div className="absolute bottom-0 left-0 right-0 py-2 text-center"
+                  style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9), transparent)" }}>
+                  <span className="text-[8px] font-black text-pink-400 uppercase tracking-widest">+ Event</span>
+                </div>
               </div>
-              <span className="text-[10px] text-zinc-600 font-medium">Your Reel</span>
+              <span className="text-[10px] text-pink-400/80 font-semibold">Story</span>
             </div>
 
             {REELS.map((reel) => (
