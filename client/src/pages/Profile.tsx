@@ -74,9 +74,15 @@ function SettingRow({ icon: Icon, label, sub, onClick }: { icon: any; label: str
 
 function OtherUserProfile({ userId }: { userId: string }) {
   const [, navigate] = useLocation();
+
   const { data: profileData, isLoading } = useQuery<any>({
     queryKey: ["/api/users", userId],
     queryFn: () => fetch(`/api/users/${userId}`, { credentials: "include" }).then(r => r.json()),
+  });
+
+  const { data: userPosts, isLoading: postsLoading } = useQuery<any[]>({
+    queryKey: ["/api/posts", "user", userId],
+    queryFn: () => fetch(`/api/posts?userId=${userId}`, { credentials: "include" }).then(r => r.json()),
   });
 
   if (isLoading) {
@@ -90,6 +96,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
   const u = profileData;
   const name = u ? `${u.firstName} ${u.lastName}` : "User";
   const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase();
+  const postCount = userPosts?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-black pb-20">
@@ -101,7 +108,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
         <span className="font-bold text-white">{name}</span>
       </div>
 
-      {/* Profile hero */}
+      {/* Cover */}
       <div className="relative">
         <div className="h-36 w-full" style={{ background: "linear-gradient(135deg, #1a0030, #0d001a)" }} />
         <div className="absolute -bottom-10 left-4">
@@ -115,11 +122,12 @@ function OtherUserProfile({ userId }: { userId: string }) {
       </div>
 
       <div className="px-4 pt-14">
+        {/* Name + follow */}
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="flex items-center gap-1.5">
               <h1 className="text-lg font-black text-white">{name}</h1>
-              {u?.isCelebrity && <span className="w-4 h-4 text-blue-400">✓</span>}
+              {u?.isCelebrity && <span className="text-blue-400 text-sm">✓</span>}
             </div>
             {u?.bio && <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{u.bio}</p>}
           </div>
@@ -129,9 +137,9 @@ function OtherUserProfile({ userId }: { userId: string }) {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-4 mb-5">
           {[
-            { label: "Posts", value: u?.postsCount ?? 0 },
+            { label: "Posts", value: postCount },
             { label: "Followers", value: u?.followersCount ?? 0 },
             { label: "Following", value: u?.followingCount ?? 0 },
           ].map(stat => (
@@ -142,7 +150,45 @@ function OtherUserProfile({ userId }: { userId: string }) {
           ))}
         </div>
 
-        <p className="text-xs text-zinc-600 text-center py-8">No posts to show yet.</p>
+        {/* Posts grid */}
+        {postsLoading ? (
+          <div className="grid grid-cols-3 gap-0.5">
+            {Array(6).fill(0).map((_, i) => (
+              <div key={i} className="aspect-square bg-zinc-900 animate-pulse" />
+            ))}
+          </div>
+        ) : userPosts && userPosts.length > 0 ? (
+          <div className="grid grid-cols-3 gap-0.5">
+            {userPosts.map((post: any) => (
+              <div key={post.id} className="aspect-square bg-zinc-900 overflow-hidden relative">
+                {post.imageUrl && !post.imageUrl.startsWith("blob:") ? (
+                  <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center p-2"
+                    style={{ background: `linear-gradient(135deg, hsl(${(post.id * 47) % 360}, 40%, 14%), hsl(${(post.id * 47 + 120) % 360}, 50%, 20%))` }}
+                  >
+                    <p className="text-[8px] text-white/30 text-center leading-tight">{post.type}</p>
+                  </div>
+                )}
+                {(post.type === "video" || post.type === "reel") && (
+                  <div className="absolute top-1 right-1">
+                    <div className="w-4 h-4 rounded bg-black/60 flex items-center justify-center">
+                      <span className="text-[7px] text-white">▶</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="w-14 h-14 rounded-full bg-zinc-900 flex items-center justify-center mx-auto mb-3">
+              <Grid className="w-6 h-6 text-zinc-700" />
+            </div>
+            <p className="text-sm text-zinc-600">No posts yet</p>
+          </div>
+        )}
       </div>
 
       <BottomNav />
@@ -163,7 +209,7 @@ export default function Profile() {
   const { toast } = useToast();
   const [selectedPet, setSelectedPet] = useState<{ name: string; emoji: string } | null>(null);
   const { data: history } = useQuery<any[]>({ queryKey: ["/api/history"] });
-  const myPosts = posts || [];
+  const myPosts = posts?.filter(p => p.userId === user?.id) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
   const [allowMessages, setAllowMessages] = useState(true);

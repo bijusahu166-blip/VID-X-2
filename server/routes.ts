@@ -149,7 +149,10 @@ export async function registerRoutes(
 
   // Posts
   app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
-    const posts = await storage.getAllPosts();
+    const allPosts = await storage.getAllPosts();
+    // Optional userId filter for profile views
+    const filterUserId = req.query.userId as string | undefined;
+    const posts = filterUserId ? allPosts.filter(p => p.userId === filterUserId) : allPosts;
     // Enrich with user data and likes (inefficient N+1 but ok for MVP)
     const enrichedPosts = await Promise.all(posts.map(async (post) => {
       const user = await authStorage.getUser(post.userId);
