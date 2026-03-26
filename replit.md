@@ -42,11 +42,13 @@ Preferred communication style: Simple, everyday language.
 - **Relations**: Drizzle relations defined between posts↔users, posts↔comments, posts↔likes, comments↔users
 
 ## Authentication
-- **Method**: Replit Auth (OpenID Connect)
-- **Flow**: `/api/login` redirects to Replit OIDC, callback upserts user into `users` table
-- **Session**: Express sessions stored in PostgreSQL via `connect-pg-simple`
-- **Middleware**: `isAuthenticated` middleware protects API routes
-- **Client Hook**: `useAuth()` hook fetches current user from `/api/auth/user`
+- **Method**: Custom email/password auth (bcryptjs password hashing)
+- **Flow**: `POST /api/auth/register` → creates user; `POST /api/auth/login` → sets session; `POST /api/auth/logout` → destroys session
+- **Session**: Express sessions stored in PostgreSQL via `connect-pg-simple`, session userId stored as `req.session.userId`
+- **Middleware**: `isAuthenticated` checks `req.session.userId`
+- **Client Hook**: `useAuth()` fetches current user from `GET /api/auth/user`; logout uses POST (no Replit redirect)
+- **Login Page**: Custom dark VID-X branded login/signup page (`client/src/pages/Login.tsx`) with animated tabs
+- **Test accounts**: alice@example.com / password123, bob@example.com / password123
 
 ## Key API Routes
 - `GET/POST /api/posts` - List and create posts

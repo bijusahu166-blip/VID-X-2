@@ -18,9 +18,12 @@ async function seed() {
 
   console.log("Seeding database...");
 
-  // Seed users
+  // Seed users (password: "password123" for all)
+  const bcrypt = await import("bcryptjs");
+  const hashed = await bcrypt.hash("password123", 10);
   const [user1] = await db.insert(users).values({
       email: "alice@example.com",
+      password: hashed,
       firstName: "Alice",
       lastName: "Wonder",
       isCelebrity: true,
@@ -29,6 +32,7 @@ async function seed() {
 
   const [user2] = await db.insert(users).values({
       email: "bob@example.com",
+      password: hashed,
       firstName: "Bob",
       lastName: "Builder",
       profileImageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob",
@@ -127,7 +131,7 @@ export async function registerRoutes(
       const user = await authStorage.getUser(post.userId);
       const likesCount = await storage.getLikesCount(post.id);
       const comments = await storage.getComments(post.id);
-      const hasLiked = req.user ? await storage.hasLiked(post.id, (req.user as any).claims.sub) : false;
+      const hasLiked = await storage.hasLiked(post.id, (req.session as any).userId);
       return {
         ...post,
         user,
@@ -144,7 +148,7 @@ export async function registerRoutes(
       const input = api.posts.create.input.parse(req.body);
       const post = await storage.createPost({
         ...input,
-        userId: (req.user as any).claims.sub
+        userId: (req.session as any).userId
       });
       res.status(201).json(post);
     } catch (err) {
@@ -166,7 +170,7 @@ export async function registerRoutes(
     const user = await authStorage.getUser(post.userId);
     const likesCount = await storage.getLikesCount(post.id);
     const comments = await storage.getComments(post.id);
-    const hasLiked = req.user ? await storage.hasLiked(post.id, (req.user as any).claims.sub) : false;
+    const hasLiked = await storage.hasLiked(post.id, (req.session as any).userId);
     
     res.json({
       ...post,
@@ -179,14 +183,14 @@ export async function registerRoutes(
 
   app.post(api.posts.like.path, isAuthenticated, async (req, res) => {
     const postId = Number(req.params.id);
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const { added, count } = await storage.toggleLike(postId, userId);
     res.json({ success: true, likesCount: count, added });
   });
 
   app.post(api.posts.comment.path, isAuthenticated, async (req, res) => {
     const postId = Number(req.params.id);
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const { content } = req.body;
     
     if (!content) return res.status(400).json({ message: "Content required" });
@@ -231,20 +235,20 @@ export async function registerRoutes(
 
   // History
   app.get("/api/history", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const history = await storage.getHistory(userId);
     res.json(history);
   });
 
   app.post("/api/history", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const entry = await storage.createHistory({ ...req.body, userId });
     res.status(201).json(entry);
   });
 
   // ── Update own profile ────────────────────────────────────────────────────
   app.patch("/api/profile", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const { firstName, lastName, profileImageUrl } = req.body;
     const existing = await authStorage.getUser(userId);
     if (!existing) return res.status(404).json({ message: "User not found" });
@@ -260,19 +264,19 @@ export async function registerRoutes(
   // ── Users list (for new chat) ─────────────────────────────────────────────
   app.get("/api/users", isAuthenticated, async (req, res) => {
     const allUsers = await db.select().from(users);
-    const me = (req.user as any).claims.sub;
+    const me = (req.session as any).userId;
     res.json(allUsers.filter(u => u.id !== me));
   });
 
   // ── Online status ─────────────────────────────────────────────────────────
   app.post("/api/status/online", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     await storage.setOnlineStatus(userId, true);
     res.json({ ok: true });
   });
 
   app.post("/api/status/offline", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     await storage.setOnlineStatus(userId, false);
     res.json({ ok: true });
   });
@@ -284,7 +288,7 @@ export async function registerRoutes(
 
   // ── Direct chats ──────────────────────────────────────────────────────────
   app.get("/api/direct-chats", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const chats = await storage.getDirectChats(userId);
     const enriched = await Promise.all(chats.map(async chat => {
       const otherId = chat.user1Id === userId ? chat.user2Id : chat.user1Id;
@@ -299,7 +303,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/direct-chats", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const { otherUserId } = req.body;
     if (!otherUserId) return res.status(400).json({ message: "otherUserId required" });
     const chat = await storage.getOrCreateDirectChat(userId, otherUserId);
@@ -318,7 +322,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const chatId = Number(req.params.id);
     const { content, type, mediaUrl, metadata, replyToId, expiresInSeconds } = req.body;
     const expiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : undefined;
@@ -331,13 +335,13 @@ export async function registerRoutes(
   });
 
   app.patch("/api/direct-chats/:id/read", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     await storage.markMessagesRead(Number(req.params.id), userId);
     res.json({ ok: true });
   });
 
   app.patch("/api/messages/:id/react", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const { emoji } = req.body;
     const msg = await storage.addReaction(Number(req.params.id), userId, emoji);
     res.json(msg);
@@ -356,13 +360,13 @@ export async function registerRoutes(
 
   // ── Typing indicator ──────────────────────────────────────────────────────
   app.post("/api/direct-chats/:id/typing", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     await storage.setTyping(userId, Number(req.params.id));
     res.json({ ok: true });
   });
 
   app.get("/api/direct-chats/:id/typing", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const typers = await storage.getTyping(Number(req.params.id), userId);
     res.json({ typers });
   });
@@ -401,13 +405,13 @@ export async function registerRoutes(
 
   // ── Group chats ───────────────────────────────────────────────────────────
   app.get("/api/group-chats", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const groups = await storage.getGroupChats(userId);
     res.json(groups);
   });
 
   app.post("/api/group-chats", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+    const userId = (req.session as any).userId;
     const { name, memberIds } = req.body;
     if (!name) return res.status(400).json({ message: "name required" });
     const group = await storage.createGroupChat({ name, createdBy: userId }, [userId, ...(memberIds || [])]);

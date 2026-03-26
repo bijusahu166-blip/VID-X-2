@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 
 import NotFound from "@/pages/not-found";
-import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Reading from "@/pages/Reading";
@@ -27,7 +27,7 @@ function Router() {
   }
 
   if (!user) {
-    return <Landing />;
+    return <Login />;
   }
 
   return (
