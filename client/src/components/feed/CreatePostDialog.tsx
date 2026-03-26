@@ -12,6 +12,8 @@ import {
   Tag, AlignLeft, Captions, ListVideo, X, CheckCircle2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AR_EFFECTS, EFFECT_CATEGORIES } from "@/lib/arEffects";
+import type { AREffect } from "@/lib/arEffects";
 
 interface CreatePostDialogProps {
   open: boolean;
@@ -102,6 +104,73 @@ function readFileAsDataURL(file: File): Promise<string> {
   });
 }
 
+function ARFilterStrip({
+  selected,
+  onSelect,
+}: {
+  selected: AREffect;
+  onSelect: (e: AREffect) => void;
+}) {
+  const [activeTab, setActiveTab] = useState("All");
+  const visible = AR_EFFECTS.filter(e =>
+    (EFFECT_CATEGORIES.find(c => c.label === activeTab)?.ids ?? AR_EFFECTS.map(x => x.id)).includes(e.id)
+  );
+  return (
+    <div className="space-y-2">
+      {/* Category tabs */}
+      <div className="overflow-x-auto pb-1">
+        <div className="flex gap-1.5 w-max">
+          {EFFECT_CATEGORIES.map(cat => (
+            <button
+              key={cat.label}
+              onClick={() => setActiveTab(cat.label)}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold transition-all whitespace-nowrap border ${
+                activeTab === cat.label
+                  ? "bg-purple-500 border-purple-400 text-white"
+                  : "bg-white/5 border-white/10 text-white/50 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              {cat.emoji} {cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Filter tiles */}
+      <div className="overflow-x-auto pb-1">
+        <div className="flex gap-2 w-max">
+          {visible.map(effect => (
+            <button
+              key={effect.id}
+              onClick={() => onSelect(effect)}
+              className={`flex flex-col items-center gap-1 shrink-0 transition-all ${
+                selected.id === effect.id ? "scale-110" : "opacity-70 hover:opacity-100"
+              }`}
+            >
+              <div
+                className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl border-2 transition-all ${
+                  selected.id === effect.id
+                    ? "border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.6)]"
+                    : "border-white/10"
+                }`}
+                style={{
+                  background: selected.id === effect.id
+                    ? "rgba(168,85,247,0.2)"
+                    : "rgba(255,255,255,0.05)",
+                }}
+              >
+                {effect.emoji}
+              </div>
+              <span className="text-[8px] text-white/60 font-semibold max-w-[48px] text-center leading-tight">
+                {effect.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) {
   const [step, setStep] = useState<"select" | "edit" | "video-details" | "details">("select");
   const [uploadType, setUploadType] = useState<UploadType>("post");
@@ -116,6 +185,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [isReadingFile, setIsReadingFile] = useState(false);
+  const [selectedArEffect, setSelectedArEffect] = useState<AREffect>(AR_EFFECTS[0]);
+  const [showArFilters, setShowArFilters] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -186,6 +257,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setThumbnailUrl("");
       setSelectedFile(null);
       setPreviewUrl("");
+      setSelectedArEffect(AR_EFFECTS[0]);
+      setShowArFilters(false);
     }, 300);
   };
 
@@ -389,10 +462,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
           {/* ── STEP: EDIT (Reel / Story) ── */}
           {step === "edit" && (
-            <div className="space-y-5">
+            <div className="space-y-4">
+              {/* Image preview with AR filter applied */}
               <div
                 className="aspect-[9/16] rounded-2xl bg-white/5 relative overflow-hidden flex items-center justify-center border border-dashed border-white/15 cursor-pointer"
-                onClick={() => photoInputRef.current?.click()}
+                onClick={() => !imageUrl && photoInputRef.current?.click()}
               >
                 {isReadingFile ? (
                   <div className="flex flex-col items-center gap-2">
@@ -400,7 +474,29 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                     <p className="text-xs text-zinc-500">Loading preview...</p>
                   </div>
                 ) : imageUrl ? (
-                  <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                  <>
+                    <img
+                      src={imageUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      style={{ filter: selectedArEffect.filter === "none" ? undefined : selectedArEffect.filter }}
+                    />
+                    {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
+                      <div className="absolute inset-0 pointer-events-none" style={{ background: selectedArEffect.overlay }} />
+                    )}
+                    {selectedArEffect.id !== "none" && (
+                      <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/15">
+                        <span className="text-sm">{selectedArEffect.emoji}</span>
+                        <span className="text-[10px] text-white/80 font-semibold">{selectedArEffect.name}</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); photoInputRef.current?.click(); }}
+                      className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center border border-white/15 hover:bg-white/20 transition-colors"
+                    >
+                      <ImagePlus className="w-4 h-4 text-white" />
+                    </button>
+                  </>
                 ) : (
                   <div className="text-center space-y-2">
                     <ImagePlus className="w-10 h-10 text-zinc-600 mx-auto" />
@@ -420,23 +516,49 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
               {imageUrl && (
                 <button
                   type="button"
-                  onClick={() => { setImageUrl(""); setPreviewUrl(""); setSelectedFile(null); }}
+                  onClick={() => { setImageUrl(""); setPreviewUrl(""); setSelectedFile(null); setSelectedArEffect(AR_EFFECTS[0]); }}
                   className="w-full text-[11px] text-zinc-500 hover:text-red-400 transition-colors"
                 >
                   Remove photo
                 </button>
               )}
 
+              {/* Editing tools — Effects button now opens the AR filter strip */}
               <div className="flex justify-between px-2">
                 {EDITING_TOOLS.map((tool) => (
-                  <button key={tool.label} className="flex flex-col items-center gap-1 group">
-                    <div className="p-3 rounded-full bg-white/8 group-hover:bg-white/15 transition-colors">
-                      <tool.icon className="w-5 h-5 text-white" />
+                  <button
+                    key={tool.label}
+                    onClick={() => tool.label === "Effects" ? setShowArFilters(s => !s) : undefined}
+                    className="flex flex-col items-center gap-1 group"
+                  >
+                    <div className={`p-3 rounded-full transition-colors ${
+                      tool.label === "Effects" && showArFilters
+                        ? "bg-purple-500/30 ring-1 ring-purple-400"
+                        : "bg-white/8 group-hover:bg-white/15"
+                    }`}>
+                      <tool.icon className={`w-5 h-5 ${tool.label === "Effects" && showArFilters ? "text-purple-300" : "text-white"}`} />
                     </div>
                     <span className="text-[9px] text-zinc-500 font-bold uppercase">{tool.label}</span>
                   </button>
                 ))}
               </div>
+
+              {/* AR Filter picker — toggled by Effects button */}
+              {showArFilters && imageUrl && (
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <span className="text-[11px] font-bold text-white">AR Filters</span>
+                      <span className="text-[9px] text-purple-400">{AR_EFFECTS.length} filters</span>
+                    </div>
+                    <button onClick={() => setShowArFilters(false)} className="text-white/40 hover:text-white">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <ARFilterStrip selected={selectedArEffect} onSelect={setSelectedArEffect} />
+                </div>
+              )}
 
               {uploadType === "story" && (
                 <div className="space-y-2 pt-3 border-t border-white/8">
@@ -464,44 +586,104 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
           {/* ── STEP: DETAILS (Post / Live) ── */}
           {step === "details" && uploadType !== "video" && (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {uploadType !== "live" && (
-                <div
-                  className="relative w-full h-36 rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group overflow-hidden"
-                  onClick={() => photoInputRef.current?.click()}
-                >
-                  {isReadingFile ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-                      <p className="text-xs text-zinc-500">Loading preview...</p>
-                    </div>
-                  ) : imageUrl ? (
-                    <img src={imageUrl} alt="Preview" className="w-full h-full object-cover rounded-2xl" />
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <ImagePlus className="w-5 h-5 text-purple-400" />
+                <div className="space-y-2">
+                  <div
+                    className="relative w-full h-40 rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group overflow-hidden"
+                    onClick={() => !imageUrl && photoInputRef.current?.click()}
+                  >
+                    {isReadingFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                        <p className="text-xs text-zinc-500">Loading preview...</p>
                       </div>
-                      <div className="text-center">
-                        <p className="text-sm font-semibold text-white">Tap to select photo</p>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">JPG, PNG, WEBP</p>
+                    ) : imageUrl ? (
+                      <>
+                        <img
+                          src={imageUrl}
+                          alt="Preview"
+                          className="w-full h-full object-cover rounded-2xl"
+                          style={{ filter: selectedArEffect.filter === "none" ? undefined : selectedArEffect.filter }}
+                        />
+                        {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
+                          <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ background: selectedArEffect.overlay }} />
+                        )}
+                        {selectedArEffect.id !== "none" && (
+                          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/15">
+                            <span className="text-sm">{selectedArEffect.emoji}</span>
+                            <span className="text-[10px] text-white/80 font-semibold">{selectedArEffect.name}</span>
+                          </div>
+                        )}
+                        <div className="absolute bottom-2 right-2 flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setShowArFilters(s => !s); }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                              showArFilters
+                                ? "bg-purple-500 border-purple-400 text-white"
+                                : "bg-black/60 border-white/15 text-white/80 hover:bg-white/20"
+                            }`}
+                          >
+                            <Sparkles className="w-3 h-3" /> Filters
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); photoInputRef.current?.click(); }}
+                            className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center border border-white/15 hover:bg-white/20 transition-colors"
+                          >
+                            <ImagePlus className="w-3.5 h-3.5 text-white" />
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <ImagePlus className="w-5 h-5 text-purple-400" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-semibold text-white">Tap to select photo</p>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">JPG, PNG, WEBP</p>
+                        </div>
                       </div>
+                    )}
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoFileChange}
+                    />
+                  </div>
+
+                  {/* AR Filter picker for Photo Post */}
+                  {showArFilters && imageUrl && (
+                    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                          <span className="text-[11px] font-bold text-white">AR Filters</span>
+                          <span className="text-[9px] text-purple-400">{AR_EFFECTS.length} filters</span>
+                        </div>
+                        <button type="button" onClick={() => setShowArFilters(false)} className="text-white/40 hover:text-white">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <ARFilterStrip selected={selectedArEffect} onSelect={setSelectedArEffect} />
                     </div>
                   )}
-                  <input
-                    ref={photoInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handlePhotoFileChange}
-                  />
                 </div>
               )}
 
               <div className="flex gap-3">
                 {imageUrl && uploadType !== "live" && (
                   <div className="w-16 h-16 rounded-xl bg-white/8 overflow-hidden shrink-0 border border-white/10">
-                    <img src={imageUrl} alt="thumb" className="w-full h-full object-cover" />
+                    <img
+                      src={imageUrl}
+                      alt="thumb"
+                      className="w-full h-full object-cover"
+                      style={{ filter: selectedArEffect.filter === "none" ? undefined : selectedArEffect.filter }}
+                    />
                   </div>
                 )}
                 <Textarea
