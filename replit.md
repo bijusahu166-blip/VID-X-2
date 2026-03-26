@@ -1,6 +1,6 @@
 # Overview
 
-This is an Instagram-like social media application called "SocialApp" built with a full-stack TypeScript architecture. It features a mobile-first design with a feed of photo posts, stories, reels, direct messages, user profiles, AI-powered chat, and AI image generation. The app uses Replit Auth for authentication and follows the 2025-2026 Instagram layout pattern (create button top-left, DMs center-bottom, 5-tab navigation).
+**LITLink (VID-X)** — a mobile-first dark-themed social media platform built with React + Express + PostgreSQL. Features: Home feed, Search, Reels, Reading, full-featured Messages (with 1-to-1 chat, voice notes, media sharing, AI translation, smart replies, polls, location, disappearing messages, reactions, pinning, chat themes), Video Calling with 4K HD + 81 AR filters + screen sharing + recording, and AI assistant. Uses Replit Auth (OIDC) for authentication.
 
 # User Preferences
 

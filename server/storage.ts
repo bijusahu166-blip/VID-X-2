@@ -4,8 +4,13 @@ import {
   type Comment, type Like, type Book, type InsertBook, type Ad, type InsertAd,
   type History, type InsertHistory
 } from "@shared/schema";
+import {
+  directChats, directMessages, groupChats, groupMembers, typingIndicators, userOnlineStatus,
+  type DirectChat, type InsertDirectChat, type DirectMessage, type InsertDirectMessage,
+  type GroupChat, type InsertGroupChat, type GroupMember
+} from "@shared/models/chat";
 import { db } from "./db";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, or } from "drizzle-orm";
 
 export interface IStorage {
   // Posts
@@ -33,6 +38,30 @@ export interface IStorage {
   // History
   createHistory(entry: InsertHistory): Promise<History>;
   getHistory(userId: string): Promise<History[]>;
+
+  // Direct Chats
+  getOrCreateDirectChat(user1Id: string, user2Id: string): Promise<DirectChat>;
+  getDirectChats(userId: string): Promise<DirectChat[]>;
+  updateChatTheme(chatId: number, theme: string): Promise<void>;
+
+  // Direct Messages
+  getDirectMessages(chatId: number): Promise<DirectMessage[]>;
+  sendDirectMessage(msg: InsertDirectMessage): Promise<DirectMessage>;
+  markMessagesRead(chatId: number, userId: string): Promise<void>;
+  addReaction(messageId: number, userId: string, emoji: string): Promise<DirectMessage>;
+  pinMessage(messageId: number, pinned: boolean): Promise<DirectMessage>;
+  deleteMessage(messageId: number): Promise<void>;
+
+  // Typing & Online Status
+  setTyping(userId: string, chatId: number): Promise<void>;
+  getTyping(chatId: number, exceptUserId: string): Promise<string[]>;
+  setOnlineStatus(userId: string, isOnline: boolean): Promise<void>;
+  getOnlineStatus(userId: string): Promise<{ isOnline: boolean; lastSeen: Date | null }>;
+
+  // Groups
+  createGroupChat(group: InsertGroupChat, memberIds: string[]): Promise<GroupChat>;
+  getGroupChats(userId: string): Promise<GroupChat[]>;
+  getGroupMembers(groupId: number): Promise<GroupMember[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -51,11 +80,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createComment(postId: number, userId: string, content: string): Promise<Comment> {
-    const [comment] = await db.insert(comments).values({
-      postId,
-      userId,
-      content
-    }).returning();
+    const [comment] = await db.insert(comments).values({ postId, userId, content }).returning();
     return comment;
   }
 
@@ -67,7 +92,6 @@ export class DatabaseStorage implements IStorage {
     const existing = await db.select().from(likes).where(
       sql`${likes.postId} = ${postId} AND ${likes.userId} = ${userId}`
     );
-
     let added = false;
     if (existing.length > 0) {
       await db.delete(likes).where(sql`${likes.id} = ${existing[0].id}`);
@@ -75,7 +99,6 @@ export class DatabaseStorage implements IStorage {
       await db.insert(likes).values({ postId, userId });
       added = true;
     }
-
     const count = await this.getLikesCount(postId);
     return { added, count };
   }
@@ -98,9 +121,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBooks(type?: string): Promise<Book[]> {
-    if (type) {
-      return db.select().from(books).where(eq(books.type, type)).orderBy(desc(books.createdAt));
-    }
+    if (type) return db.select().from(books).where(eq(books.type, type)).orderBy(desc(books.createdAt));
     return db.select().from(books).orderBy(desc(books.createdAt));
   }
 
@@ -120,6 +141,136 @@ export class DatabaseStorage implements IStorage {
 
   async getHistory(userId: string): Promise<History[]> {
     return db.select().from(history).where(eq(history.userId, userId)).orderBy(desc(history.createdAt)).limit(50);
+  }
+
+  // ── Direct Chats ──────────────────────────────────────────────────────────
+  async getOrCreateDirectChat(user1Id: string, user2Id: string): Promise<DirectChat> {
+    const existing = await db.select().from(directChats).where(
+      or(
+        and(eq(directChats.user1Id, user1Id), eq(directChats.user2Id, user2Id)),
+        and(eq(directChats.user1Id, user2Id), eq(directChats.user2Id, user1Id))
+      )
+    );
+    if (existing.length > 0) return existing[0];
+    const [chat] = await db.insert(directChats).values({ user1Id, user2Id }).returning();
+    return chat;
+  }
+
+  async getDirectChats(userId: string): Promise<DirectChat[]> {
+    return db.select().from(directChats).where(
+      or(eq(directChats.user1Id, userId), eq(directChats.user2Id, userId))
+    ).orderBy(desc(directChats.lastMessageAt));
+  }
+
+  async updateChatTheme(chatId: number, theme: string): Promise<void> {
+    await db.update(directChats).set({ theme }).where(eq(directChats.id, chatId));
+  }
+
+  // ── Direct Messages ───────────────────────────────────────────────────────
+  async getDirectMessages(chatId: number): Promise<DirectMessage[]> {
+    return db.select().from(directMessages)
+      .where(eq(directMessages.chatId, chatId))
+      .orderBy(directMessages.createdAt);
+  }
+
+  async sendDirectMessage(msg: InsertDirectMessage): Promise<DirectMessage> {
+    const [newMsg] = await db.insert(directMessages).values(msg).returning();
+    await db.update(directChats).set({ lastMessageAt: new Date() }).where(eq(directChats.id, msg.chatId));
+    return newMsg;
+  }
+
+  async markMessagesRead(chatId: number, userId: string): Promise<void> {
+    await db.update(directMessages)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(directMessages.chatId, chatId),
+          sql`${directMessages.senderId} != ${userId}`,
+          sql`${directMessages.readAt} IS NULL`
+        )
+      );
+  }
+
+  async addReaction(messageId: number, userId: string, emoji: string): Promise<DirectMessage> {
+    const [msg] = await db.select().from(directMessages).where(eq(directMessages.id, messageId));
+    if (!msg) throw new Error("Message not found");
+    const reactions = JSON.parse(msg.reactions || "{}") as Record<string, string[]>;
+    if (!reactions[emoji]) reactions[emoji] = [];
+    const idx = reactions[emoji].indexOf(userId);
+    if (idx >= 0) {
+      reactions[emoji].splice(idx, 1);
+      if (reactions[emoji].length === 0) delete reactions[emoji];
+    } else {
+      reactions[emoji].push(userId);
+    }
+    const [updated] = await db.update(directMessages)
+      .set({ reactions: JSON.stringify(reactions) })
+      .where(eq(directMessages.id, messageId))
+      .returning();
+    return updated;
+  }
+
+  async pinMessage(messageId: number, pinned: boolean): Promise<DirectMessage> {
+    const [updated] = await db.update(directMessages)
+      .set({ pinnedAt: pinned ? new Date() : null })
+      .where(eq(directMessages.id, messageId))
+      .returning();
+    return updated;
+  }
+
+  async deleteMessage(messageId: number): Promise<void> {
+    await db.delete(directMessages).where(eq(directMessages.id, messageId));
+  }
+
+  // ── Typing Indicators ─────────────────────────────────────────────────────
+  async setTyping(userId: string, chatId: number): Promise<void> {
+    await db.insert(typingIndicators)
+      .values({ userId, chatId, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: typingIndicators.userId, set: { chatId, updatedAt: new Date() } });
+  }
+
+  async getTyping(chatId: number, exceptUserId: string): Promise<string[]> {
+    const cutoff = new Date(Date.now() - 4000);
+    const rows = await db.select().from(typingIndicators).where(
+      and(
+        eq(typingIndicators.chatId, chatId),
+        sql`${typingIndicators.userId} != ${exceptUserId}`,
+        sql`${typingIndicators.updatedAt} > ${cutoff}`
+      )
+    );
+    return rows.map(r => r.userId);
+  }
+
+  // ── Online Status ─────────────────────────────────────────────────────────
+  async setOnlineStatus(userId: string, isOnline: boolean): Promise<void> {
+    await db.insert(userOnlineStatus)
+      .values({ userId, isOnline, lastSeen: new Date() })
+      .onConflictDoUpdate({ target: userOnlineStatus.userId, set: { isOnline, lastSeen: new Date() } });
+  }
+
+  async getOnlineStatus(userId: string): Promise<{ isOnline: boolean; lastSeen: Date | null }> {
+    const [row] = await db.select().from(userOnlineStatus).where(eq(userOnlineStatus.userId, userId));
+    return { isOnline: row?.isOnline ?? false, lastSeen: row?.lastSeen ?? null };
+  }
+
+  // ── Groups ────────────────────────────────────────────────────────────────
+  async createGroupChat(group: InsertGroupChat, memberIds: string[]): Promise<GroupChat> {
+    const [newGroup] = await db.insert(groupChats).values(group).returning();
+    if (memberIds.length > 0) {
+      await db.insert(groupMembers).values(memberIds.map(uid => ({ groupId: newGroup.id, userId: uid })));
+    }
+    return newGroup;
+  }
+
+  async getGroupChats(userId: string): Promise<GroupChat[]> {
+    const memberRows = await db.select().from(groupMembers).where(eq(groupMembers.userId, userId));
+    const groupIds = memberRows.map(r => r.groupId);
+    if (groupIds.length === 0) return [];
+    return db.select().from(groupChats).where(sql`${groupChats.id} = ANY(${groupIds})`);
+  }
+
+  async getGroupMembers(groupId: number): Promise<GroupMember[]> {
+    return db.select().from(groupMembers).where(eq(groupMembers.groupId, groupId));
   }
 }
 

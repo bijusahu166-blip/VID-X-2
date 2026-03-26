@@ -10,6 +10,7 @@ import { z } from "zod";
 import { users } from "@shared/models/auth";
 import { posts, comments, ads } from "@shared/schema";
 import { db } from "./db";
+import OpenAI from "openai";
 
 async function seed() {
   const existingUsers = await db.select().from(users).limit(1);
@@ -237,11 +238,165 @@ export async function registerRoutes(
 
   app.post("/api/history", isAuthenticated, async (req, res) => {
     const userId = (req.user as any).claims.sub;
-    const entry = await storage.createHistory({
-      ...req.body,
-      userId
-    });
+    const entry = await storage.createHistory({ ...req.body, userId });
     res.status(201).json(entry);
+  });
+
+  // ── Users list (for new chat) ─────────────────────────────────────────────
+  app.get("/api/users", isAuthenticated, async (req, res) => {
+    const allUsers = await db.select().from(users);
+    const me = (req.user as any).claims.sub;
+    res.json(allUsers.filter(u => u.id !== me));
+  });
+
+  // ── Online status ─────────────────────────────────────────────────────────
+  app.post("/api/status/online", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    await storage.setOnlineStatus(userId, true);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/status/offline", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    await storage.setOnlineStatus(userId, false);
+    res.json({ ok: true });
+  });
+
+  app.get("/api/status/:userId", isAuthenticated, async (req, res) => {
+    const status = await storage.getOnlineStatus(req.params.userId);
+    res.json(status);
+  });
+
+  // ── Direct chats ──────────────────────────────────────────────────────────
+  app.get("/api/direct-chats", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const chats = await storage.getDirectChats(userId);
+    const enriched = await Promise.all(chats.map(async chat => {
+      const otherId = chat.user1Id === userId ? chat.user2Id : chat.user1Id;
+      const otherUser = await authStorage.getUser(otherId);
+      const msgs = await storage.getDirectMessages(chat.id);
+      const lastMsg = msgs[msgs.length - 1] ?? null;
+      const unread = msgs.filter(m => m.senderId !== userId && !m.readAt).length;
+      const onlineStatus = await storage.getOnlineStatus(otherId);
+      return { ...chat, otherUser, lastMsg, unread, isOnline: onlineStatus.isOnline, lastSeen: onlineStatus.lastSeen };
+    }));
+    res.json(enriched);
+  });
+
+  app.post("/api/direct-chats", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const { otherUserId } = req.body;
+    if (!otherUserId) return res.status(400).json({ message: "otherUserId required" });
+    const chat = await storage.getOrCreateDirectChat(userId, otherUserId);
+    res.json(chat);
+  });
+
+  app.patch("/api/direct-chats/:id/theme", isAuthenticated, async (req, res) => {
+    await storage.updateChatTheme(Number(req.params.id), req.body.theme);
+    res.json({ ok: true });
+  });
+
+  // ── Messages ──────────────────────────────────────────────────────────────
+  app.get("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
+    const msgs = await storage.getDirectMessages(Number(req.params.id));
+    res.json(msgs);
+  });
+
+  app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const chatId = Number(req.params.id);
+    const { content, type, mediaUrl, metadata, replyToId, expiresInSeconds } = req.body;
+    const expiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : undefined;
+    const msg = await storage.sendDirectMessage({
+      chatId, senderId: userId, content, type: type || "text",
+      mediaUrl, metadata, replyToId,
+      ...(expiresAt ? { expiresAt } : {}),
+    });
+    res.status(201).json(msg);
+  });
+
+  app.patch("/api/direct-chats/:id/read", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    await storage.markMessagesRead(Number(req.params.id), userId);
+    res.json({ ok: true });
+  });
+
+  app.patch("/api/messages/:id/react", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const { emoji } = req.body;
+    const msg = await storage.addReaction(Number(req.params.id), userId, emoji);
+    res.json(msg);
+  });
+
+  app.patch("/api/messages/:id/pin", isAuthenticated, async (req, res) => {
+    const { pinned } = req.body;
+    const msg = await storage.pinMessage(Number(req.params.id), pinned);
+    res.json(msg);
+  });
+
+  app.delete("/api/messages/:id", isAuthenticated, async (req, res) => {
+    await storage.deleteMessage(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // ── Typing indicator ──────────────────────────────────────────────────────
+  app.post("/api/direct-chats/:id/typing", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    await storage.setTyping(userId, Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  app.get("/api/direct-chats/:id/typing", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const typers = await storage.getTyping(Number(req.params.id), userId);
+    res.json({ typers });
+  });
+
+  // ── AI: Translate message ─────────────────────────────────────────────────
+  app.post("/api/translate", isAuthenticated, async (req, res) => {
+    const { text, targetLang } = req.body;
+    if (!text) return res.status(400).json({ message: "text required" });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: `Translate the following text to ${targetLang || "English"}. Reply with only the translated text:\n\n${text}` }],
+      max_tokens: 300,
+    });
+    res.json({ translated: completion.choices[0].message.content });
+  });
+
+  // ── AI: Smart reply suggestions ───────────────────────────────────────────
+  app.post("/api/smart-reply", isAuthenticated, async (req, res) => {
+    const { lastMessage } = req.body;
+    if (!lastMessage) return res.status(400).json({ message: "lastMessage required" });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: `Generate 3 short, natural reply suggestions for this message: "${lastMessage}". Reply with a JSON array of strings, no other text.` }],
+      max_tokens: 100,
+    });
+    try {
+      const raw = completion.choices[0].message.content ?? "[]";
+      const suggestions = JSON.parse(raw.replace(/```json|```/g, "").trim());
+      res.json({ suggestions });
+    } catch {
+      res.json({ suggestions: ["👍", "Got it!", "Thanks!"] });
+    }
+  });
+
+  // ── Group chats ───────────────────────────────────────────────────────────
+  app.get("/api/group-chats", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const groups = await storage.getGroupChats(userId);
+    res.json(groups);
+  });
+
+  app.post("/api/group-chats", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const { name, memberIds } = req.body;
+    if (!name) return res.status(400).json({ message: "name required" });
+    const group = await storage.createGroupChat({ name, createdBy: userId }, [userId, ...(memberIds || [])]);
+    res.status(201).json(group);
   });
 
   return httpServer;

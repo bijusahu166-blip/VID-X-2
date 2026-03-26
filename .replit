@@ -7,7 +7,6 @@ modules = ["nodejs-20", "web", "postgresql-16"]
 
 [[ports]]
 localPort = 5000
-externalPort = 80
 
 [[ports]]
 localPort = 5904

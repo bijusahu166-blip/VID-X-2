@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Mic, MicOff, Video, VideoOff, PhoneOff,
   RotateCcw, Volume2, VolumeX, Sparkles, X,
-  Maximize2, ChevronUp, Signal
+  Maximize2, ChevronUp, Signal, Monitor, CircleDot, Gauge
 } from "lucide-react";
 import { AR_EFFECTS, EFFECT_CATEGORIES } from "@/lib/arEffects";
 import type { AREffect } from "@/lib/arEffects";
@@ -32,6 +32,10 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const [isPiPExpanded, setIsPiPExpanded] = useState(false);
   const [activeEffectTab, setActiveEffectTab] = useState("All");
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [lowDataMode, setLowDataMode] = useState(false);
+  const screenStreamRef = useRef<MediaStream | null>(null);
   const caller = MOCK_CALLERS[0];
 
   const visibleEffects = AR_EFFECTS.filter(e =>
@@ -112,7 +116,25 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
 
   const handleEndCall = () => {
     localStreamRef.current?.getTracks().forEach(t => t.stop());
+    screenStreamRef.current?.getTracks().forEach(t => t.stop());
     onClose();
+  };
+
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      screenStreamRef.current?.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
+      setIsScreenSharing(false);
+      startCamera(isFrontCamera ? "user" : "environment");
+    } else {
+      try {
+        const screen = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+        screenStreamRef.current = screen;
+        if (localVideoRef.current) localVideoRef.current.srcObject = screen;
+        screen.getVideoTracks()[0].onended = () => { setIsScreenSharing(false); startCamera("user"); };
+        setIsScreenSharing(true);
+      } catch { /* cancelled */ }
+    }
   };
 
   const activeEffect = selectedEffect;
@@ -260,15 +282,27 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
 
       {/* ── TOP BAR ── */}
       <div className="relative z-30 flex items-center justify-between px-4 pt-12 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-sm border border-white/10">
             <Signal className="w-3 h-3 text-green-400" />
-            <span className="text-[10px] text-green-400 font-bold">4K HD</span>
+            <span className="text-[10px] text-green-400 font-bold">{lowDataMode ? "Low Data" : "4K HD"}</span>
           </div>
           {callState === "active" && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-sm border border-white/10">
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
               <span className="text-[10px] text-white font-mono">{formatDuration(callDuration)}</span>
+            </div>
+          )}
+          {isRecording && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/30 backdrop-blur-sm border border-red-500/40">
+              <CircleDot className="w-3 h-3 text-red-400 animate-pulse" />
+              <span className="text-[10px] text-red-300 font-bold">REC</span>
+            </div>
+          )}
+          {isScreenSharing && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/30 backdrop-blur-sm border border-blue-500/40">
+              <Monitor className="w-3 h-3 text-blue-400" />
+              <span className="text-[10px] text-blue-300 font-bold">Screen</span>
             </div>
           )}
         </div>
@@ -395,6 +429,28 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
           className="px-6 pb-10 pt-4"
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, transparent 100%)" }}
         >
+          {/* Secondary controls row */}
+          <div className="flex items-center justify-center gap-6 mb-4">
+            <button onClick={toggleScreenShare} className="flex flex-col items-center gap-1">
+              <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all ${isScreenSharing ? "bg-blue-500/30 border-blue-400/60" : "bg-white/10 border-white/15 hover:bg-white/20"}`}>
+                <Monitor className={`w-4 h-4 ${isScreenSharing ? "text-blue-400" : "text-white"}`} />
+              </div>
+              <span className="text-[9px] text-white/50">{isScreenSharing ? "Stop Share" : "Share"}</span>
+            </button>
+            <button onClick={() => setIsRecording(r => !r)} className="flex flex-col items-center gap-1">
+              <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all ${isRecording ? "bg-red-500/30 border-red-400/60" : "bg-white/10 border-white/15 hover:bg-white/20"}`}>
+                <CircleDot className={`w-4 h-4 ${isRecording ? "text-red-400 animate-pulse" : "text-white"}`} />
+              </div>
+              <span className="text-[9px] text-white/50">{isRecording ? "Stop Rec" : "Record"}</span>
+            </button>
+            <button onClick={() => setLowDataMode(l => !l)} className="flex flex-col items-center gap-1">
+              <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all ${lowDataMode ? "bg-amber-500/30 border-amber-400/60" : "bg-white/10 border-white/15 hover:bg-white/20"}`}>
+                <Gauge className={`w-4 h-4 ${lowDataMode ? "text-amber-400" : "text-white"}`} />
+              </div>
+              <span className="text-[9px] text-white/50">{lowDataMode ? "Low Data" : "Data Saver"}</span>
+            </button>
+          </div>
+
           <div className="flex items-center justify-between max-w-xs mx-auto">
             {/* Mute */}
             <button
