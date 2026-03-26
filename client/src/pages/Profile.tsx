@@ -461,9 +461,9 @@ export default function Profile() {
                             { icon: TrendingUp, label: "InsightX", emoji: "📊", color: "#a78bfa", panel: "InsightX" },
                           ].map((s) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
-                              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
-                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
-                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                              className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-6 h-6" style={{ color: s.color }} />
                               </div>
                               <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
                             </button>
@@ -481,9 +481,9 @@ export default function Profile() {
                             { icon: ShieldCheck, label: "VerifyPlus",    color: "#818cf8", panel: "VerifyPlus", sub: "Subscribed" },
                           ].map((s) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
-                              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
-                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
-                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                              className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-6 h-6" style={{ color: s.color }} />
                               </div>
                               <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
                               {s.sub && <span className="text-[8px] text-emerald-400 font-semibold -mt-1">{s.sub}</span>}
@@ -505,9 +505,9 @@ export default function Profile() {
                             { icon: Activity,  label: "FriendPulse",  color: "#fb923c", panel: "FriendPulse" },
                           ].map((s) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
-                              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
-                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
-                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                              className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-6 h-6" style={{ color: s.color }} />
                               </div>
                               <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
                               {s.sub && <span className="text-[8px] text-zinc-500 -mt-1">{s.sub}</span>}
@@ -527,9 +527,9 @@ export default function Profile() {
                             { icon: Share2,        label: "Sharing",   color: "#a78bfa", panel: "Sharing and reuse" },
                           ].map((s) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
-                              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
-                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
-                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                              className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-6 h-6" style={{ color: s.color }} />
                               </div>
                               <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
                             </button>
