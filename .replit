@@ -1,50 +1,50 @@
 modules = ["nodejs-20", "web", "postgresql-16"]
-run = "npm run dev"
-hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+  run = "npm run dev"
+  hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
-[nix]
-channel = "stable-24_05"
+  [nix]
+  channel = "stable-24_05"
 
-[[ports]]
-localPort = 5000
+  [[ports]]
+  localPort = 5000
+  externalPort = 80
 
-[[ports]]
-localPort = 5904
-externalPort = 3000
+  [[ports]]
+  localPort = 5904
+  externalPort = 3000
 
-[env]
-PORT = "5000"
+  [env]
+  PORT = "5000"
 
-[deployment]
-deploymentTarget = "autoscale"
-run = ["node", "./dist/index.cjs"]
-build = ["npm", "run", "build"]
+  [deployment]
+  deploymentTarget = "autoscale"
+  run = ["node", "./dist/index.cjs"]
+  build = ["npm", "run", "build"]
 
-[workflows]
-runButton = "Project"
+  [workflows]
+  runButton = "Project"
 
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
+  [[workflows.workflow]]
+  name = "Project"
+  mode = "parallel"
+  author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
+  [[workflows.workflow.tasks]]
+  task = "workflow.run"
+  args = "Start application"
 
-[[workflows.workflow]]
-name = "Start application"
-author = "agent"
+  [[workflows.workflow]]
+  name = "Start application"
+  author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
+  [workflows.workflow.metadata]
+  outputType = "webview"
 
-[agent]
-integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
+  [[workflows.workflow.tasks]]
+  task = "shell.exec"
+  args = "npm run dev"
+  waitForPort = 5000
 
-[userenv]
-
-[userenv.shared]
-sk-proj-ljk8Hw7DWNaqDw6Qg7xs3S6mHoG0tkMW2ShYeG2NF49zGjsbeUhK0lZXnu60JU7F4z_OyLKYgmT3BlbkFJCaSazC1cNW0n71Qshcw438EFbXibxqhfHw-Jd2 = "123432214454"
+  [agent]
+  integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
+  

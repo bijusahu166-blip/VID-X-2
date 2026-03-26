@@ -180,7 +180,7 @@ export default function Profile() {
                       </div>
                     </div>
                     <Separator className="my-3" />
-                    <button onClick={logout} className="w-full flex items-center gap-3 px-5 py-3 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
+                    <button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
                       <LogOut className="w-4 h-4" />
                       <span className="text-sm font-semibold">Log out</span>
                     </button>

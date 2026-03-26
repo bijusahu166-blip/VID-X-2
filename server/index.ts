@@ -59,6 +59,24 @@ app.use((req, res, next) => {
   next();
 });
 
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+
+process.on("SIGTERM", () => {
+  console.log("Received SIGTERM - process is being terminated");
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  console.log("Received SIGINT - process is being interrupted");
+  process.exit(0);
+});
+
 (async () => {
   await registerRoutes(httpServer, app);
 
@@ -90,14 +108,7 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
+  httpServer.listen(port, "0.0.0.0", () => {
+    log(`serving on port ${port}`);
+  });
 })();

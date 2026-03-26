@@ -26,7 +26,7 @@ export function AIChatDrawer() {
   }, [isOpen, conversations, activeConversationId]);
 
   const handleCreateChat = async () => {
-    const newChat = await createConversation.mutateAsync();
+    const newChat = await createConversation.mutateAsync("New Chat");
     setActiveConversationId(newChat.id);
   };
 

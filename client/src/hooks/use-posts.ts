@@ -3,8 +3,16 @@ import { api, buildUrl } from "@shared/routes";
 import { z } from "zod";
 import { insertPostSchema, insertCommentSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import type { User } from "@shared/models/auth";
 
 type Post = z.infer<typeof api.posts.create.responses[201]>;
+
+export interface EnrichedPost extends Post {
+  user: User | undefined;
+  likesCount: number;
+  commentsCount: number;
+  hasLiked: boolean;
+}
 
 // GET /api/posts
 export function usePosts() {
@@ -13,7 +21,7 @@ export function usePosts() {
     queryFn: async () => {
       const res = await fetch(api.posts.list.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch posts");
-      return await res.json() as Post[];
+      return await res.json() as EnrichedPost[];
     },
   });
 }

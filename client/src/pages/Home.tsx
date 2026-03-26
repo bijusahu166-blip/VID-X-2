@@ -204,7 +204,7 @@ export default function Home() {
                   <div className="relative w-full aspect-video bg-zinc-900 overflow-hidden">
                     <img
                       src={post.imageUrl}
-                      alt={post.caption}
+                      alt={post.caption ?? undefined}
                       className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
                     />
                     {/* Duration badge */}
