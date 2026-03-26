@@ -3,6 +3,9 @@ import { authStorage } from "./storage";
 import { isAuthenticated } from "./replitAuth";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { db } from "../../db";
+import { sql } from "drizzle-orm";
+import crypto from "crypto";
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -22,6 +25,14 @@ function generateUsername(firstName: string, lastName: string): string {
   return `${base}${suffix}`;
 }
 
+function generateOTP(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function generateToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
 export function registerAuthRoutes(app: Express): void {
   // Register new account
   app.post("/api/auth/register", async (req: any, res) => {
@@ -38,8 +49,7 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       const hashed = await bcrypt.hash(password, 10);
-      // Generate a unique username — retry up to 5 times if collision
-      let username = generateUsername(firstName, lastName);
+      const username = generateUsername(firstName, lastName);
       const user = await authStorage.createUser({
         email,
         password: hashed,
@@ -58,7 +68,7 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  // Login
+  // Login — Step 1: verify password, issue OTP
   app.post("/api/auth/login", async (req: any, res) => {
     try {
       const parsed = loginSchema.safeParse(req.body);
@@ -77,12 +87,75 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(401).json({ message: "Invalid email or password." });
       }
 
-      req.session.userId = user.id;
-      const { password: _, ...safeUser } = user;
-      res.json(safeUser);
+      // Clean up any old OTPs for this user
+      await db.execute(sql`DELETE FROM otps WHERE user_id = ${user.id}`);
+
+      // Generate OTP + temp token
+      const code = generateOTP();
+      const token = generateToken();
+      const hashedCode = await bcrypt.hash(code, 8);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      await db.execute(sql`
+        INSERT INTO otps (user_id, code, token, expires_at)
+        VALUES (${user.id}, ${hashedCode}, ${token}, ${expiresAt.toISOString()})
+      `);
+
+      // Return OTP token + the code (in production this would be emailed)
+      res.json({
+        needsOtp: true,
+        otpToken: token,
+        otpCode: code,         // shown in UI (simulates email delivery)
+        expiresIn: 300,        // seconds
+      });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // Login — Step 2: verify OTP, create session
+  app.post("/api/auth/verify-otp", async (req: any, res) => {
+    try {
+      const { otpToken, code } = req.body as { otpToken?: string; code?: string };
+      if (!otpToken || !code) {
+        return res.status(400).json({ message: "OTP token and code are required." });
+      }
+
+      const rows = await db.execute(sql`
+        SELECT * FROM otps WHERE token = ${otpToken} AND used = false LIMIT 1
+      `);
+
+      const otp = (rows as any).rows?.[0] ?? (rows as any)[0];
+      if (!otp) {
+        return res.status(401).json({ message: "Invalid or expired security code. Please log in again." });
+      }
+
+      // Check expiry
+      if (new Date(otp.expires_at) < new Date()) {
+        await db.execute(sql`DELETE FROM otps WHERE token = ${otpToken}`);
+        return res.status(401).json({ message: "Security code has expired. Please log in again." });
+      }
+
+      // Verify code
+      const codeMatch = await bcrypt.compare(code, otp.code);
+      if (!codeMatch) {
+        return res.status(401).json({ message: "Incorrect security code. Please try again." });
+      }
+
+      // Mark OTP as used
+      await db.execute(sql`UPDATE otps SET used = true WHERE token = ${otpToken}`);
+
+      // Create session
+      req.session.userId = otp.user_id;
+      const user = await authStorage.getUser(otp.user_id);
+      if (!user) return res.status(404).json({ message: "User not found." });
+
+      const { password: _, ...safeUser } = user as any;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("OTP verify error:", error);
+      res.status(500).json({ message: "Verification failed" });
     }
   });
 

@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound, CheckCircle2, ShieldCheck } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
 
 type Tab = "login" | "signup";
-type View = "auth" | "forgot" | "reset-success";
+type View = "auth" | "forgot" | "otp";
 
 interface AuthForm {
   firstName?: string;
@@ -270,12 +270,163 @@ function ForgotPasswordView({ onBack }: { onBack: () => void }) {
   );
 }
 
+// ── OTP Verification View ─────────────────────────────────────────────────
+function OtpView({
+  otpToken, displayCode, expiresIn, onBack, onSuccess,
+}: {
+  otpToken: string;
+  displayCode: string;
+  expiresIn: number;
+  onBack: () => void;
+  onSuccess: (user: any) => void;
+}) {
+  const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
+  const [error, setError] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState(expiresIn);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const t = setInterval(() => setSecondsLeft(s => s - 1), 1000);
+    return () => clearInterval(t);
+  }, [secondsLeft]);
+
+  const verifyOtp = useMutation({
+    mutationFn: (code: string) =>
+      apiPost("/api/auth/verify-otp", { otpToken, code }),
+    onSuccess: (user) => onSuccess(user),
+    onError: (err: Error) => { setError(err.message); setDigits(Array(6).fill("")); inputRefs.current[0]?.focus(); },
+  });
+
+  const handleDigit = (idx: number, val: string) => {
+    const d = val.replace(/\D/g, "").slice(-1);
+    const next = [...digits];
+    next[idx] = d;
+    setDigits(next);
+    setError("");
+    if (d && idx < 5) inputRefs.current[idx + 1]?.focus();
+    if (next.every(x => x !== "")) verifyOtp.mutate(next.join(""));
+  };
+
+  const handleKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !digits[idx] && idx > 0) {
+      inputRefs.current[idx - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length === 6) {
+      setDigits(pasted.split(""));
+      verifyOtp.mutate(pasted);
+    }
+  };
+
+  const mins = Math.floor(secondsLeft / 60);
+  const secs = secondsLeft % 60;
+  const expired = secondsLeft <= 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      className="w-full max-w-sm"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} data-testid="button-back-otp"
+          className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center hover:bg-zinc-800 transition-colors">
+          <ArrowLeft className="w-4 h-4 text-white" />
+        </button>
+        <div>
+          <h2 className="text-xl font-black text-white">Security Verification</h2>
+          <p className="text-xs text-zinc-500">Enter your 6-digit code to continue</p>
+        </div>
+      </div>
+
+      {/* Shield icon */}
+      <div className="flex justify-center mb-5">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center relative"
+          style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15))", border: "1px solid rgba(59,130,246,0.3)" }}>
+          <ShieldCheck className="w-8 h-8 text-blue-400" />
+          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-black flex items-center justify-center">
+            <span className="text-[6px] text-white font-black">✓</span>
+          </div>
+        </div>
+      </div>
+
+      {/* The displayed OTP code (simulates email delivery) */}
+      <div className="mb-5 rounded-2xl p-4 border"
+        style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08))", borderColor: "rgba(59,130,246,0.2)" }}>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-1">🔐 Your Security Code</p>
+        <p className="text-3xl font-black tracking-[0.3em] text-white" style={{ fontFamily: "monospace" }}>
+          {displayCode}
+        </p>
+        <p className="text-[10px] text-zinc-600 mt-1.5">In production, this code would be sent to your registered email.</p>
+      </div>
+
+      {/* Digit input boxes */}
+      <div className="flex gap-2 justify-center mb-4" onPaste={handlePaste}>
+        {digits.map((d, i) => (
+          <input
+            key={i}
+            ref={el => { inputRefs.current[i] = el; }}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={d}
+            data-testid={`input-otp-${i}`}
+            onChange={e => handleDigit(i, e.target.value)}
+            onKeyDown={e => handleKeyDown(i, e)}
+            className={`w-11 h-14 text-center text-xl font-black rounded-xl border-2 bg-zinc-900 text-white outline-none transition-all ${
+              d ? "border-blue-500 text-blue-300" : error ? "border-red-500/60" : "border-zinc-700 focus:border-blue-500"
+            }`}
+            style={d ? { boxShadow: "0 0 10px rgba(59,130,246,0.3)" } : {}}
+          />
+        ))}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+          <p className="text-[12px] text-red-400 text-center font-semibold">{error}</p>
+        </div>
+      )}
+
+      {/* Timer */}
+      <div className="flex items-center justify-center gap-1.5 mb-5">
+        <div className={`w-2 h-2 rounded-full ${expired ? "bg-red-500" : secondsLeft <= 60 ? "bg-orange-400 animate-pulse" : "bg-green-400"}`} />
+        {expired ? (
+          <span className="text-[11px] text-red-400 font-semibold">Code expired — please sign in again</span>
+        ) : (
+          <span className="text-[11px] text-zinc-500">
+            Code expires in <span className={`font-bold ${secondsLeft <= 60 ? "text-orange-400" : "text-white"}`}>{mins}:{String(secs).padStart(2, "0")}</span>
+          </span>
+        )}
+      </div>
+
+      <button
+        onClick={() => { const code = digits.join(""); if (code.length === 6) verifyOtp.mutate(code); }}
+        disabled={digits.join("").length < 6 || verifyOtp.isPending || expired}
+        data-testid="button-verify-otp"
+        className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+        style={{ background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", boxShadow: "0 0 24px rgba(59,130,246,0.3)" }}
+      >
+        {verifyOtp.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Sign In"}
+      </button>
+    </motion.div>
+  );
+}
+
 export default function Login() {
   const [tab, setTab] = useState<Tab>("login");
   const [view, setView] = useState<View>("auth");
   const [form, setForm] = useState<AuthForm>({ email: "", password: "" });
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [otpData, setOtpData] = useState<{ token: string; code: string; expiresIn: number } | null>(null);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -294,9 +445,16 @@ export default function Login() {
         });
       }
     },
-    onSuccess: (user) => {
-      queryClient.setQueryData(["/api/auth/user"], user);
-      navigate("/");
+    onSuccess: (data) => {
+      if (data.needsOtp) {
+        // Login: proceed to OTP step
+        setOtpData({ token: data.otpToken, code: data.otpCode, expiresIn: data.expiresIn });
+        setView("otp");
+      } else {
+        // Register: direct login
+        queryClient.setQueryData(["/api/auth/user"], data);
+        navigate("/");
+      }
     },
     onError: (err: Error) => {
       toast({ title: err.message, variant: "destructive" });
@@ -323,6 +481,16 @@ export default function Login() {
         {view === "forgot" ? (
           <motion.div key="forgot" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full flex flex-col items-center">
             <ForgotPasswordView onBack={() => setView("auth")} />
+          </motion.div>
+        ) : view === "otp" && otpData ? (
+          <motion.div key="otp" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full flex flex-col items-center">
+            <OtpView
+              otpToken={otpData.token}
+              displayCode={otpData.code}
+              expiresIn={otpData.expiresIn}
+              onBack={() => { setView("auth"); setOtpData(null); }}
+              onSuccess={(user) => { queryClient.setQueryData(["/api/auth/user"], user); navigate("/"); }}
+            />
           </motion.div>
         ) : (
           <motion.div key="auth" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full flex flex-col items-center">
