@@ -205,6 +205,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [cameraMode, setCameraMode] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -230,24 +231,28 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const startCamera = useCallback(async (front = true) => {
     setCameraReady(false);
     setCameraError(null);
+    setDemoMode(false);
     try {
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach(t => t.stop());
         cameraStreamRef.current = null;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: front ? "user" : "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      // 5-second timeout — fall to demo mode if camera hangs
+      const stream = await Promise.race([
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: front ? "user" : "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("CameraTimeout")), 5000)
+        ),
+      ]);
       cameraStreamRef.current = stream;
       attachStream(stream);
     } catch (err: any) {
-      const msg = err?.name === "NotAllowedError"
-        ? "Camera permission denied. Please allow camera access in your browser."
-        : err?.name === "NotFoundError"
-        ? "No camera found on this device."
-        : "Could not start camera. Try allowing camera access.";
-      setCameraError(msg);
+      // Fall to demo mode instead of hard error
+      setDemoMode(true);
+      setCameraReady(true); // treat demo as "ready"
     }
   }, [attachStream]);
 
@@ -260,21 +265,47 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   }, []);
 
   const capturePhoto = useCallback(() => {
-    const video = cameraVideoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    if (selectedArEffect.filter !== "none") ctx.filter = selectedArEffect.filter;
-    if (isFrontCamera) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(video, 0, 0);
+
+    const video = cameraVideoRef.current;
+    if (video && video.readyState >= 2) {
+      // Real camera capture
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      if (selectedArEffect.filter !== "none") ctx.filter = selectedArEffect.filter;
+      if (isFrontCamera) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+      ctx.drawImage(video, 0, 0);
+    } else {
+      // Demo mode: paint a colourful gradient placeholder
+      canvas.width = 640;
+      canvas.height = 1138;
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, "#1a0030");
+      grad.addColorStop(0.4, "#0d1a40");
+      grad.addColorStop(0.8, "#001a20");
+      grad.addColorStop(1, "#200010");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Grid lines
+      ctx.strokeStyle = "rgba(255,255,255,0.07)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+      for (let y = 0; y < canvas.height; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+      // Centre silhouette circle
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height * 0.35, 120, 0, Math.PI * 2); ctx.fill();
+      if (selectedArEffect.filter !== "none") ctx.filter = selectedArEffect.filter;
+    }
+
     const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
     setImageUrl(dataUrl);
     setPreviewUrl(dataUrl);
     stopCamera();
     setCameraMode(false);
+    setDemoMode(false);
   }, [selectedArEffect, isFrontCamera, stopCamera]);
 
   // Start/stop camera when cameraMode changes
@@ -304,6 +335,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const openCameraMode = () => {
     setImageUrl("");
     setPreviewUrl("");
+    setDemoMode(false);
+    setCameraReady(false);
     setCameraMode(true);
   };
 
@@ -387,6 +420,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setShowArFilters(false);
       setCameraError(null);
       setCameraReady(false);
+      setDemoMode(false);
     }, 300);
   };
 
@@ -617,28 +651,39 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
               {/* ── LIVE CAMERA MODE ── */}
               {cameraMode ? (
                 <div className="rounded-2xl bg-zinc-950 overflow-hidden relative" style={{ aspectRatio: "9/16", maxHeight: "68vh" }}>
-                  {cameraError ? (
-                    /* ── Error state ── */
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6">
-                      <Video className="w-12 h-12 text-zinc-600" />
-                      <p className="text-xs text-zinc-400 text-center leading-relaxed">{cameraError}</p>
-                      <button onClick={() => startCamera(isFrontCamera)}
-                        className="px-5 py-2 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-400 text-xs font-bold">
-                        Try Again
-                      </button>
-                      <p className="text-[10px] text-zinc-600 text-center">Open the app URL directly in your browser for camera access</p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Loading spinner */}
-                      {!cameraReady && (
+                  <>
+                      {/* Loading spinner while waiting for camera */}
+                      {!cameraReady && !demoMode && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-zinc-950">
                           <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
                           <p className="text-xs text-zinc-500">Starting camera…</p>
                         </div>
                       )}
 
-                      {/* Live video feed */}
+                      {/* ── DEMO MODE background (camera unavailable) ── */}
+                      {demoMode && (
+                        <div
+                          className="absolute inset-0 w-full h-full"
+                          style={{
+                            background: "linear-gradient(160deg,#12001f 0%,#0a1030 35%,#001520 65%,#1a000d 100%)",
+                            filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined,
+                          }}
+                        >
+                          {/* animated grid */}
+                          <div className="absolute inset-0 opacity-10"
+                            style={{
+                              backgroundImage: "linear-gradient(rgba(255,255,255,0.15) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.15) 1px,transparent 1px)",
+                              backgroundSize: "40px 40px",
+                            }}
+                          />
+                          {/* face silhouette rings */}
+                          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 rounded-full border border-white/10 animate-pulse" />
+                          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full border border-white/8" />
+                          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/5" />
+                        </div>
+                      )}
+
+                      {/* Live video feed (real camera) */}
                       <video
                         ref={cameraVideoRef}
                         autoPlay playsInline muted
@@ -647,7 +692,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                         style={{
                           transform: isFrontCamera ? "scaleX(-1)" : "none",
                           filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined,
-                          opacity: cameraReady ? 1 : 0,
+                          opacity: cameraReady && !demoMode ? 1 : 0,
                           transition: "opacity 0.3s ease",
                         }}
                       />
@@ -655,6 +700,16 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                       {/* AR colour overlay */}
                       {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
                         <div className="absolute inset-0 pointer-events-none z-10" style={{ background: selectedArEffect.overlay }} />
+                      )}
+
+                      {/* Demo mode badge */}
+                      {demoMode && (
+                        <div className="absolute top-12 left-0 right-0 flex justify-center z-20">
+                          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 backdrop-blur-sm border border-yellow-500/40">
+                            <span className="text-[9px] text-yellow-400 font-bold uppercase tracking-wider">Demo Mode</span>
+                            <span className="text-[9px] text-zinc-500">— allow camera for live view</span>
+                          </div>
+                        </div>
                       )}
 
                       {/* ── TOP controls ── */}
@@ -689,7 +744,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                         </div>
                       </div>
                     </>
-                  )}
                 </div>
               ) : (
                 /* ── UPLOAD MODE ── */
