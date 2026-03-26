@@ -11,7 +11,7 @@ import {
   Play, ThumbsUp, ThumbsDown, Share2, MoreVertical,
   MessageSquare, Eye, ChevronRight, Flame, Music,
   Globe, Gamepad2, Utensils, Plane, Cpu, Plus,
-  CheckCircle2, Clock, Zap
+  CheckCircle2, Clock, Zap, Film
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -202,11 +202,22 @@ export default function Home() {
                 <div key={post.id} className="mb-1 group cursor-pointer">
                   {/* Thumbnail */}
                   <div className="relative w-full aspect-video bg-zinc-900 overflow-hidden">
-                    <img
-                      src={post.imageUrl}
-                      alt={post.caption ?? undefined}
-                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-                    />
+                    {/* Gradient placeholder — always rendered, acts as fallback background */}
+                    <div
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{ background: `linear-gradient(135deg, hsl(${(post.id * 47) % 360}, 40%, 14%), hsl(${(post.id * 47 + 120) % 360}, 50%, 20%))` }}
+                    >
+                      <Film className="w-12 h-12 text-white/15" />
+                    </div>
+                    {/* Thumbnail — only shown when imageUrl is a real, non-blob URL */}
+                    {post.imageUrl && !post.imageUrl.startsWith("blob:") && (
+                      <img
+                        src={post.imageUrl}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                    )}
                     {/* Duration badge */}
                     <div className="absolute bottom-2 right-2 bg-black/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
                       {dur}
