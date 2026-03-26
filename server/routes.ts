@@ -19,18 +19,22 @@ import fs from "fs";
 const uploadsDir = path.join(process.cwd(), "uploads", "videos");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp", ".flv", ".wmv", ".ts"]);
 const videoUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, uploadsDir),
     filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname) || ".mp4";
+      const ext = path.extname(file.originalname).toLowerCase() || ".mp4";
       cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
     },
   }),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("video/")) cb(null, true);
-    else cb(new Error("Only video files allowed"));
+    const ext = path.extname(file.originalname).toLowerCase();
+    const isVideoMime = file.mimetype.startsWith("video/") || file.mimetype === "application/octet-stream";
+    const isVideoExt = VIDEO_EXTENSIONS.has(ext);
+    if (isVideoMime || isVideoExt) cb(null, true);
+    else cb(new Error(`Unsupported file type: ${file.mimetype} (${ext})`));
   },
 });
 
@@ -681,10 +685,23 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/upload/video", isAuthenticated, videoUpload.single("video"), (req: any, res) => {
-    if (!req.file) return res.status(400).json({ message: "No video file uploaded" });
-    const fileUrl = `/uploads/videos/${req.file.filename}`;
-    res.json({ url: fileUrl, filename: req.file.filename, size: req.file.size });
+  app.post("/api/upload/video", isAuthenticated, (req: any, res) => {
+    videoUpload.single("video")(req, res, (err: any) => {
+      if (err) {
+        console.error("[video upload error]", err.message || err);
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({ message: "File too large. Maximum size is 500MB." });
+        }
+        return res.status(400).json({ message: err.message || "Upload failed" });
+      }
+      if (!req.file) {
+        console.error("[video upload] No file received in request");
+        return res.status(400).json({ message: "No video file received. Please select a video file." });
+      }
+      const fileUrl = `/uploads/videos/${req.file.filename}`;
+      console.log(`[video upload] saved: ${req.file.filename} (${Math.round(req.file.size / 1024)}KB)`);
+      res.json({ url: fileUrl, filename: req.file.filename, size: req.file.size });
+    });
   });
 
   // ── Follow / Unfollow ─────────────────────────────────────────────────────

@@ -781,7 +781,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 <input
                   ref={videoInputRef}
                   type="file"
-                  accept="video/*"
+                  accept="video/*,video/mp4,video/mov,video/quicktime,video/avi,video/webm,video/mkv,.mp4,.mov,.avi,.webm,.mkv,.m4v,.3gp"
                   className="hidden"
                   onChange={handleVideoFileChange}
                 />
