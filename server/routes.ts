@@ -116,6 +116,30 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // Check if email exists (for forgot password flow)
+  app.get("/api/users/check-email", async (req, res) => {
+    const email = ((req.query.email as string) || "").toLowerCase().trim();
+    if (!email) return res.status(400).json({ message: "Email is required" });
+    const { eq } = await import("drizzle-orm");
+    const found = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (!found.length) return res.status(404).json({ message: "No account found with that email address" });
+    res.json({ exists: true });
+  });
+
+  // Reset Password — verify email exists, then update password
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const { email, newPassword } = req.body as { email?: string; newPassword?: string };
+    if (!email || !newPassword) return res.status(400).json({ message: "Email and new password are required" });
+    if (newPassword.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+    const { eq } = await import("drizzle-orm");
+    const found = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+    if (!found.length) return res.status(404).json({ message: "No account found with that email address" });
+    const bcrypt = await import("bcryptjs");
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await db.update(users).set({ password: hashed }).where(eq(users.email, email.toLowerCase().trim()));
+    res.json({ message: "Password updated successfully" });
+  });
+
   // Setup Integrations
   registerChatRoutes(app);
   registerImageRoutes(app);
