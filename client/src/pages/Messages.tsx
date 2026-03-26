@@ -527,10 +527,10 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
           <p className="text-xs text-zinc-400">{chat.isOnline ? "Online" : chat.lastSeen ? `Last seen ${formatTime(chat.lastSeen)}` : "Offline"}</p>
         </div>
         <div className="flex items-center gap-1">
-          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { setCallAudioOnly(false); setShowVideoCall(true); }} data-testid="button-video-call">
+          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { setCallAudioOnly(false); setShowVideoCall(true); if (other?.id) fetch(`/api/users/${other.id}/call-notify`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ audioOnly: false }) }); }} data-testid="button-video-call">
             <Video className="w-4 h-4" />
           </button>
-          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { setCallAudioOnly(true); setShowVideoCall(true); }} data-testid="button-voice-call">
+          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { setCallAudioOnly(true); setShowVideoCall(true); if (other?.id) fetch(`/api/users/${other.id}/call-notify`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ audioOnly: true }) }); }} data-testid="button-voice-call">
             <Phone className="w-4 h-4" />
           </button>
           <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => setShowThemePicker(p => !p)} data-testid="button-theme">

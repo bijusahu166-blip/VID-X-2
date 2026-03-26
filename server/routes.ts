@@ -254,6 +254,19 @@ export async function registerRoutes(
     const postId = Number(req.params.id);
     const userId = (req.session as any).userId;
     const { added, count } = await storage.toggleLike(postId, userId);
+    // Send notification to post author when liked (not when unliked)
+    if (added) {
+      try {
+        const post = await storage.getPost(postId);
+        if (post && post.userId !== userId) {
+          const liker = await authStorage.getUser(userId);
+          await db.execute(sql`
+            INSERT INTO notifications (user_id, from_user_id, type, message, post_id)
+            VALUES (${post.userId}, ${userId}, 'like', ${`${liker?.firstName ?? "Someone"} liked your post`}, ${postId})
+          `);
+        }
+      } catch {}
+    }
     res.json({ success: true, likesCount: count, added });
   });
 
@@ -521,6 +534,20 @@ export async function registerRoutes(
       mediaUrl, metadata, replyToId,
       ...(expiresAt ? { expiresAt } : {}),
     });
+    // Notify the other participant in the chat
+    try {
+      const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
+      const chat = ((chatRows as any).rows ?? chatRows as any)[0];
+      if (chat) {
+        const recipientId = chat.user1_id === userId ? chat.user2_id : chat.user1_id;
+        const sender = await authStorage.getUser(userId);
+        const preview = (content ?? "").slice(0, 50);
+        await db.execute(sql`
+          INSERT INTO notifications (user_id, from_user_id, type, message)
+          VALUES (${recipientId}, ${userId}, 'message', ${`${sender?.firstName ?? "Someone"} sent you a message${preview ? `: "${preview}"` : ""}`})
+        `);
+      }
+    } catch {}
     res.status(201).json(msg);
   });
 
@@ -643,6 +670,25 @@ export async function registerRoutes(
       res.json({ following: true });
     } catch (err) {
       res.status(500).json({ message: "Failed to follow" });
+    }
+  });
+
+  // Notify a user of an incoming call
+  app.post("/api/users/:id/call-notify", isAuthenticated, async (req: any, res) => {
+    const callerId = req.session.userId;
+    const calleeId = req.params.id;
+    if (callerId === calleeId) return res.json({ ok: true });
+    try {
+      const caller = await authStorage.getUser(callerId);
+      const { audioOnly } = req.body;
+      const callType = audioOnly ? "voice call" : "video call";
+      await db.execute(sql`
+        INSERT INTO notifications (user_id, from_user_id, type, message)
+        VALUES (${calleeId}, ${callerId}, 'call', ${`${caller?.firstName ?? "Someone"} is calling you — ${callType}`})
+      `);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ ok: false });
     }
   });
 

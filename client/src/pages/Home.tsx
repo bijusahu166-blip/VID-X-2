@@ -19,6 +19,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { LiveStreamViewer } from "@/components/live/LiveStreamViewer";
 import { PostViewerModal } from "@/components/post/PostViewerModal";
+import { StoryViewer } from "@/components/story/StoryViewer";
 import { playLike, playUnlike } from "@/lib/sounds";
 
 const CATEGORIES = [
@@ -347,6 +348,7 @@ export default function Home() {
   const [actionMenuPost, setActionMenuPost] = useState<any | null>(null);
   const [livePost, setLivePost] = useState<any | null>(null);
   const [viewingPost, setViewingPost] = useState<any | null>(null);
+  const [viewingStoryIdx, setViewingStoryIdx] = useState<number | null>(null);
 
   const likeMutation = useMutation({
     mutationFn: (postId: number) => apiRequest("POST", `/api/posts/${postId}/like`),
@@ -425,82 +427,57 @@ export default function Home() {
               <span className="text-[10px] text-pink-400/80 font-semibold">Your story</span>
             </div>
 
-            {/* Real stories + live streams from ALL users */}
-            {posts?.filter(p => p.type === "story" || p.type === "live").map((story) => {
-              const authorName = story.user ? `${story.user.firstName}` : "User";
-              const authorAvatar = story.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.user?.firstName}`;
-              const isLive = story.type === "live";
-              return (
-                <div
-                  key={story.id}
-                  className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group"
-                  onClick={() => isLive ? setLivePost(story) : setViewingPost(story)}
-                  data-testid={`story-item-${story.id}`}
-                >
-                  <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
-                    {/* Gradient ring around avatar for stories */}
-                    <div className="absolute inset-0"
-                      style={{ background: `linear-gradient(135deg, hsl(${(story.id * 53) % 360}, 60%, 14%), hsl(${(story.id * 53 + 140) % 360}, 50%, 18%))` }} />
-
-                    {story.imageUrl && !story.imageUrl.startsWith("blob:") ? (
-                      <img
-                        src={story.imageUrl}
-                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center p-2">
-                        <p className="text-[9px] text-white/60 text-center leading-tight line-clamp-4">
-                          {story.caption || "Story"}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
-
-                    {isLive && (
-                      <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wide flex items-center gap-0.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        LIVE
-                      </div>
-                    )}
-
-                    {/* Gradient ring avatar at bottom */}
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full p-[2px]"
-                      style={{ background: "linear-gradient(135deg, #ec4899, #a855f7, #f97316)" }}>
-                      <div className="w-full h-full rounded-full overflow-hidden border border-black">
-                        <img src={authorAvatar} className="w-full h-full object-cover" />
+            {/* Only real stories (not live) from all users */}
+            {(() => {
+              const storyList = (posts?.filter(p => p.type === "story") ?? []);
+              if (storyList.length === 0) {
+                return REELS.map((reel) => (
+                  <div key={reel.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
+                    <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
+                      <img src={reel.thumb} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                      <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full border-2 border-black overflow-hidden">
+                        <img src={reel.avatar} className="w-full h-full object-cover" />
                       </div>
                     </div>
+                    <span className="text-[9px] text-zinc-500 font-medium mt-2 max-w-[80px] truncate text-center">{reel.user}</span>
                   </div>
-                  <span className="text-[9px] text-zinc-400 font-medium max-w-[80px] truncate text-center">{authorName}</span>
-                </div>
-              );
-            })}
-
-            {/* Fallback: no stories or live yet — show placeholder cards */}
-            {posts?.filter(p => p.type === "story" || p.type === "live").length === 0 && (
-              REELS.map((reel) => (
-                <div key={reel.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
-                  <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
-                    <img
-                      src={reel.thumb}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                    {reel.live && (
-                      <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wide flex items-center gap-0.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        LIVE
+                ));
+              }
+              return storyList.map((story, i) => {
+                const authorName = story.user ? `${story.user.firstName}` : "User";
+                const authorAvatar = story.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.user?.firstName}`;
+                return (
+                  <div
+                    key={story.id}
+                    className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group"
+                    onClick={() => setViewingStoryIdx(i)}
+                    data-testid={`story-item-${story.id}`}
+                  >
+                    <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative"
+                      style={{ border: "2px solid transparent", background: "linear-gradient(#111,#111) padding-box, linear-gradient(135deg,#ec4899,#a855f7,#f97316) border-box" }}>
+                      <div className="absolute inset-0"
+                        style={{ background: `linear-gradient(135deg, hsl(${(story.id * 53) % 360}, 60%, 14%), hsl(${(story.id * 53 + 140) % 360}, 50%, 18%))` }} />
+                      {story.imageUrl && !story.imageUrl.startsWith("blob:") ? (
+                        <img src={story.imageUrl} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center p-2">
+                          <p className="text-[9px] text-white/60 text-center leading-tight line-clamp-4">{story.caption || "✨"}</p>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/10" />
+                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full p-[2px]"
+                        style={{ background: "linear-gradient(135deg, #ec4899, #a855f7, #f97316)" }}>
+                        <div className="w-full h-full rounded-full overflow-hidden border border-black">
+                          <img src={authorAvatar} className="w-full h-full object-cover" />
+                        </div>
                       </div>
-                    )}
-                    <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full border-2 border-black overflow-hidden">
-                      <img src={reel.avatar} className="w-full h-full object-cover" />
                     </div>
+                    <span className="text-[9px] text-zinc-400 font-medium max-w-[80px] truncate text-center">{authorName}</span>
                   </div>
-                  <span className="text-[9px] text-zinc-500 font-medium mt-2 max-w-[80px] truncate text-center">{reel.user}</span>
-                </div>
-              ))
-            )}
+                );
+              });
+            })()}
           </div>
         </div>
 
@@ -720,6 +697,15 @@ export default function Home() {
           post={viewingPost}
           onClose={() => setViewingPost(null)}
           allPosts={posts?.filter(p => p.type === viewingPost.type) ?? []}
+        />
+      )}
+
+      {/* Story Viewer */}
+      {viewingStoryIdx !== null && (
+        <StoryViewer
+          stories={posts?.filter(p => p.type === "story") ?? []}
+          initialIndex={viewingStoryIdx}
+          onClose={() => setViewingStoryIdx(null)}
         />
       )}
     </div>

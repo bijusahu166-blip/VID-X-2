@@ -1,7 +1,10 @@
 import { BottomNav } from "@/components/layout/BottomNav";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Heart, UserPlus, Radio, MessageCircle, Check } from "lucide-react";
+import { Bell, Heart, UserPlus, Radio, MessageCircle, Check, Phone, UserCheck, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useLocation } from "wouter";
+import { useState } from "react";
+import { playFollow, playNotification } from "@/lib/sounds";
 
 interface Notification {
   id: number;
@@ -19,19 +22,52 @@ interface Notification {
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "like") return <div className="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center"><Heart className="w-4 h-4 text-red-400 fill-red-400" /></div>;
-  if (type === "follow") return <div className="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center"><UserPlus className="w-4 h-4 text-blue-400" /></div>;
-  if (type === "live") return <div className="w-9 h-9 rounded-full bg-red-600/30 flex items-center justify-center"><Radio className="w-4 h-4 text-red-400 animate-pulse" /></div>;
-  if (type === "comment") return <div className="w-9 h-9 rounded-full bg-purple-500/20 flex items-center justify-center"><MessageCircle className="w-4 h-4 text-purple-400" /></div>;
-  return <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center"><Bell className="w-4 h-4 text-zinc-400" /></div>;
+  const base = "w-5 h-5";
+  if (type === "like") return (
+    <div className="w-6 h-6 rounded-full bg-red-500/90 flex items-center justify-center shadow">
+      <Heart className={`${base} w-3 h-3 text-white fill-white`} />
+    </div>
+  );
+  if (type === "follow") return (
+    <div className="w-6 h-6 rounded-full bg-violet-500/90 flex items-center justify-center shadow">
+      <UserPlus className="w-3 h-3 text-white" />
+    </div>
+  );
+  if (type === "live") return (
+    <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center shadow animate-pulse">
+      <Radio className="w-3 h-3 text-white" />
+    </div>
+  );
+  if (type === "comment") return (
+    <div className="w-6 h-6 rounded-full bg-purple-500/90 flex items-center justify-center shadow">
+      <MessageCircle className="w-3 h-3 text-white" />
+    </div>
+  );
+  if (type === "message") return (
+    <div className="w-6 h-6 rounded-full bg-blue-500/90 flex items-center justify-center shadow">
+      <MessageCircle className="w-3 h-3 text-white fill-white" />
+    </div>
+  );
+  if (type === "call") return (
+    <div className="w-6 h-6 rounded-full bg-green-500/90 flex items-center justify-center shadow">
+      <Phone className="w-3 h-3 text-white" />
+    </div>
+  );
+  return (
+    <div className="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center">
+      <Bell className="w-3 h-3 text-zinc-300" />
+    </div>
+  );
 }
 
 export default function Notifications() {
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+  const [followedBack, setFollowedBack] = useState<Set<string>>(new Set());
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
-    refetchInterval: 30000,
+    refetchInterval: 15000,
   });
 
   const readAll = useMutation({
@@ -42,7 +78,23 @@ export default function Notifications() {
     },
   });
 
+  const followBack = async (userId: string) => {
+    await fetch(`/api/users/${userId}/follow`, { method: "POST", credentials: "include" });
+    setFollowedBack(prev => new Set([...prev, userId]));
+    playFollow();
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+  };
+
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const groupedByDay = notifications.reduce((acc, n) => {
+    const day = new Date(n.created_at).toDateString();
+    if (!acc[day]) acc[day] = [];
+    acc[day].push(n);
+    return acc;
+  }, {} as Record<string, Notification[]>);
+
+  const days = Object.keys(groupedByDay);
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
@@ -63,7 +115,7 @@ export default function Notifications() {
         </div>
       </div>
 
-      <div className="flex-1 pb-20">
+      <div className="flex-1 pb-24">
         {isLoading && (
           <div className="flex flex-col gap-3 p-4">
             {Array(5).fill(0).map((_, i) => (
@@ -85,49 +137,98 @@ export default function Notifications() {
             </div>
             <div className="text-center">
               <p className="text-white font-bold text-lg mb-2">No notifications yet</p>
-              <p className="text-zinc-500 text-sm">When people follow you, go live, or interact with your posts, you'll see it here.</p>
+              <p className="text-zinc-500 text-sm">When people follow you, like your posts, or send you messages, you'll see it here.</p>
             </div>
           </div>
         )}
 
         {!isLoading && notifications.length > 0 && (
-          <div className="divide-y divide-white/5">
-            {notifications.map(notif => (
-              <div
-                key={notif.id}
-                className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${!notif.read ? "bg-red-500/5 border-l-2 border-red-500/60" : ""}`}
-                data-testid={`notification-${notif.id}`}
-              >
-                {/* Avatar or type icon */}
-                <div className="relative flex-shrink-0">
-                  {notif.profile_image_url ? (
-                    <img src={notif.profile_image_url} alt="user" className="w-12 h-12 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-white font-bold text-base">
-                      {notif.first_name?.[0] ?? "?"}
+          <div>
+            {days.map(day => (
+              <div key={day}>
+                <div className="px-4 py-2 sticky top-[57px] bg-black/80 backdrop-blur z-10">
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                    {new Date(day).toDateString() === new Date().toDateString() ? "Today" :
+                      new Date(day).toDateString() === new Date(Date.now() - 86400000).toDateString() ? "Yesterday" :
+                      new Date(day).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                  </span>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {groupedByDay[day].map(notif => (
+                    <div
+                      key={notif.id}
+                      className={`flex items-start gap-3 px-4 py-3.5 transition-colors cursor-pointer active:bg-white/5
+                        ${!notif.read ? "bg-violet-500/5 border-l-2 border-violet-500/50" : ""}`}
+                      data-testid={`notification-${notif.id}`}
+                      onClick={() => {
+                        if (notif.from_user_id) navigate(`/profile/${notif.from_user_id}`);
+                      }}
+                    >
+                      {/* Avatar */}
+                      <div className="relative flex-shrink-0">
+                        {notif.profile_image_url ? (
+                          <img src={notif.profile_image_url} alt="user" className="w-12 h-12 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center text-white font-bold text-base">
+                            {notif.first_name?.[0]?.toUpperCase() ?? "?"}
+                          </div>
+                        )}
+                        <div className="absolute -bottom-1 -right-1">
+                          <NotifIcon type={notif.type} />
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white leading-snug">
+                          {notif.username ? (
+                            <><span className="font-bold">@{notif.username}</span> {notif.message.replace(/^\S+\s/, "")}</>
+                          ) : notif.message}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 mt-0.5">
+                          {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true })}
+                        </p>
+
+                        {/* Follow back button */}
+                        {notif.type === "follow" && notif.from_user_id && (
+                          <div className="mt-2 flex gap-2" onClick={e => e.stopPropagation()}>
+                            {followedBack.has(notif.from_user_id) ? (
+                              <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                                <UserCheck className="w-3.5 h-3.5" /> Following
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => followBack(notif.from_user_id!)}
+                                className="flex items-center gap-1.5 text-[12px] font-bold bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded-full transition-colors"
+                                data-testid={`button-follow-back-${notif.from_user_id}`}
+                              >
+                                <UserPlus className="w-3 h-3" /> Follow back
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Message — go to chat */}
+                        {notif.type === "message" && notif.from_user_id && (
+                          <div className="mt-2" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => navigate("/messages")}
+                              className="text-[12px] font-bold bg-blue-600/80 hover:bg-blue-500 text-white px-3 py-1 rounded-full transition-colors"
+                              data-testid={`button-reply-message-${notif.id}`}
+                            >
+                              Reply
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Unread indicator */}
+                      {!notif.read && (
+                        <div className="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0 mt-1.5" />
+                      )}
                     </div>
-                  )}
-                  <div className="absolute -bottom-1 -right-1">
-                    <NotifIcon type={notif.type} />
-                  </div>
+                  ))}
                 </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white leading-snug">
-                    {notif.username ? (
-                      <><span className="font-bold">@{notif.username}</span> {notif.message.split(' ').slice(1).join(' ')}</>
-                    ) : notif.message}
-                  </p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true })}
-                  </p>
-                </div>
-
-                {/* Unread dot */}
-                {!notif.read && (
-                  <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-                )}
               </div>
             ))}
           </div>
