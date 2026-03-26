@@ -13,16 +13,17 @@ interface VideoCallScreenProps {
   onClose: () => void;
   callerName?: string;
   callerAvatar?: string;
+  audioOnly?: boolean;
 }
 
-export function VideoCallScreen({ onClose, callerName, callerAvatar }: VideoCallScreenProps) {
+export function VideoCallScreen({ onClose, callerName, callerAvatar, audioOnly = false }: VideoCallScreenProps) {
   const displayName = callerName || "Unknown";
   const displayHandle = `@${(callerName || "user").toLowerCase().replace(/\s+/g, "_")}`;
   const displayAvatar = callerAvatar || null;
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
-  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isCameraOn, setIsCameraOn] = useState(!audioOnly);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [selectedEffect, setSelectedEffect] = useState<AREffect>(AR_EFFECTS[0]);
   const [showEffects, setShowEffects] = useState(false);
@@ -40,23 +41,23 @@ export function VideoCallScreen({ onClose, callerName, callerAvatar }: VideoCall
     (EFFECT_CATEGORIES.find(c => c.label === activeEffectTab)?.ids ?? AR_EFFECTS.map(x => x.id)).includes(e.id)
   );
 
-  // Start camera
-  const startCamera = useCallback(async (facingMode: "user" | "environment" = "user") => {
+  // Start camera/audio
+  const startCamera = useCallback(async (facingMode: "user" | "environment" = "user", videoEnabled = true) => {
     try {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
+        video: videoEnabled ? {
           facingMode,
-          width: { ideal: 3840, max: 3840 },
-          height: { ideal: 2160, max: 2160 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: 30 },
-        },
+        } : false,
         audio: true,
       });
       localStreamRef.current = stream;
-      if (localVideoRef.current) {
+      if (localVideoRef.current && videoEnabled) {
         localVideoRef.current.srcObject = stream;
       }
       setCameraError(false);
@@ -66,7 +67,7 @@ export function VideoCallScreen({ onClose, callerName, callerAvatar }: VideoCall
   }, []);
 
   useEffect(() => {
-    startCamera("user");
+    startCamera("user", !audioOnly);
     // Simulate connecting → ringing → active
     const t1 = setTimeout(() => setCallState("ringing"), 1200);
     const t2 = setTimeout(() => setCallState("active"), 3500);

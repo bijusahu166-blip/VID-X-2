@@ -74,6 +74,8 @@ function SettingRow({ icon: Icon, label, sub, onClick }: { icon: any; label: str
 
 function OtherUserProfile({ userId }: { userId: string }) {
   const [, navigate] = useLocation();
+  const qc = useQueryClient();
+  const { toast } = useToast();
 
   const { data: profileData, isLoading } = useQuery<any>({
     queryKey: ["/api/users", userId],
@@ -84,6 +86,48 @@ function OtherUserProfile({ userId }: { userId: string }) {
     queryKey: ["/api/posts", "user", userId],
     queryFn: () => fetch(`/api/posts?userId=${userId}`, { credentials: "include" }).then(r => r.json()),
   });
+
+  const { data: followStatus } = useQuery<{ following: boolean }>({
+    queryKey: ["/api/users", userId, "follow-status"],
+    queryFn: () => fetch(`/api/users/${userId}/follow-status`, { credentials: "include" }).then(r => r.json()),
+  });
+
+  const [followLoading, setFollowLoading] = useState(false);
+  const isFollowing = followStatus?.following ?? false;
+
+  const toggleFollow = async () => {
+    setFollowLoading(true);
+    try {
+      const method = isFollowing ? "DELETE" : "POST";
+      await fetch(`/api/users/${userId}/follow`, { method, credentials: "include" });
+      qc.invalidateQueries({ queryKey: ["/api/users", userId, "follow-status"] });
+      qc.invalidateQueries({ queryKey: ["/api/users", userId] });
+      qc.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      toast({ title: isFollowing ? "Unfollowed" : "Following! They've been notified." });
+    } catch {
+      toast({ title: "Failed to update follow", variant: "destructive" });
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const [msgLoading, setMsgLoading] = useState(false);
+  const startMessage = async () => {
+    setMsgLoading(true);
+    try {
+      await fetch("/api/direct-chats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ otherUserId: userId }),
+      });
+      navigate("/messages");
+    } catch {
+      navigate("/messages");
+    } finally {
+      setMsgLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -102,7 +146,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
     <div className="min-h-screen bg-black pb-20">
       {/* Back header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 sticky top-0 z-40 bg-black/95 backdrop-blur">
-        <button onClick={() => navigate("/search")} className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center">
+        <button onClick={() => window.history.back()} className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center" data-testid="button-back-profile">
           <ArrowLeft className="w-4 h-4 text-white" />
         </button>
         <span className="font-bold text-white">{name}</span>
@@ -122,7 +166,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
       </div>
 
       <div className="px-4 pt-14">
-        {/* Name + follow */}
+        {/* Name + action buttons */}
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="flex items-center gap-1.5">
@@ -134,9 +178,30 @@ function OtherUserProfile({ userId }: { userId: string }) {
             </p>
             {u?.bio && <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{u.bio}</p>}
           </div>
-          <button className="bg-red-500 text-white text-sm font-bold px-5 py-2 rounded-full hover:bg-red-600 transition-colors">
-            Follow
-          </button>
+          {/* Follow + Message buttons */}
+          <div className="flex flex-col gap-2 items-end">
+            <button
+              onClick={toggleFollow}
+              disabled={followLoading}
+              data-testid="button-follow-user"
+              className={`text-white text-sm font-bold px-5 py-2 rounded-full transition-colors disabled:opacity-60 ${
+                isFollowing
+                  ? "bg-zinc-700 hover:bg-zinc-600 border border-zinc-600"
+                  : "bg-red-500 hover:bg-red-600"
+              }`}
+            >
+              {followLoading ? "…" : isFollowing ? "Following ✓" : "Follow"}
+            </button>
+            <button
+              onClick={startMessage}
+              disabled={msgLoading}
+              data-testid="button-message-user"
+              className="flex items-center gap-1.5 text-white text-sm font-bold px-4 py-2 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors border border-zinc-700 disabled:opacity-60"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              {msgLoading ? "…" : "Message"}
+            </button>
+          </div>
         </div>
 
         {/* Stats */}

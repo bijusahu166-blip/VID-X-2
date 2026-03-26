@@ -414,8 +414,8 @@ export default function Home() {
               <span className="text-[10px] text-pink-400/80 font-semibold">Your story</span>
             </div>
 
-            {/* Real stories from ALL users */}
-            {posts?.filter(p => p.type === "story").map((story) => {
+            {/* Real stories + live streams from ALL users */}
+            {posts?.filter(p => p.type === "story" || p.type === "live").map((story) => {
               const authorName = story.user ? `${story.user.firstName}` : "User";
               const authorAvatar = story.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.user?.firstName}`;
               const isLive = story.type === "live";
@@ -461,8 +461,8 @@ export default function Home() {
               );
             })}
 
-            {/* Fallback: no stories yet — show placeholder cards */}
-            {posts?.filter(p => p.type === "story").length === 0 && (
+            {/* Fallback: no stories or live yet — show placeholder cards */}
+            {posts?.filter(p => p.type === "story" || p.type === "live").length === 0 && (
               REELS.map((reel) => (
                 <div key={reel.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
                   <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
@@ -509,7 +509,18 @@ export default function Home() {
               <p className="text-sm">No posts yet. Be the first!</p>
             </div>
           ) : (
-            posts?.map((post, index) => {
+            posts?.filter((post) => {
+              if (activeCategory === "All") return true;
+              if (activeCategory === "Trending") return (post.likesCount ?? 0) >= 0; // all show for trending
+              if (activeCategory === "Reels") return post.type === "reel" || post.type === "video";
+              if (activeCategory === "Music") return post.caption?.toLowerCase().includes("music") || post.caption?.toLowerCase().includes("song");
+              if (activeCategory === "Gaming") return post.caption?.toLowerCase().includes("gaming") || post.caption?.toLowerCase().includes("game");
+              if (activeCategory === "Food") return post.caption?.toLowerCase().includes("food") || post.caption?.toLowerCase().includes("eat");
+              if (activeCategory === "Travel") return post.caption?.toLowerCase().includes("travel") || post.caption?.toLowerCase().includes("trip");
+              if (activeCategory === "Tech") return post.caption?.toLowerCase().includes("tech") || post.caption?.toLowerCase().includes("code");
+              if (activeCategory === "World") return post.type === "post";
+              return true;
+            }).map((post, index) => {
               const isVideo = isVideoPost(post);
               const isPhoto = isPhotoPost(post);
               return (
@@ -526,28 +537,32 @@ export default function Home() {
                         : <Film className="w-12 h-12 text-white/15" />}
                     </div>
 
-                    {/* Media */}
-                    {post.imageUrl && !post.imageUrl.startsWith("blob:") && (
+                    {/* Media: real video if available, else thumbnail */}
+                    {isVideo && (post as any).videoUrl ? (
+                      <video
+                        src={(post as any).videoUrl}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        controls
+                        preload="metadata"
+                        playsInline
+                        data-testid={`video-post-${post.id}`}
+                      />
+                    ) : post.imageUrl && !post.imageUrl.startsWith("blob:") ? (
                       <img
                         src={post.imageUrl}
                         alt=""
                         className={`absolute inset-0 w-full h-full ${isPhoto ? "object-contain" : "object-cover"} group-hover:scale-[1.02] transition-transform duration-300`}
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
-                    )}
+                    ) : null}
 
-                    {/* Video: duration badge + play overlay */}
-                    {isVideo && (
-                      <>
-                        <div className="absolute bottom-2 right-2 bg-black/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                          {`${Math.floor(Math.random() * 15) + 1}:${Math.floor(Math.random() * 60).toString().padStart(2, "0")}`}
+                    {/* Video with no file: show play overlay on thumbnail */}
+                    {isVideo && !(post as any).videoUrl && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                          <Play className="w-7 h-7 text-white fill-white ml-1" />
                         </div>
-                        <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm">
-                            <Play className="w-7 h-7 text-white fill-white ml-1" />
-                          </div>
-                        </div>
-                      </>
+                      </div>
                     )}
 
                     {/* Photo: no play button, but show full image */}

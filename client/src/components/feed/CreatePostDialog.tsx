@@ -573,10 +573,15 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       }
     }
 
+    // Include category in caption for video posts
+    const captionWithCategory = (uploadType === "video" && selectedCategory)
+      ? `${finalCaption}\n#${selectedCategory}`.trim()
+      : finalCaption;
+
     try {
       await createPost.mutateAsync({
         imageUrl: finalImageUrl,
-        caption: finalCaption,
+        caption: captionWithCategory,
         userId: "temp",
         type: uploadType === "video" ? "video" : uploadType,
         ...(videoFileUrl ? { videoUrl: videoFileUrl } : {}),

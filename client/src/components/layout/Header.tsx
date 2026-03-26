@@ -1,13 +1,23 @@
 import { Plus, Bell, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { CreatePostDialog } from "@/components/feed/CreatePostDialog";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
+import { useQuery } from "@tanstack/react-query";
 import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
 
 export function Header() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCallOpen, setIsCallOpen] = useState(false);
+  const [, navigate] = useLocation();
+
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/notifications/unread-count"],
+    refetchInterval: 30000,
+    staleTime: 10000,
+  });
+  const unreadCount = unreadData?.count ?? 0;
 
   return (
     <>
@@ -34,7 +44,7 @@ export function Header() {
 
           {/* Right: Video Call + Notifications */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Video call button with green spinning border */}
+            {/* Video call button */}
             <div className="spin-border-green">
               <Button
                 size="icon"
@@ -48,14 +58,20 @@ export function Header() {
               </Button>
             </div>
 
-            {/* Notifications */}
+            {/* Notifications bell — navigates to /notifications */}
             <Button
               size="icon"
               variant="ghost"
-              className="rounded-full w-9 h-9 hover:bg-secondary transition-colors"
+              onClick={() => navigate("/notifications")}
+              className="rounded-full w-9 h-9 hover:bg-secondary transition-colors relative"
               data-testid="button-notifications"
             >
               <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
               <span className="sr-only">Notifications</span>
             </Button>
           </div>

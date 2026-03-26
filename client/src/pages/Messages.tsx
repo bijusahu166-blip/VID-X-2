@@ -353,6 +353,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [showVideoCall, setShowVideoCall] = useState(false);
+  const [callAudioOnly, setCallAudioOnly] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [showTranslate, setShowTranslate] = useState<number | null>(null);
@@ -500,9 +501,10 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
 
   if (showVideoCall) return (
     <VideoCallScreen
-      onClose={() => setShowVideoCall(false)}
+      onClose={() => { setShowVideoCall(false); setCallAudioOnly(false); }}
       callerName={other ? `${other.firstName} ${other.lastName}` : undefined}
       callerAvatar={other?.profileImageUrl || undefined}
+      audioOnly={callAudioOnly}
     />
   );
 
@@ -523,10 +525,10 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
           <p className="text-xs text-zinc-400">{chat.isOnline ? "Online" : chat.lastSeen ? `Last seen ${formatTime(chat.lastSeen)}` : "Offline"}</p>
         </div>
         <div className="flex items-center gap-1">
-          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => setShowVideoCall(true)} data-testid="button-video-call">
+          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { setCallAudioOnly(false); setShowVideoCall(true); }} data-testid="button-video-call">
             <Video className="w-4 h-4" />
           </button>
-          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" data-testid="button-voice-call">
+          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { setCallAudioOnly(true); setShowVideoCall(true); }} data-testid="button-voice-call">
             <Phone className="w-4 h-4" />
           </button>
           <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => setShowThemePicker(p => !p)} data-testid="button-theme">
