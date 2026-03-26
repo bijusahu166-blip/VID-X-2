@@ -436,7 +436,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     try {
       const thumb = await generateVideoThumbnail(file);
       setImageUrl(thumb);
-    } finally {
+    } catch { /* thumbnail failed, skip */ } finally {
       setIsReadingFile(false);
     }
     e.target.value = "";

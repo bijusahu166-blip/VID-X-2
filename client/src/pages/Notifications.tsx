@@ -82,10 +82,12 @@ export default function Notifications() {
   });
 
   const followBack = async (userId: string) => {
-    await fetch(`/api/users/${userId}/follow`, { method: "POST", credentials: "include" });
-    setFollowedBack(prev => new Set([...prev, userId]));
-    playFollow();
-    queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+    try {
+      await fetch(`/api/users/${userId}/follow`, { method: "POST", credentials: "include" });
+      setFollowedBack(prev => new Set([...prev, userId]));
+      playFollow();
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+    } catch { /* ignore network errors */ }
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
