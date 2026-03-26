@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AR_EFFECTS, EFFECT_CATEGORIES } from "@/lib/arEffects";
 import type { AREffect } from "@/lib/arEffects";
+import filterIconSrc from "@assets/image_1774511462472.png";
 
 interface CreatePostDialogProps {
   open: boolean;
@@ -147,20 +148,33 @@ function ARFilterStrip({
               }`}
             >
               <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl border-2 transition-all ${
+                className={`w-14 h-14 rounded-xl overflow-hidden relative border-2 transition-all ${
                   selected.id === effect.id
                     ? "border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.6)]"
                     : "border-white/10"
                 }`}
                 style={{
-                  background: selected.id === effect.id
-                    ? "rgba(168,85,247,0.2)"
-                    : "rgba(255,255,255,0.05)",
+                  background: "rgba(255,255,255,0.05)",
                 }}
               >
-                {effect.emoji}
+                {/* Filter icon base */}
+                <img
+                  src={filterIconSrc}
+                  alt={effect.name}
+                  className="w-full h-full object-cover"
+                  style={{
+                    filter: effect.filter !== "none" ? effect.filter : undefined,
+                  }}
+                />
+                {/* Emoji badge */}
+                <div className="absolute bottom-0 right-0 w-5 h-5 rounded-tl-lg flex items-center justify-center text-[10px] bg-black/70">
+                  {effect.emoji}
+                </div>
+                {selected.id === effect.id && (
+                  <div className="absolute inset-0 ring-2 ring-purple-400 ring-inset rounded-xl pointer-events-none" />
+                )}
               </div>
-              <span className="text-[8px] text-white/60 font-semibold max-w-[48px] text-center leading-tight">
+              <span className="text-[8px] text-white/60 font-semibold max-w-[56px] text-center leading-tight">
                 {effect.name}
               </span>
             </button>

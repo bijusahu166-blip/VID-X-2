@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { AR_EFFECTS, EFFECT_CATEGORIES } from "@/lib/arEffects";
 import type { AREffect } from "@/lib/arEffects";
+import filterIconSrc from "@assets/image_1774511462472.png";
 
 const MOCK_CALLERS = [
   { name: "Alice Wonder", handle: "@alice_litlink", avatar: "🧝‍♀️" },
@@ -338,18 +339,25 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
                   }`}
                 >
                   <div
-                    className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl border-2 transition-all ${
+                    className={`w-14 h-14 rounded-xl overflow-hidden relative border-2 transition-all ${
                       selectedEffect.id === effect.id
                         ? "border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.6)]"
                         : "border-white/10"
                     }`}
-                    style={{
-                      background: selectedEffect.id === effect.id
-                        ? "rgba(168,85,247,0.2)"
-                        : "rgba(255,255,255,0.06)",
-                    }}
+                    style={{ background: "rgba(255,255,255,0.06)" }}
                   >
-                    {effect.emoji}
+                    <img
+                      src={filterIconSrc}
+                      alt={effect.name}
+                      className="w-full h-full object-cover"
+                      style={{ filter: effect.filter !== "none" ? effect.filter : undefined }}
+                    />
+                    <div className="absolute bottom-0 right-0 w-5 h-5 rounded-tl-lg flex items-center justify-center text-[10px] bg-black/70">
+                      {effect.emoji}
+                    </div>
+                    {selectedEffect.id === effect.id && (
+                      <div className="absolute inset-0 ring-2 ring-purple-400 ring-inset rounded-xl pointer-events-none" />
+                    )}
                   </div>
                   <span className="text-[9px] text-white/70 font-semibold text-center leading-tight max-w-[56px]">
                     {effect.name}
