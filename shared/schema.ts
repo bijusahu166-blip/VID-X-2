@@ -87,6 +87,14 @@ export const ads = pgTable("ads", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const reports = pgTable("reports", {
+  id: serial("id").primaryKey(),
+  postId: integer("post_id").notNull().references(() => posts.id),
+  reporterId: text("reporter_id").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const history = pgTable("history", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),

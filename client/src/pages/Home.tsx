@@ -7,11 +7,13 @@ import { BannerAd } from "@/components/ads/BannerAd";
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
-  Play, ThumbsUp, ThumbsDown, Share2, MoreVertical,
-  MessageSquare, Eye, ChevronRight, Flame, Music,
+  Play, ThumbsUp, Share2, MoreVertical,
+  MessageSquare, ChevronRight, Flame, Music,
   Globe, Gamepad2, Utensils, Plane, Cpu, Plus,
-  CheckCircle2, Zap, Film, X, Send, Loader2, Image
+  CheckCircle2, Zap, Film, X, Send, Loader2, Image,
+  Trash2, Flag, AlertTriangle, ShieldAlert, EyeOff, Ban, CheckCheck
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -158,11 +160,186 @@ async function sharePost(post: any) {
   }
 }
 
+const REPORT_REASONS = [
+  { icon: ShieldAlert, label: "Spam or misleading" },
+  { icon: AlertTriangle, label: "Hateful or abusive" },
+  { icon: EyeOff, label: "Nudity or sexual content" },
+  { icon: Flag, label: "Violence or dangerous" },
+  { icon: Ban, label: "Harassment or bullying" },
+  { icon: AlertTriangle, label: "Other" },
+];
+
+function PostActionMenu({
+  post, isOwner, onClose,
+}: {
+  post: any; isOwner: boolean; onClose: () => void;
+}) {
+  const [view, setView] = useState<"menu" | "confirm-delete" | "report-reason" | "reported" | "deleted">("menu");
+  const { toast } = useToast();
+
+  const deleteMutation = useMutation({
+    mutationFn: () => fetch(`/api/posts/${post.id}`, { method: "DELETE", credentials: "include" }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      setView("deleted");
+      setTimeout(onClose, 1800);
+    },
+    onError: () => toast({ title: "Could not delete post", variant: "destructive" }),
+  });
+
+  const reportMutation = useMutation({
+    mutationFn: (reason: string) => apiRequest("POST", `/api/posts/${post.id}/report`, { reason }),
+    onSuccess: () => setView("reported"),
+    onError: () => toast({ title: "Could not submit report", variant: "destructive" }),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md mx-auto rounded-t-3xl bg-zinc-950 border-t border-zinc-800 overflow-hidden">
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-zinc-700" />
+        </div>
+
+        {/* Menu view */}
+        {view === "menu" && (
+          <div className="px-4 py-3 space-y-1">
+            <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-3">Post Options</p>
+
+            {isOwner && (
+              <button
+                onClick={() => setView("confirm-delete")}
+                data-testid="button-delete-post"
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-4 h-4 text-red-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-red-400">Delete Post</p>
+                  <p className="text-[11px] text-zinc-600">Remove this post permanently</p>
+                </div>
+              </button>
+            )}
+
+            {!isOwner && (
+              <button
+                onClick={() => setView("report-reason")}
+                data-testid="button-report-post"
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20 transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0">
+                  <Flag className="w-4 h-4 text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-orange-400">Report Post</p>
+                  <p className="text-[11px] text-zinc-600">Flag this content for review</p>
+                </div>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl hover:bg-white/5 transition-colors text-left"
+            >
+              <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center shrink-0">
+                <X className="w-4 h-4 text-zinc-400" />
+              </div>
+              <p className="text-sm font-semibold text-zinc-400">Cancel</p>
+            </button>
+            <div className="h-4" />
+          </div>
+        )}
+
+        {/* Confirm delete */}
+        {view === "confirm-delete" && (
+          <div className="px-5 py-5">
+            <div className="w-14 h-14 rounded-2xl bg-red-500/15 border border-red-500/25 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-7 h-7 text-red-400" />
+            </div>
+            <h3 className="text-lg font-black text-white text-center mb-1">Delete Post?</h3>
+            <p className="text-sm text-zinc-500 text-center mb-6">This will permanently remove your post including all comments and likes. This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setView("menu")} className="flex-1 h-12 rounded-xl border border-zinc-700 text-zinc-300 font-bold text-sm hover:bg-white/5 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+                className="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-4 h-4" /> Delete</>}
+              </button>
+            </div>
+            <div className="h-4" />
+          </div>
+        )}
+
+        {/* Report reason picker */}
+        {view === "report-reason" && (
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-3 mb-4">
+              <button onClick={() => setView("menu")} className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
+                <X className="w-3.5 h-3.5 text-zinc-400" />
+              </button>
+              <h3 className="text-sm font-black text-white">Why are you reporting this?</h3>
+            </div>
+            <div className="space-y-1.5 mb-4">
+              {REPORT_REASONS.map(({ icon: Icon, label }) => (
+                <button
+                  key={label}
+                  onClick={() => reportMutation.mutate(label)}
+                  disabled={reportMutation.isPending}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors text-left disabled:opacity-50"
+                >
+                  <Icon className="w-4 h-4 text-orange-400 shrink-0" />
+                  <span className="text-sm text-white font-medium">{label}</span>
+                  {reportMutation.isPending && <Loader2 className="w-3.5 h-3.5 text-zinc-600 animate-spin ml-auto" />}
+                </button>
+              ))}
+            </div>
+            <div className="h-2" />
+          </div>
+        )}
+
+        {/* Report success */}
+        {view === "reported" && (
+          <div className="px-5 py-8 text-center">
+            <div className="w-14 h-14 rounded-full bg-green-500/15 border border-green-500/25 flex items-center justify-center mx-auto mb-4">
+              <CheckCheck className="w-7 h-7 text-green-400" />
+            </div>
+            <h3 className="text-lg font-black text-white mb-1">Report Submitted</h3>
+            <p className="text-sm text-zinc-500 mb-5">Thank you for helping keep VID-X safe. Our team will review this content.</p>
+            <button onClick={onClose} className="w-full h-11 rounded-xl bg-zinc-800 text-white font-bold text-sm hover:bg-zinc-700 transition-colors">
+              Done
+            </button>
+            <div className="h-4" />
+          </div>
+        )}
+
+        {/* Deleted success */}
+        {view === "deleted" && (
+          <div className="px-5 py-8 text-center">
+            <div className="w-14 h-14 rounded-full bg-red-500/15 border border-red-500/25 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-7 h-7 text-red-400" />
+            </div>
+            <h3 className="text-lg font-black text-white mb-1">Post Deleted</h3>
+            <p className="text-sm text-zinc-500">Your post has been permanently removed.</p>
+            <div className="h-8" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const { data: posts, isLoading } = usePosts();
   const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState("All");
   const [openCommentPostId, setOpenCommentPostId] = useState<number | null>(null);
+  const [actionMenuPost, setActionMenuPost] = useState<any | null>(null);
 
   const likeMutation = useMutation({
     mutationFn: (postId: number) => apiRequest("POST", `/api/posts/${postId}/like`),
@@ -450,7 +627,11 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <button className="shrink-0 text-zinc-600 hover:text-white transition-colors self-start mt-0.5">
+                    <button
+                      data-testid={`button-post-menu-${post.id}`}
+                      onClick={() => setActionMenuPost(post)}
+                      className="shrink-0 text-zinc-600 hover:text-white transition-colors self-start mt-0.5 w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10"
+                    >
                       <MoreVertical className="w-4 h-4" />
                     </button>
                   </div>
@@ -477,6 +658,15 @@ export default function Home() {
           postId={openCommentPostId}
           open={openCommentPostId !== null}
           onClose={() => setOpenCommentPostId(null)}
+        />
+      )}
+
+      {/* Post Action Menu */}
+      {actionMenuPost && (
+        <PostActionMenu
+          post={actionMenuPost}
+          isOwner={actionMenuPost.userId === user?.id}
+          onClose={() => setActionMenuPost(null)}
         />
       )}
     </div>

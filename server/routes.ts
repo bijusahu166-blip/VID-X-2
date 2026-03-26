@@ -223,6 +223,25 @@ export async function registerRoutes(
     res.status(201).json(comment);
   });
 
+  // DELETE a post (owner only)
+  app.delete("/api/posts/:id", isAuthenticated, async (req, res) => {
+    const userId = (req.session as any).userId;
+    const postId = Number(req.params.id);
+    const deleted = await storage.deletePost(postId, userId);
+    if (!deleted) return res.status(403).json({ message: "Not allowed or post not found" });
+    res.json({ success: true });
+  });
+
+  // REPORT a post
+  app.post("/api/posts/:id/report", isAuthenticated, async (req, res) => {
+    const userId = (req.session as any).userId;
+    const postId = Number(req.params.id);
+    const { reason } = req.body as { reason?: string };
+    if (!reason) return res.status(400).json({ message: "Reason is required" });
+    await storage.reportPost(postId, userId, reason);
+    res.json({ success: true });
+  });
+
   // GET comments for a post
   app.get("/api/posts/:id/comments", isAuthenticated, async (req, res) => {
     const postId = Number(req.params.id);

@@ -1,5 +1,5 @@
 import { 
-  posts, comments, likes, books, ads, history,
+  posts, comments, likes, books, ads, history, reports,
   type Post, type InsertPost, type InsertComment, type InsertLike, 
   type Comment, type Like, type Book, type InsertBook, type Ad, type InsertAd,
   type History, type InsertHistory
@@ -17,6 +17,8 @@ export interface IStorage {
   createPost(post: InsertPost): Promise<Post>;
   getAllPosts(): Promise<Post[]>;
   getPost(id: number): Promise<Post | undefined>;
+  deletePost(id: number, userId: string): Promise<boolean>;
+  reportPost(postId: number, reporterId: string, reason: string): Promise<void>;
   
   // Comments
   createComment(postId: number, userId: string, content: string): Promise<Comment>;
@@ -77,6 +79,21 @@ export class DatabaseStorage implements IStorage {
   async getPost(id: number): Promise<Post | undefined> {
     const [post] = await db.select().from(posts).where(eq(posts.id, id));
     return post;
+  }
+
+  async deletePost(id: number, userId: string): Promise<boolean> {
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+    if (!post || post.userId !== userId) return false;
+    // Delete related comments and likes first
+    await db.delete(comments).where(eq(comments.postId, id));
+    await db.delete(likes).where(eq(likes.postId, id));
+    await db.delete(reports).where(eq(reports.postId, id));
+    await db.delete(posts).where(eq(posts.id, id));
+    return true;
+  }
+
+  async reportPost(postId: number, reporterId: string, reason: string): Promise<void> {
+    await db.insert(reports).values({ postId, reporterId, reason });
   }
 
   async createComment(postId: number, userId: string, content: string): Promise<Comment> {
