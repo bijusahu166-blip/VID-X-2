@@ -451,25 +451,91 @@ export default function Profile() {
 
                   {/* ── MAIN LIST ── */}
                   {!settingsPanel && (
-                    <div className="py-3 space-y-1">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-3 pb-1">How you use LITLink</p>
-                      <SettingRow icon={TrendingUp} label="InsightX 📊" onClick={() => setSettingsPanel("InsightX")} />
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">For professionals</p>
-                      <SettingRow icon={Wrench} label="ProTools Hub 🧰" onClick={() => setSettingsPanel("ProTools Hub")} />
-                      <SettingRow icon={Wallet} label="AdPay Center 💳" onClick={() => setSettingsPanel("AdPay Center")} />
-                      <SettingRow icon={ShieldCheck} label="VerifyPlus ✔️" sub="Subscribed" onClick={() => setSettingsPanel("VerifyPlus")} />
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Who can see your content</p>
-                      <SettingRow icon={KeyRound} label="PrivacyLock 🔒" sub={accountPrivate ? "Private" : "Public"} onClick={() => setSettingsPanel("PrivacyLock")} />
-                      <SettingRow icon={Heart} label="InnerCircle 👥" sub="15 members" onClick={() => setSettingsPanel("InnerCircle")} />
-                      <SettingRow icon={RefreshCw} label="ShareSync 🔄" onClick={() => setSettingsPanel("ShareSync")} />
-                      <SettingRow icon={UserX} label="BlockShield 🚫" sub="3 accounts" onClick={() => setSettingsPanel("BlockShield")} />
-                      <SettingRow icon={Ghost} label="GhostView 👻" onClick={() => setSettingsPanel("GhostView")} />
-                      <SettingRow icon={Activity} label="FriendPulse 💫" onClick={() => setSettingsPanel("FriendPulse")} />
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">How others can interact with you</p>
-                      <SettingRow icon={MessageSquare} label="Messages and story replies" onClick={() => setSettingsPanel("Messages and story replies")} />
-                      <SettingRow icon={AtSign} label="Tags and mentions" onClick={() => setSettingsPanel("Tags and mentions")} />
-                      <SettingRow icon={MessageCircle} label="Comments" onClick={() => setSettingsPanel("Comments")} />
-                      <SettingRow icon={Share2} label="Sharing and reuse" onClick={() => setSettingsPanel("Sharing and reuse")} />
+                    <div className="py-4 space-y-5 px-4">
+
+                      {/* Section: How you use LITLink */}
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">How you use LITLink</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { icon: TrendingUp, label: "InsightX", emoji: "📊", color: "#a78bfa", panel: "InsightX" },
+                          ].map((s) => (
+                            <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
+                              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                              </div>
+                              <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Section: For professionals */}
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">For Professionals</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { icon: Wrench,      label: "ProTools Hub",  color: "#f59e0b", panel: "ProTools Hub" },
+                            { icon: Wallet,      label: "AdPay Center",  color: "#34d399", panel: "AdPay Center" },
+                            { icon: ShieldCheck, label: "VerifyPlus",    color: "#818cf8", panel: "VerifyPlus", sub: "Subscribed" },
+                          ].map((s) => (
+                            <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
+                              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                              </div>
+                              <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
+                              {s.sub && <span className="text-[8px] text-emerald-400 font-semibold -mt-1">{s.sub}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Section: Privacy */}
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">🔐 Privacy</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { icon: KeyRound,  label: "PrivacyLock",  color: "#f472b6", panel: "PrivacyLock",  sub: accountPrivate ? "Private" : "Public" },
+                            { icon: Heart,     label: "InnerCircle",  color: "#fb7185", panel: "InnerCircle",  sub: "15 members" },
+                            { icon: RefreshCw, label: "ShareSync",    color: "#38bdf8", panel: "ShareSync" },
+                            { icon: UserX,     label: "BlockShield",  color: "#f87171", panel: "BlockShield",  sub: "3 accounts" },
+                            { icon: Ghost,     label: "GhostView",    color: "#c084fc", panel: "GhostView" },
+                            { icon: Activity,  label: "FriendPulse",  color: "#fb923c", panel: "FriendPulse" },
+                          ].map((s) => (
+                            <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
+                              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                              </div>
+                              <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
+                              {s.sub && <span className="text-[8px] text-zinc-500 -mt-1">{s.sub}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Section: Interactions */}
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">Interactions</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { icon: MessageSquare, label: "Messages",  color: "#34d399", panel: "Messages and story replies" },
+                            { icon: AtSign,        label: "Tags",      color: "#60a5fa", panel: "Tags and mentions" },
+                            { icon: MessageCircle, label: "Comments",  color: "#f59e0b", panel: "Comments" },
+                            { icon: Share2,        label: "Sharing",   color: "#a78bfa", panel: "Sharing and reuse" },
+                          ].map((s) => (
+                            <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
+                              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                              </div>
+                              <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Ads preferences</p>
                       <div className="px-5 py-3 space-y-4">
                         <div className="flex items-center justify-between">
