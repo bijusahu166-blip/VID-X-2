@@ -290,6 +290,32 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // SAVE / UNSAVE a post (bookmark toggle)
+  app.post("/api/posts/:id/save", isAuthenticated, async (req, res) => {
+    const userId = (req.session as any).userId;
+    const postId = Number(req.params.id);
+    const existing = await db.execute(
+      sql`SELECT id FROM saved_posts WHERE user_id = ${userId} AND post_id = ${postId}`
+    );
+    if (existing.rows.length > 0) {
+      await db.execute(sql`DELETE FROM saved_posts WHERE user_id = ${userId} AND post_id = ${postId}`);
+      return res.json({ saved: false });
+    } else {
+      await db.execute(sql`INSERT INTO saved_posts (user_id, post_id) VALUES (${userId}, ${postId}) ON CONFLICT DO NOTHING`);
+      return res.json({ saved: true });
+    }
+  });
+
+  // GET all saved posts for the current user
+  app.get("/api/posts/saved", isAuthenticated, async (req, res) => {
+    const userId = (req.session as any).userId;
+    const rows = await db.execute(
+      sql`SELECT sp.post_id FROM saved_posts sp WHERE sp.user_id = ${userId} ORDER BY sp.created_at DESC`
+    );
+    const postIds = rows.rows.map((r: any) => r.post_id as number);
+    res.json({ postIds });
+  });
+
   // REPORT a post
   app.post("/api/posts/:id/report", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;

@@ -106,6 +106,13 @@ export const history = pgTable("history", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const savedPosts = pgTable("saved_posts", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  postId: integer("post_id").notNull().references(() => posts.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertHistorySchema = createInsertSchema(history).omit({ id: true, createdAt: true });
 export type History = typeof history.$inferSelect;
 export type InsertHistory = z.infer<typeof insertHistorySchema>;
