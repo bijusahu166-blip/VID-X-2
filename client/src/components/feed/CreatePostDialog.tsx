@@ -203,7 +203,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [selectedArEffect, setSelectedArEffect] = useState<AREffect>(AR_EFFECTS[0]);
   const [showArFilters, setShowArFilters] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
-  const [cameraError, setCameraError] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -213,45 +214,61 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
   const createPost = useCreatePost();
 
+  const attachStream = useCallback((stream: MediaStream) => {
+    const tryAttach = (attempts = 0) => {
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = stream;
+        cameraVideoRef.current.play().catch(() => {});
+        setCameraReady(true);
+      } else if (attempts < 20) {
+        setTimeout(() => tryAttach(attempts + 1), 50);
+      }
+    };
+    tryAttach();
+  }, []);
+
   const startCamera = useCallback(async (front = true) => {
+    setCameraReady(false);
+    setCameraError(null);
     try {
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: front ? "user" : "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
       cameraStreamRef.current = stream;
-      if (cameraVideoRef.current) {
-        cameraVideoRef.current.srcObject = stream;
-      }
-      setCameraError(false);
-    } catch {
-      setCameraError(true);
+      attachStream(stream);
+    } catch (err: any) {
+      const msg = err?.name === "NotAllowedError"
+        ? "Camera permission denied. Please allow camera access in your browser."
+        : err?.name === "NotFoundError"
+        ? "No camera found on this device."
+        : "Could not start camera. Try allowing camera access.";
+      setCameraError(msg);
     }
-  }, []);
+  }, [attachStream]);
 
   const stopCamera = useCallback(() => {
     if (cameraStreamRef.current) {
       cameraStreamRef.current.getTracks().forEach(t => t.stop());
       cameraStreamRef.current = null;
     }
+    setCameraReady(false);
   }, []);
 
   const capturePhoto = useCallback(() => {
     const video = cameraVideoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     if (selectedArEffect.filter !== "none") ctx.filter = selectedArEffect.filter;
-    if (isFrontCamera) {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-    }
+    if (isFrontCamera) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
     ctx.drawImage(video, 0, 0);
     const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
     setImageUrl(dataUrl);
@@ -263,16 +280,20 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   useEffect(() => {
     if (cameraMode) {
       startCamera(isFrontCamera);
-    } else {
-      stopCamera();
     }
-    return () => { if (!cameraMode) stopCamera(); };
+    return () => { stopCamera(); };
   }, [cameraMode]);
 
-  const toggleCameraFace = async () => {
+  const toggleCameraFace = () => {
     const next = !isFrontCamera;
     setIsFrontCamera(next);
-    await startCamera(next);
+    startCamera(next);
+  };
+
+  const openCameraMode = () => {
+    setImageUrl("");
+    setPreviewUrl("");
+    setCameraMode(true);
   };
 
   const handleTypeSelect = (type: UploadType) => {
@@ -344,7 +365,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setPreviewUrl("");
       setSelectedArEffect(AR_EFFECTS[0]);
       setShowArFilters(false);
-      setCameraError(false);
+      setCameraError(null);
+      setCameraReady(false);
     }, 300);
   };
 
@@ -552,7 +574,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
               {/* Camera / Upload mode toggle */}
               <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
                 <button
-                  onClick={() => { setCameraMode(true); setImageUrl(""); setPreviewUrl(""); }}
+                  data-testid="button-camera-mode"
+                  onClick={openCameraMode}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-all ${
                     cameraMode ? "bg-pink-500 text-white shadow-lg" : "text-zinc-400 hover:text-white"
                   }`}
@@ -576,27 +599,38 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 <div className="space-y-3">
                   <div className="aspect-[9/16] rounded-2xl bg-zinc-900 relative overflow-hidden">
                     {cameraError ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                        <Video className="w-10 h-10 text-zinc-600" />
-                        <p className="text-xs text-zinc-500 text-center px-4">Camera access denied.<br/>Please allow camera permission.</p>
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6">
+                        <Video className="w-12 h-12 text-zinc-600" />
+                        <p className="text-xs text-zinc-400 text-center leading-relaxed">{cameraError}</p>
                         <button
                           onClick={() => startCamera(isFrontCamera)}
-                          className="px-4 py-2 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-400 text-xs font-bold"
+                          className="px-5 py-2 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-400 text-xs font-bold"
                         >
                           Try Again
                         </button>
+                        <p className="text-[10px] text-zinc-600 text-center">Tip: Open the app URL directly in your browser for camera access</p>
                       </div>
                     ) : (
                       <>
+                        {/* Loading spinner until camera is ready */}
+                        {!cameraReady && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
+                            <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
+                            <p className="text-xs text-zinc-500">Starting camera…</p>
+                          </div>
+                        )}
                         <video
                           ref={cameraVideoRef}
                           autoPlay
                           playsInline
                           muted
                           className="w-full h-full object-cover"
+                          onCanPlay={() => setCameraReady(true)}
                           style={{
                             transform: isFrontCamera ? "scaleX(-1)" : "none",
                             filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined,
+                            opacity: cameraReady ? 1 : 0,
+                            transition: "opacity 0.3s ease",
                           }}
                         />
                         {/* AR overlay */}
@@ -742,7 +776,56 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
           {/* ── STEP: DETAILS (Post / Live) ── */}
           {step === "details" && uploadType !== "video" && (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {uploadType !== "live" && (
+              {/* ── CAMERA MODE in Details Step ── */}
+              {cameraMode && (
+                <div className="space-y-3">
+                  <div className="aspect-[9/16] max-h-72 rounded-2xl bg-zinc-900 relative overflow-hidden">
+                    {cameraError ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6">
+                        <Video className="w-10 h-10 text-zinc-600" />
+                        <p className="text-xs text-zinc-400 text-center leading-relaxed">{cameraError}</p>
+                        <button type="button" onClick={() => startCamera(isFrontCamera)} className="px-4 py-2 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-400 text-xs font-bold">Try Again</button>
+                        <p className="text-[10px] text-zinc-600 text-center">Open the app URL directly in your browser for camera access</p>
+                      </div>
+                    ) : (
+                      <>
+                        {!cameraReady && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
+                            <Loader2 className="w-7 h-7 text-pink-400 animate-spin" />
+                            <p className="text-xs text-zinc-500">Starting camera…</p>
+                          </div>
+                        )}
+                        <video
+                          ref={cameraVideoRef}
+                          autoPlay playsInline muted
+                          className="w-full h-full object-cover"
+                          onCanPlay={() => setCameraReady(true)}
+                          style={{
+                            transform: isFrontCamera ? "scaleX(-1)" : "none",
+                            filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined,
+                            opacity: cameraReady ? 1 : 0,
+                            transition: "opacity 0.3s ease",
+                          }}
+                        />
+                        {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
+                          <div className="absolute inset-0 pointer-events-none" style={{ background: selectedArEffect.overlay }} />
+                        )}
+                        <button type="button" onClick={toggleCameraFace} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm border border-white/15 flex items-center justify-center">
+                          <RotateCcw className="w-3.5 h-3.5 text-white" />
+                        </button>
+                        <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                          <button type="button" onClick={capturePhoto} className="w-14 h-14 rounded-full border-4 border-white flex items-center justify-center bg-white/20 backdrop-blur-sm hover:bg-white/40 active:scale-90 transition-all shadow-2xl">
+                            <div className="w-9 h-9 rounded-full bg-white" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <ARFilterStrip selected={selectedArEffect} onSelect={setSelectedArEffect} />
+                  <button type="button" onClick={() => { setCameraMode(false); stopCamera(); }} className="w-full py-2 rounded-xl text-xs text-zinc-400 border border-white/10 hover:border-white/20">← Back to Upload</button>
+                </div>
+              )}
+              {uploadType !== "live" && !cameraMode && (
                 <div className="space-y-2">
                   <div
                     className="relative w-full h-40 rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group overflow-hidden"
@@ -792,14 +875,25 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                         </div>
                       </>
                     ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                          <ImagePlus className="w-5 h-5 text-purple-400" />
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="flex gap-3">
+                          <div
+                            onClick={(e) => { e.stopPropagation(); photoInputRef.current?.click(); }}
+                            className="flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/20 transition-all cursor-pointer"
+                          >
+                            <ImagePlus className="w-5 h-5 text-purple-400" />
+                            <span className="text-[10px] text-purple-300 font-semibold">Upload Photo</span>
+                          </div>
+                          <div
+                            onClick={(e) => { e.stopPropagation(); openCameraMode(); }}
+                            className="flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl bg-pink-500/10 border border-pink-500/30 hover:bg-pink-500/20 transition-all cursor-pointer"
+                            data-testid="button-camera-details"
+                          >
+                            <img src={filterIconSrc} alt="Camera" className="w-5 h-5 rounded object-cover" style={{ filter: "brightness(10) sepia(1) hue-rotate(280deg) saturate(3)" }} />
+                            <span className="text-[10px] text-pink-300 font-semibold">Camera + AR</span>
+                          </div>
                         </div>
-                        <div className="text-center">
-                          <p className="text-sm font-semibold text-white">Tap to select photo</p>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">JPG, PNG, WEBP</p>
-                        </div>
+                        <p className="text-[10px] text-zinc-600">Tap to add photo</p>
                       </div>
                     )}
                     <input
