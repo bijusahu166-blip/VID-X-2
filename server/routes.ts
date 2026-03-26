@@ -675,6 +675,34 @@ export async function registerRoutes(
     res.status(201).json(group);
   });
 
+  // ── Audio Proxy (bypasses CORS on external audio sources) ────────────────
+  app.get("/api/audio-proxy", async (req: any, res) => {
+    const url = req.query.url as string;
+    const ALLOWED_HOSTS = ["www.soundhelix.com", "cdn.pixabay.com", "freemusicarchive.org", "upload.wikimedia.org"];
+    let hostname = "";
+    try { hostname = new URL(url).hostname; } catch { return res.status(400).json({ message: "Invalid URL" }); }
+    if (!url || !ALLOWED_HOSTS.includes(hostname)) return res.status(400).json({ message: "Disallowed audio source" });
+    try {
+      const https = await import("https");
+      const http = await import("http");
+      const proto = url.startsWith("https://") ? https : http;
+      proto.get(url, (upstream) => {
+        if (upstream.statusCode !== 200) {
+          return res.status(upstream.statusCode || 502).json({ message: "Audio source returned error" });
+        }
+        res.setHeader("Content-Type", upstream.headers["content-type"] || "audio/mpeg");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        if (upstream.headers["content-length"]) {
+          res.setHeader("Content-Length", upstream.headers["content-length"]);
+        }
+        upstream.pipe(res);
+      }).on("error", () => res.status(502).json({ message: "Failed to fetch audio" }));
+    } catch (err) {
+      res.status(500).json({ message: "Audio proxy error" });
+    }
+  });
+
   // ── Video Upload (real file to disk) ─────────────────────────────────────
   app.use("/uploads", (req, res, next) => {
     const filePath = path.join(process.cwd(), "uploads", req.path);

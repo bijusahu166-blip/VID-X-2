@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Music, Search, Play, Pause, X, Check, Film } from "lucide-react";
+import { Music, Search, Play, Pause, X, Check, Film, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 
@@ -13,47 +13,53 @@ export interface Song {
   audioUrl?: string;
 }
 
+// Route all audio through our server proxy to avoid CORS issues
+function proxyAudio(num: number) {
+  const src = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${num}.mp3`;
+  return `/api/audio-proxy?url=${encodeURIComponent(src)}`;
+}
+
 export const SONG_LIBRARY: Song[] = [
-  { id: 1,  title: "Kesariya",               artist: "Arijit Singh",        genre: "Bollywood", duration: "3:42", color: "#f97316", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { id: 2,  title: "Raataan Lambiyan",        artist: "Jubin Nautiyal",      genre: "Bollywood", duration: "3:58", color: "#ec4899", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
-  { id: 3,  title: "Tum Hi Ho",               artist: "Arijit Singh",        genre: "Bollywood", duration: "4:22", color: "#a855f7", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
-  { id: 4,  title: "Apna Bana Le",            artist: "Arijit Singh",        genre: "Bollywood", duration: "3:31", color: "#f59e0b", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
-  { id: 5,  title: "Ik Vaari Aa",             artist: "Arijit Singh",        genre: "Bollywood", duration: "3:47", color: "#22c55e", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
-  { id: 6,  title: "Channa Mereya",           artist: "Arijit Singh",        genre: "Bollywood", duration: "4:49", color: "#06b6d4", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
-  { id: 7,  title: "Bekhayali",               artist: "Sachet Tandon",       genre: "Bollywood", duration: "5:25", color: "#3b82f6", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
-  { id: 8,  title: "Hawayein",                artist: "Arijit Singh",        genre: "Bollywood", duration: "4:36", color: "#e879f9", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
-  { id: 9,  title: "Photograph",              artist: "Ed Sheeran",          genre: "Pop",       duration: "4:19", color: "#f97316", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3" },
-  { id: 10, title: "Blinding Lights",         artist: "The Weeknd",          genre: "Pop",       duration: "3:20", color: "#ef4444", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3" },
-  { id: 11, title: "As It Was",               artist: "Harry Styles",        genre: "Pop",       duration: "2:37", color: "#8b5cf6", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3" },
-  { id: 12, title: "Levitating",              artist: "Dua Lipa",            genre: "Pop",       duration: "3:23", color: "#06b6d4", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3" },
-  { id: 13, title: "Flowers",                 artist: "Miley Cyrus",         genre: "Pop",       duration: "3:21", color: "#22c55e", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3" },
-  { id: 14, title: "Anti-Hero",               artist: "Taylor Swift",        genre: "Pop",       duration: "3:21", color: "#ec4899", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3" },
-  { id: 15, title: "Good 4 U",                artist: "Olivia Rodrigo",      genre: "Pop",       duration: "2:58", color: "#f59e0b", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3" },
-  { id: 16, title: "Stay",                    artist: "The Kid LAROI",       genre: "Pop",       duration: "2:21", color: "#a855f7", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3" },
-  { id: 17, title: "Heat Waves",              artist: "Glass Animals",       genre: "Pop",       duration: "3:59", color: "#3b82f6", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3" },
-  { id: 18, title: "SICKO MODE",              artist: "Travis Scott",        genre: "Hip Hop",   duration: "5:13", color: "#1e1b4b" },
-  { id: 19, title: "God's Plan",              artist: "Drake",               genre: "Hip Hop",   duration: "3:18", color: "#7c3aed" },
-  { id: 20, title: "Humble",                  artist: "Kendrick Lamar",      genre: "Hip Hop",   duration: "2:57", color: "#c2410c" },
-  { id: 21, title: "Rockstar",                artist: "Post Malone",         genre: "Hip Hop",   duration: "3:38", color: "#0f172a" },
-  { id: 22, title: "Old Town Road",           artist: "Lil Nas X",           genre: "Hip Hop",   duration: "1:53", color: "#92400e" },
-  { id: 23, title: "Numb",                    artist: "Linkin Park",         genre: "Rock",      duration: "3:06", color: "#1f2937" },
-  { id: 24, title: "Bohemian Rhapsody",       artist: "Queen",               genre: "Rock",      duration: "5:55", color: "#7f1d1d" },
-  { id: 25, title: "Mr. Brightside",          artist: "The Killers",         genre: "Rock",      duration: "3:42", color: "#1e3a5f" },
-  { id: 26, title: "Sunflower",               artist: "Post Malone",         genre: "Chill",     duration: "2:38", color: "#fbbf24" },
-  { id: 27, title: "lofi hip hop",            artist: "Chillhop Music",      genre: "Chill",     duration: "3:02", color: "#4f46e5" },
-  { id: 28, title: "Weightless",              artist: "Marconi Union",       genre: "Chill",     duration: "8:09", color: "#0369a1" },
-  { id: 29, title: "Clair de Lune",           artist: "Claude Debussy",      genre: "Chill",     duration: "5:00", color: "#6d28d9" },
-  { id: 30, title: "Midnight Rain",           artist: "Taylor Swift",        genre: "Chill",     duration: "3:41", color: "#1e1b4b" },
-  { id: 31, title: "Starter Pack",            artist: "Jimin BTS",           genre: "K-Pop",     duration: "2:58", color: "#be185d" },
-  { id: 32, title: "Dynamite",                artist: "BTS",                 genre: "K-Pop",     duration: "3:19", color: "#d97706" },
-  { id: 33, title: "LALISA",                  artist: "LISA",                genre: "K-Pop",     duration: "3:28", color: "#9333ea" },
-  { id: 34, title: "Fancy",                   artist: "TWICE",               genre: "K-Pop",     duration: "3:34", color: "#db2777" },
-  { id: 35, title: "Butter",                  artist: "BTS",                 genre: "K-Pop",     duration: "2:45", color: "#f59e0b" },
-  { id: 36, title: "Escape",                  artist: "NF",                  genre: "Trending",  duration: "3:53", color: "#374151" },
-  { id: 37, title: "Dreaming",                artist: "OMG",                 genre: "Trending",  duration: "2:54", color: "#7c3aed" },
-  { id: 38, title: "Industry Baby",           artist: "Lil Nas X",           genre: "Trending",  duration: "3:33", color: "#1d4ed8" },
-  { id: 39, title: "Bad Guy",                 artist: "Billie Eilish",       genre: "Trending",  duration: "3:14", color: "#166534" },
-  { id: 40, title: "Jhol",                    artist: "Maanu ft. Aakanksha", genre: "Trending",  duration: "3:47", color: "#9f1239" },
+  { id: 1,  title: "Kesariya",               artist: "Arijit Singh",        genre: "Bollywood", duration: "3:42", color: "#f97316", audioUrl: proxyAudio(1) },
+  { id: 2,  title: "Raataan Lambiyan",        artist: "Jubin Nautiyal",      genre: "Bollywood", duration: "3:58", color: "#ec4899", audioUrl: proxyAudio(2) },
+  { id: 3,  title: "Tum Hi Ho",               artist: "Arijit Singh",        genre: "Bollywood", duration: "4:22", color: "#a855f7", audioUrl: proxyAudio(3) },
+  { id: 4,  title: "Apna Bana Le",            artist: "Arijit Singh",        genre: "Bollywood", duration: "3:31", color: "#f59e0b", audioUrl: proxyAudio(4) },
+  { id: 5,  title: "Ik Vaari Aa",             artist: "Arijit Singh",        genre: "Bollywood", duration: "3:47", color: "#22c55e", audioUrl: proxyAudio(5) },
+  { id: 6,  title: "Channa Mereya",           artist: "Arijit Singh",        genre: "Bollywood", duration: "4:49", color: "#06b6d4", audioUrl: proxyAudio(6) },
+  { id: 7,  title: "Bekhayali",               artist: "Sachet Tandon",       genre: "Bollywood", duration: "5:25", color: "#3b82f6", audioUrl: proxyAudio(7) },
+  { id: 8,  title: "Hawayein",                artist: "Arijit Singh",        genre: "Bollywood", duration: "4:36", color: "#e879f9", audioUrl: proxyAudio(8) },
+  { id: 9,  title: "Photograph",              artist: "Ed Sheeran",          genre: "Pop",       duration: "4:19", color: "#f97316", audioUrl: proxyAudio(9) },
+  { id: 10, title: "Blinding Lights",         artist: "The Weeknd",          genre: "Pop",       duration: "3:20", color: "#ef4444", audioUrl: proxyAudio(10) },
+  { id: 11, title: "As It Was",               artist: "Harry Styles",        genre: "Pop",       duration: "2:37", color: "#8b5cf6", audioUrl: proxyAudio(11) },
+  { id: 12, title: "Levitating",              artist: "Dua Lipa",            genre: "Pop",       duration: "3:23", color: "#06b6d4", audioUrl: proxyAudio(12) },
+  { id: 13, title: "Flowers",                 artist: "Miley Cyrus",         genre: "Pop",       duration: "3:21", color: "#22c55e", audioUrl: proxyAudio(13) },
+  { id: 14, title: "Anti-Hero",               artist: "Taylor Swift",        genre: "Pop",       duration: "3:21", color: "#ec4899", audioUrl: proxyAudio(14) },
+  { id: 15, title: "Good 4 U",                artist: "Olivia Rodrigo",      genre: "Pop",       duration: "2:58", color: "#f59e0b", audioUrl: proxyAudio(15) },
+  { id: 16, title: "Stay",                    artist: "The Kid LAROI",       genre: "Pop",       duration: "2:21", color: "#a855f7", audioUrl: proxyAudio(16) },
+  { id: 17, title: "Heat Waves",              artist: "Glass Animals",       genre: "Pop",       duration: "3:59", color: "#3b82f6", audioUrl: proxyAudio(17) },
+  { id: 18, title: "SICKO MODE",              artist: "Travis Scott",        genre: "Hip Hop",   duration: "5:13", color: "#1e1b4b", audioUrl: proxyAudio(1) },
+  { id: 19, title: "God's Plan",              artist: "Drake",               genre: "Hip Hop",   duration: "3:18", color: "#7c3aed", audioUrl: proxyAudio(2) },
+  { id: 20, title: "Humble",                  artist: "Kendrick Lamar",      genre: "Hip Hop",   duration: "2:57", color: "#c2410c", audioUrl: proxyAudio(3) },
+  { id: 21, title: "Rockstar",                artist: "Post Malone",         genre: "Hip Hop",   duration: "3:38", color: "#0f172a", audioUrl: proxyAudio(4) },
+  { id: 22, title: "Old Town Road",           artist: "Lil Nas X",           genre: "Hip Hop",   duration: "1:53", color: "#92400e", audioUrl: proxyAudio(5) },
+  { id: 23, title: "Numb",                    artist: "Linkin Park",         genre: "Rock",      duration: "3:06", color: "#1f2937", audioUrl: proxyAudio(6) },
+  { id: 24, title: "Bohemian Rhapsody",       artist: "Queen",               genre: "Rock",      duration: "5:55", color: "#7f1d1d", audioUrl: proxyAudio(7) },
+  { id: 25, title: "Mr. Brightside",          artist: "The Killers",         genre: "Rock",      duration: "3:42", color: "#1e3a5f", audioUrl: proxyAudio(8) },
+  { id: 26, title: "Sunflower",               artist: "Post Malone",         genre: "Chill",     duration: "2:38", color: "#fbbf24", audioUrl: proxyAudio(9) },
+  { id: 27, title: "lofi hip hop",            artist: "Chillhop Music",      genre: "Chill",     duration: "3:02", color: "#4f46e5", audioUrl: proxyAudio(10) },
+  { id: 28, title: "Weightless",              artist: "Marconi Union",       genre: "Chill",     duration: "8:09", color: "#0369a1", audioUrl: proxyAudio(11) },
+  { id: 29, title: "Clair de Lune",           artist: "Claude Debussy",      genre: "Chill",     duration: "5:00", color: "#6d28d9", audioUrl: proxyAudio(12) },
+  { id: 30, title: "Midnight Rain",           artist: "Taylor Swift",        genre: "Chill",     duration: "3:41", color: "#1e1b4b", audioUrl: proxyAudio(13) },
+  { id: 31, title: "Starter Pack",            artist: "Jimin BTS",           genre: "K-Pop",     duration: "2:58", color: "#be185d", audioUrl: proxyAudio(14) },
+  { id: 32, title: "Dynamite",                artist: "BTS",                 genre: "K-Pop",     duration: "3:19", color: "#d97706", audioUrl: proxyAudio(15) },
+  { id: 33, title: "LALISA",                  artist: "LISA",                genre: "K-Pop",     duration: "3:28", color: "#9333ea", audioUrl: proxyAudio(16) },
+  { id: 34, title: "Fancy",                   artist: "TWICE",               genre: "K-Pop",     duration: "3:34", color: "#db2777", audioUrl: proxyAudio(17) },
+  { id: 35, title: "Butter",                  artist: "BTS",                 genre: "K-Pop",     duration: "2:45", color: "#f59e0b", audioUrl: proxyAudio(1) },
+  { id: 36, title: "Escape",                  artist: "NF",                  genre: "Trending",  duration: "3:53", color: "#374151", audioUrl: proxyAudio(2) },
+  { id: 37, title: "Dreaming",                artist: "OMG",                 genre: "Trending",  duration: "2:54", color: "#7c3aed", audioUrl: proxyAudio(3) },
+  { id: 38, title: "Industry Baby",           artist: "Lil Nas X",           genre: "Trending",  duration: "3:33", color: "#1d4ed8", audioUrl: proxyAudio(4) },
+  { id: 39, title: "Bad Guy",                 artist: "Billie Eilish",       genre: "Trending",  duration: "3:14", color: "#166534", audioUrl: proxyAudio(5) },
+  { id: 40, title: "Jhol",                    artist: "Maanu ft. Aakanksha", genre: "Trending",  duration: "3:47", color: "#9f1239", audioUrl: proxyAudio(6) },
 ];
 
 const GENRES = ["All", "Trending", "Bollywood", "Pop", "Hip Hop", "K-Pop", "Rock", "Chill"];
@@ -68,6 +74,7 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("All");
   const [playingId, setPlayingId] = useState<number | null>(null);
+  const [loadingId, setLoadingId] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { data: reelSongs = [] } = useQuery<any[]>({
@@ -86,14 +93,32 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
     if (playingId === song.id) {
       audioRef.current?.pause();
       setPlayingId(null);
-    } else {
-      if (audioRef.current) audioRef.current.pause();
-      audioRef.current = new Audio(song.audioUrl);
-      audioRef.current.volume = 0.6;
-      audioRef.current.play().catch(() => {});
-      audioRef.current.onended = () => setPlayingId(null);
-      setPlayingId(song.id);
+      setLoadingId(null);
+      return;
     }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+    setPlayingId(null);
+    setLoadingId(song.id);
+    const audio = new Audio(song.audioUrl);
+    audioRef.current = audio;
+    audio.volume = 0.7;
+    audio.oncanplay = () => {
+      setLoadingId(null);
+      setPlayingId(song.id);
+    };
+    audio.onended = () => setPlayingId(null);
+    audio.onerror = () => {
+      setLoadingId(null);
+      setPlayingId(null);
+    };
+    audio.load();
+    audio.play().catch(() => {
+      setLoadingId(null);
+      setPlayingId(null);
+    });
   };
 
   useEffect(() => {
@@ -219,6 +244,7 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
           {filtered.map(song => {
             const isSelected = selectedSong?.id === song.id;
             const isPlaying = playingId === song.id;
+            const isLoading = loadingId === song.id;
             return (
               <div
                 key={song.id}
@@ -235,13 +261,17 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
                   style={{ background: `${song.color}33`, border: `1px solid ${song.color}44` }}
                 >
                   🎵
-                  {isPlaying && (
-                    <div className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center">
-                      <div className="flex gap-0.5">
-                        {[0, 1, 2].map(i => (
-                          <div key={i} className="w-0.5 bg-white rounded-full animate-bounce" style={{ height: 8 + i * 4, animationDelay: `${i * 0.1}s` }} />
-                        ))}
-                      </div>
+                  {(isPlaying || isLoading) && (
+                    <div className="absolute inset-0 rounded-xl bg-black/50 flex items-center justify-center">
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 text-white animate-spin" />
+                      ) : (
+                        <div className="flex gap-0.5 items-end">
+                          {[0, 1, 2].map(i => (
+                            <div key={i} className="w-0.5 bg-white rounded-full animate-bounce" style={{ height: 8 + i * 4, animationDelay: `${i * 0.12}s` }} />
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -257,10 +287,15 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
                     <button
                       onClick={e => { e.stopPropagation(); togglePlay(song); }}
                       className="w-7 h-7 rounded-full flex items-center justify-center transition-all"
-                      style={{ background: isPlaying ? "#7c3aed" : "rgba(255,255,255,0.1)" }}
+                      style={{ background: (isPlaying || isLoading) ? "#7c3aed" : "rgba(255,255,255,0.1)" }}
                       data-testid={`play-song-${song.id}`}
+                      disabled={isLoading}
                     >
-                      {isPlaying ? <Pause className="w-3 h-3 text-white" /> : <Play className="w-3 h-3 text-white" />}
+                      {isLoading
+                        ? <Loader2 className="w-3 h-3 text-white animate-spin" />
+                        : isPlaying
+                          ? <Pause className="w-3 h-3 text-white" />
+                          : <Play className="w-3 h-3 text-white" />}
                     </button>
                   )}
                   {isSelected && <Check className="w-4 h-4 text-violet-400" />}
