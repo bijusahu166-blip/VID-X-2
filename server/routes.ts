@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -704,14 +704,10 @@ export async function registerRoutes(
   });
 
   // ── Video Upload (real file to disk) ─────────────────────────────────────
-  app.use("/uploads", (req, res, next) => {
-    const filePath = path.join(process.cwd(), "uploads", req.path);
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      next();
-    }
-  });
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads"), {
+    maxAge: "7d",
+    acceptRanges: true,
+  }));
 
   app.post("/api/upload/video", isAuthenticated, (req: any, res) => {
     videoUpload.single("video")(req, res, (err: any) => {

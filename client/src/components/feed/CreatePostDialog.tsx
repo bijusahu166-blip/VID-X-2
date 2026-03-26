@@ -551,8 +551,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     const finalCaption = uploadType === "video"
       ? `${videoTitle}${videoDesc ? `\n${videoDesc}` : ""}`
       : caption;
-    const finalImageUrl = thumbnailUrl || imageUrl || previewUrl ||
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
+    const DEFAULT_THUMB = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
+    // Never use a blob:// URL as the stored imageUrl (it's device-local and expires)
+    const safeImageUrl = (imageUrl && !imageUrl.startsWith("blob:")) ? imageUrl : undefined;
+    const safePreviewUrl = (previewUrl && !previewUrl.startsWith("blob:") && uploadType !== "video") ? previewUrl : undefined;
+    const finalImageUrl = thumbnailUrl || safeImageUrl || safePreviewUrl || DEFAULT_THUMB;
 
     let videoFileUrl: string | undefined;
 
@@ -561,51 +564,49 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     if (videoFile && (uploadType === "video" || uploadType === "reel" || uploadType === "story")) {
       try {
         setIsUploadingVideo(true);
-        setUploadProgress(0);
+        setUploadProgress(5);
 
-        // Use XHR for real upload progress
-        videoFileUrl = await new Promise<string | undefined>((resolve) => {
-          const xhr = new XMLHttpRequest();
+        // Simulate progress while uploading (fetch doesn't expose upload progress)
+        const progressInterval = setInterval(() => {
+          setUploadProgress(p => Math.min(p + 3, 90));
+        }, 400);
+
+        try {
           const formData = new FormData();
           formData.append("video", videoFile);
-
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              setUploadProgress(Math.round((e.loaded / e.total) * 95));
-            }
-          };
-
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try {
-                const data = JSON.parse(xhr.responseText);
-                setUploadProgress(100);
-                resolve(data.url);
-              } catch {
-                toast({ title: "Upload error", description: "Could not read server response", variant: "destructive" });
-                resolve(undefined);
-              }
-            } else {
-              let errMsg = "Upload failed";
-              try { errMsg = JSON.parse(xhr.responseText)?.message || errMsg; } catch {}
-              toast({ title: "Upload failed", description: `${errMsg} (${xhr.status})`, variant: "destructive" });
-              resolve(undefined);
-            }
-          };
-
-          xhr.onerror = () => {
-            toast({ title: "Upload failed", description: "Network error — check your connection", variant: "destructive" });
-            resolve(undefined);
-          };
-
-          xhr.open("POST", "/api/upload/video");
-          xhr.withCredentials = true;
-          xhr.send(formData);
-        });
+          const response = await fetch("/api/upload/video", {
+            method: "POST",
+            credentials: "include",
+            body: formData,
+          });
+          clearInterval(progressInterval);
+          if (response.ok) {
+            const data = await response.json();
+            setUploadProgress(100);
+            videoFileUrl = data.url;
+          } else {
+            let errMsg = "Upload failed";
+            try { errMsg = (await response.json())?.message || errMsg; } catch {}
+            toast({ title: "Upload failed", description: `${errMsg} (${response.status})`, variant: "destructive" });
+          }
+        } catch (fetchErr: any) {
+          clearInterval(progressInterval);
+          toast({ title: "Upload failed", description: fetchErr?.message || "Network error — check your connection", variant: "destructive" });
+        }
       } catch (err: any) {
         toast({ title: "Upload failed", description: err?.message || "Something went wrong", variant: "destructive" });
       } finally {
         setIsUploadingVideo(false);
+      }
+
+      // If video upload failed, stop here — don't create a broken post
+      if (!videoFileUrl) {
+        toast({
+          title: "Video required",
+          description: "Your video couldn't be uploaded. Please try again.",
+          variant: "destructive",
+        });
+        return;
       }
     }
 

@@ -295,10 +295,6 @@ export default function Profile() {
   const params = useParams<{ id?: string }>();
   const { user, logout } = useAuth();
 
-  if (params?.id && params.id !== user?.id) {
-    return <OtherUserProfile userId={params.id} />;
-  }
-
   const { data: posts } = usePosts();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -386,6 +382,10 @@ export default function Profile() {
     return           { rank: "ROOKIE",    color: "#6b7280" };
   };
   const { rank, color: rankColor } = getRank(level);
+
+  if (params?.id && params.id !== user?.id) {
+    return <OtherUserProfile userId={params.id} />;
+  }
 
   return (
     <div className="min-h-screen bg-black pb-28 relative">
