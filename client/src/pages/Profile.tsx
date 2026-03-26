@@ -452,18 +452,18 @@ export default function Profile() {
                   {!settingsPanel && (
                     <div className="py-3 space-y-1">
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-3 pb-1">How you use LITLink</p>
-                      <SettingRow icon={BarChart3} label="Insights" onClick={() => setSettingsPanel("Insights")} />
+                      <SettingRow icon={BarChart3} label="InsightX 📊" onClick={() => setSettingsPanel("InsightX")} />
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">For professionals</p>
-                      <SettingRow icon={UserCheck} label="Account type and tools" onClick={() => setSettingsPanel("Account type and tools")} />
-                      <SettingRow icon={CreditCard} label="Ads payments" onClick={() => setSettingsPanel("Ads payments")} />
-                      <SettingRow icon={BadgeCheck} label="LITLink Verified" sub="Subscribed" onClick={() => setSettingsPanel("LITLink Verified")} />
+                      <SettingRow icon={UserCheck} label="ProTools Hub 🧰" onClick={() => setSettingsPanel("ProTools Hub")} />
+                      <SettingRow icon={CreditCard} label="AdPay Center 💳" onClick={() => setSettingsPanel("AdPay Center")} />
+                      <SettingRow icon={BadgeCheck} label="VerifyPlus ✔️" sub="Subscribed" onClick={() => setSettingsPanel("VerifyPlus")} />
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Who can see your content</p>
-                      <SettingRow icon={Lock} label="Account privacy" sub={accountPrivate ? "Private" : "Public"} onClick={() => setSettingsPanel("Account privacy")} />
-                      <SettingRow icon={Star} label="Close Friends" sub="15 members" onClick={() => setSettingsPanel("Close Friends")} />
-                      <SettingRow icon={Users2} label="Crossposting" onClick={() => setSettingsPanel("Crossposting")} />
-                      <SettingRow icon={Ban} label="Blocked" sub="3 accounts" onClick={() => setSettingsPanel("Blocked")} />
-                      <SettingRow icon={EyeOff} label="Hide story and live" onClick={() => setSettingsPanel("Hide story and live")} />
-                      <SettingRow icon={UserPlus} label="Activity in Friends tab" onClick={() => setSettingsPanel("Activity in Friends tab")} />
+                      <SettingRow icon={Lock} label="PrivacyLock 🔒" sub={accountPrivate ? "Private" : "Public"} onClick={() => setSettingsPanel("PrivacyLock")} />
+                      <SettingRow icon={Star} label="InnerCircle 👥" sub="15 members" onClick={() => setSettingsPanel("InnerCircle")} />
+                      <SettingRow icon={Users2} label="ShareSync 🔄" onClick={() => setSettingsPanel("ShareSync")} />
+                      <SettingRow icon={Ban} label="BlockShield 🚫" sub="3 accounts" onClick={() => setSettingsPanel("BlockShield")} />
+                      <SettingRow icon={EyeOff} label="GhostView 👻" onClick={() => setSettingsPanel("GhostView")} />
+                      <SettingRow icon={UserPlus} label="FriendPulse 💫" onClick={() => setSettingsPanel("FriendPulse")} />
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">How others can interact with you</p>
                       <SettingRow icon={MessageSquare} label="Messages and story replies" onClick={() => setSettingsPanel("Messages and story replies")} />
                       <SettingRow icon={AtSign} label="Tags and mentions" onClick={() => setSettingsPanel("Tags and mentions")} />
@@ -498,8 +498,8 @@ export default function Profile() {
                     </div>
                   )}
 
-                  {/* ── SUB: INSIGHTS ── */}
-                  {settingsPanel === "Insights" && (
+                  {/* ── SUB: INSIGHTX ── */}
+                  {settingsPanel === "InsightX" && (
                     <div className="p-5 space-y-4">
                       {[
                         { label: "Profile views this week", value: "1,248", change: "+18%" },
@@ -518,8 +518,8 @@ export default function Profile() {
                     </div>
                   )}
 
-                  {/* ── SUB: ACCOUNT PRIVACY ── */}
-                  {settingsPanel === "Account privacy" && (
+                  {/* ── SUB: PRIVACYLOCK ── */}
+                  {settingsPanel === "PrivacyLock" && (
                     <div className="p-5 space-y-5">
                       <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
                         <div>
@@ -601,7 +601,7 @@ export default function Profile() {
                   )}
 
                   {/* ── SUB: BLOCKED ── */}
-                  {settingsPanel === "Blocked" && (
+                  {settingsPanel === "BlockShield" && (
                     <div className="p-5 space-y-3">
                       <p className="text-[11px] text-muted-foreground">Blocked accounts can't see your content or interact with you.</p>
                       {["@spammer99", "@troll_user", "@fake_account"].map((handle) => (
@@ -619,7 +619,7 @@ export default function Profile() {
                   )}
 
                   {/* ── SUB: CLOSE FRIENDS ── */}
-                  {settingsPanel === "Close Friends" && (
+                  {settingsPanel === "InnerCircle" && (
                     <div className="p-5 space-y-3">
                       <p className="text-[11px] text-muted-foreground">Your close friends list is only visible to you.</p>
                       {["Alice Wonder", "Bob Builder", "Carol Smith", "Dave Jones"].map((name) => (
@@ -639,12 +639,12 @@ export default function Profile() {
                     </div>
                   )}
 
-                  {/* ── SUB: VERIFIED ── */}
-                  {settingsPanel === "LITLink Verified" && (
+                  {/* ── SUB: VERIFYPLUS ── */}
+                  {settingsPanel === "VerifyPlus" && (
                     <div className="p-5 space-y-4">
                       <div className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 text-center">
                         <BadgeCheck className="w-12 h-12 text-purple-400" />
-                        <div className="font-bold text-lg">LITLink Verified</div>
+                        <div className="font-bold text-lg">VerifyPlus ✔️</div>
                         <div className="text-[12px] text-muted-foreground">Your account is verified. Enjoy enhanced visibility and exclusive creator features.</div>
                       </div>
                       {[
@@ -663,8 +663,8 @@ export default function Profile() {
                     </div>
                   )}
 
-                  {/* ── SUB: GENERIC (Account type, Crossposting, Hide story, Activity, Sharing, Ads payments) ── */}
-                  {["Account type and tools", "Crossposting", "Hide story and live", "Activity in Friends tab", "Sharing and reuse", "Ads payments"].includes(settingsPanel ?? "") && (
+                  {/* ── SUB: GENERIC (ProTools Hub, ShareSync, GhostView, FriendPulse, Sharing, AdPay Center) ── */}
+                  {["ProTools Hub", "ShareSync", "GhostView", "FriendPulse", "Sharing and reuse", "AdPay Center"].includes(settingsPanel ?? "") && (
                     <div className="p-5 space-y-4">
                       <div className="flex flex-col items-center gap-3 py-8 text-center text-muted-foreground">
                         <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
