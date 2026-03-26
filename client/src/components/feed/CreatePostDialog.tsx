@@ -19,6 +19,7 @@ import { AR_EFFECTS, EFFECT_CATEGORIES } from "@/lib/arEffects";
 import type { AREffect } from "@/lib/arEffects";
 import filterIconSrc from "@assets/image_1774511462472.png";
 import heroIconSrc from "@assets/image_1774512160722.png";
+import { SongPicker, type Song } from "@/components/shared/SongPicker";
 
 interface CreatePostDialogProps {
   open: boolean;
@@ -92,20 +93,6 @@ const UPLOAD_OPTIONS = [
   },
 ];
 
-const STORY_SONGS = [
-  { title: "Neon Lights", artist: "The Midnight", duration: "3:42", emoji: "🌙" },
-  { title: "Blinding Lights", artist: "The Weeknd", duration: "3:20", emoji: "✨" },
-  { title: "Levitating", artist: "Dua Lipa", duration: "3:23", emoji: "🪐" },
-  { title: "Save Your Tears", artist: "The Weeknd", duration: "3:35", emoji: "💧" },
-  { title: "Midnight Rain", artist: "Taylor Swift", duration: "3:02", emoji: "🌧️" },
-  { title: "As It Was", artist: "Harry Styles", duration: "2:37", emoji: "🎸" },
-  { title: "Stay", artist: "The Kid LAROI", duration: "2:21", emoji: "🔥" },
-  { title: "Good 4 U", artist: "Olivia Rodrigo", duration: "2:58", emoji: "💚" },
-  { title: "Peaches", artist: "Justin Bieber", duration: "3:18", emoji: "🍑" },
-  { title: "Industry Baby", artist: "Lil Nas X", duration: "3:32", emoji: "🎺" },
-  { title: "MONTERO", artist: "Lil Nas X", duration: "2:17", emoji: "🍎" },
-  { title: "Butter", artist: "BTS", duration: "2:44", emoji: "🧈" },
-];
 
 const LIVE_FAKE_USERS = ["alex_x", "sarah.j", "vibes2k", "darky_b", "neon.leo", "kira_m", "zara99", "max.dev"];
 const LIVE_FAKE_MSGS = [
@@ -285,10 +272,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [reelVideoUrl, setReelVideoUrl] = useState<string>("");
   // Story extras
   const [storyMusic, setStoryMusic] = useState<string>("");
+  const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+  const [showSongPicker, setShowSongPicker] = useState(false);
   const [storyText, setStoryText] = useState<string>("");
   const [storyTextColor, setStoryTextColor] = useState<string>("#ffffff");
   const [showStoryText, setShowStoryText] = useState(false);
-  const [showStoryMusic, setShowStoryMusic] = useState(false);
   // Live stream
   const [liveStarted, setLiveStarted] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<typeof LIVE_ACHIEVEMENTS[number] | null>(null);
@@ -565,7 +553,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
     // Upload actual video file if present
     const videoFile = selectedFile || reelVideoFile;
-    if (videoFile && (uploadType === "video" || uploadType === "reel")) {
+    if (videoFile && (uploadType === "video" || uploadType === "reel" || uploadType === "story")) {
       try {
         setIsUploadingVideo(true);
         setUploadProgress(0);
@@ -631,9 +619,10 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setReelVideoFile(null);
       setReelVideoUrl("");
       setStoryMusic("");
+      setSelectedSong(null);
+      setShowSongPicker(false);
       setStoryText("");
       setShowStoryText(false);
-      setShowStoryMusic(false);
       setLiveTitle("");
       setLiveChatInput("");
       setLiveChat([]);
@@ -1137,9 +1126,9 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                       <Type className="w-3.5 h-3.5" /> Text
                     </button>
                     <button type="button"
-                      onClick={() => setShowStoryMusic(s => !s)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold border transition-all ${showStoryMusic ? "bg-yellow-500/20 border-yellow-500/50 text-yellow-300" : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"}`}>
-                      <Music className="w-3.5 h-3.5" /> Music
+                      onClick={() => setShowSongPicker(true)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold border transition-all ${selectedSong ? "bg-yellow-500/20 border-yellow-500/50 text-yellow-300" : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"}`}>
+                      <Music className="w-3.5 h-3.5" /> {selectedSong ? "♪" : "Music"}
                     </button>
                     <button type="button"
                       onClick={() => setShowArFilters(s => !s)}
@@ -1169,31 +1158,28 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                     </div>
                   )}
 
-                  {/* Music picker panel */}
-                  {showStoryMusic && (
-                    <div className="rounded-xl bg-white/5 border border-yellow-500/20 p-3 space-y-2">
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Choose a Song</p>
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                        {STORY_SONGS.map(song => (
-                          <button key={song.title} type="button"
-                            onClick={() => { setStoryMusic(storyMusic === song.title ? "" : song.title); }}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all ${
-                              storyMusic === song.title
-                                ? "bg-yellow-500/15 border-yellow-500/50"
-                                : "bg-white/3 border-white/8 hover:border-white/20"
-                            }`}>
-                            <span className="text-lg shrink-0">{song.emoji}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-[11px] font-bold truncate ${storyMusic === song.title ? "text-yellow-300" : "text-white"}`}>{song.title}</p>
-                              <p className="text-[9px] text-zinc-500 truncate">{song.artist}</p>
-                            </div>
-                            <span className="text-[9px] text-zinc-600 shrink-0">{song.duration}</span>
-                            {storyMusic === song.title && <Music className="w-3 h-3 text-yellow-400 shrink-0 animate-pulse" />}
-                          </button>
-                        ))}
+                  {/* Music picker button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowSongPicker(true)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/4 hover:border-yellow-500/40 transition-all"
+                    data-testid="button-add-song-story"
+                  >
+                    <Music className="w-4 h-4 text-yellow-400" />
+                    {selectedSong ? (
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-yellow-300 text-[12px] font-bold truncate">{selectedSong.title}</p>
+                        <p className="text-zinc-400 text-[10px] truncate">{selectedSong.artist}</p>
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <span className="text-zinc-400 text-[12px] font-semibold">Add music to story</span>
+                    )}
+                    {selectedSong && (
+                      <button type="button" onClick={e => { e.stopPropagation(); setSelectedSong(null); }} className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                        <X className="w-3 h-3 text-zinc-400" />
+                      </button>
+                    )}
+                  </button>
 
                   {/* Duration */}
                   <div className="space-y-1.5">
@@ -1214,22 +1200,30 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 </div>
               )}
 
-              {/* Reel duration (no music/text section for reel) */}
-              {uploadType === "reel" && !imageUrl && !reelVideoUrl && (
-                <div className="space-y-2 pt-3 border-t border-white/8">
-                  <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Story Duration</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["6h", "12h", "24h"] as const).map((d) => (
-                      <button key={d} type="button" onClick={() => setStoryDuration(d)}
-                        className={`py-2 rounded-xl text-[11px] font-black border transition-all ${
-                          storyDuration === d
-                            ? "bg-yellow-500/20 border-yellow-500/60 text-yellow-300"
-                            : "bg-white/5 border-white/10 text-zinc-500 hover:border-white/25"
-                        }`}>
-                        {d}
+              {/* Reel music picker */}
+              {uploadType === "reel" && (imageUrl || reelVideoUrl) && (
+                <div className="space-y-2 pt-2 border-t border-white/8">
+                  <button
+                    type="button"
+                    onClick={() => setShowSongPicker(true)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/4 hover:border-violet-500/40 transition-all"
+                    data-testid="button-add-song-reel"
+                  >
+                    <Music className="w-4 h-4 text-violet-400" />
+                    {selectedSong ? (
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-violet-300 text-[12px] font-bold truncate">{selectedSong.title}</p>
+                        <p className="text-zinc-400 text-[10px] truncate">{selectedSong.artist}</p>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400 text-[12px] font-semibold">Add music to reel</span>
+                    )}
+                    {selectedSong && (
+                      <button type="button" onClick={e => { e.stopPropagation(); setSelectedSong(null); }} className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                        <X className="w-3 h-3 text-zinc-400" />
                       </button>
-                    ))}
-                  </div>
+                    )}
+                  </button>
                 </div>
               )}
 
@@ -1262,6 +1256,29 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                       ))}
                     </div>
                   </div>
+
+                  {/* Live music picker */}
+                  <button
+                    type="button"
+                    onClick={() => setShowSongPicker(true)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/4 hover:border-pink-500/40 transition-all"
+                    data-testid="button-add-song-live"
+                  >
+                    <Music className="w-4 h-4 text-pink-400" />
+                    {selectedSong ? (
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-pink-300 text-[12px] font-bold truncate">{selectedSong.title}</p>
+                        <p className="text-zinc-400 text-[10px] truncate">{selectedSong.artist}</p>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400 text-[12px] font-semibold">Add background music</span>
+                    )}
+                    {selectedSong && (
+                      <button type="button" onClick={e => { e.stopPropagation(); setSelectedSong(null); }} className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                        <X className="w-3 h-3 text-zinc-400" />
+                      </button>
+                    )}
+                  </button>
 
                   {/* Achievement badge picker */}
                   <div className="space-y-2">
@@ -1694,6 +1711,15 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       </DialogContent>
       {/* Hidden canvas for AR photo capture */}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Song Picker sheet */}
+      {showSongPicker && (
+        <SongPicker
+          selectedSong={selectedSong}
+          onSelect={(song) => { setSelectedSong(song); }}
+          onClose={() => setShowSongPicker(false)}
+        />
+      )}
     </Dialog>
   );
 }
