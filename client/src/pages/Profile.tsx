@@ -8,11 +8,12 @@ import { playFollow, playNotification } from "@/lib/sounds";
 import { ArrowLeft } from "lucide-react";
 import {
   Settings, Grid, Bookmark, Users, PawPrint,
-  History as HistoryIcon, BarChart3, ChevronRight, UserCheck,
-  CreditCard, BadgeCheck, Lock, Star, Users2, Ban, EyeOff,
-  UserPlus, MessageSquare, AtSign, MessageCircle, Share2,
+  History as HistoryIcon, ChevronRight,
+  TrendingUp, Wrench, Wallet, ShieldCheck, KeyRound, Heart,
+  RefreshCw, UserX, Ghost, Activity,
+  MessageSquare, AtSign, MessageCircle, Share2,
   LogOut, Menu, Zap, Trophy, Flame, Shield, Sword, Target,
-  Crown, Cpu
+  Crown, Cpu, BadgeCheck, BarChart3, Lock
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePosts } from "@/hooks/use-posts";
@@ -452,18 +453,18 @@ export default function Profile() {
                   {!settingsPanel && (
                     <div className="py-3 space-y-1">
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-3 pb-1">How you use LITLink</p>
-                      <SettingRow icon={BarChart3} label="InsightX 📊" onClick={() => setSettingsPanel("InsightX")} />
+                      <SettingRow icon={TrendingUp} label="InsightX 📊" onClick={() => setSettingsPanel("InsightX")} />
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">For professionals</p>
-                      <SettingRow icon={UserCheck} label="ProTools Hub 🧰" onClick={() => setSettingsPanel("ProTools Hub")} />
-                      <SettingRow icon={CreditCard} label="AdPay Center 💳" onClick={() => setSettingsPanel("AdPay Center")} />
-                      <SettingRow icon={BadgeCheck} label="VerifyPlus ✔️" sub="Subscribed" onClick={() => setSettingsPanel("VerifyPlus")} />
+                      <SettingRow icon={Wrench} label="ProTools Hub 🧰" onClick={() => setSettingsPanel("ProTools Hub")} />
+                      <SettingRow icon={Wallet} label="AdPay Center 💳" onClick={() => setSettingsPanel("AdPay Center")} />
+                      <SettingRow icon={ShieldCheck} label="VerifyPlus ✔️" sub="Subscribed" onClick={() => setSettingsPanel("VerifyPlus")} />
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Who can see your content</p>
-                      <SettingRow icon={Lock} label="PrivacyLock 🔒" sub={accountPrivate ? "Private" : "Public"} onClick={() => setSettingsPanel("PrivacyLock")} />
-                      <SettingRow icon={Star} label="InnerCircle 👥" sub="15 members" onClick={() => setSettingsPanel("InnerCircle")} />
-                      <SettingRow icon={Users2} label="ShareSync 🔄" onClick={() => setSettingsPanel("ShareSync")} />
-                      <SettingRow icon={Ban} label="BlockShield 🚫" sub="3 accounts" onClick={() => setSettingsPanel("BlockShield")} />
-                      <SettingRow icon={EyeOff} label="GhostView 👻" onClick={() => setSettingsPanel("GhostView")} />
-                      <SettingRow icon={UserPlus} label="FriendPulse 💫" onClick={() => setSettingsPanel("FriendPulse")} />
+                      <SettingRow icon={KeyRound} label="PrivacyLock 🔒" sub={accountPrivate ? "Private" : "Public"} onClick={() => setSettingsPanel("PrivacyLock")} />
+                      <SettingRow icon={Heart} label="InnerCircle 👥" sub="15 members" onClick={() => setSettingsPanel("InnerCircle")} />
+                      <SettingRow icon={RefreshCw} label="ShareSync 🔄" onClick={() => setSettingsPanel("ShareSync")} />
+                      <SettingRow icon={UserX} label="BlockShield 🚫" sub="3 accounts" onClick={() => setSettingsPanel("BlockShield")} />
+                      <SettingRow icon={Ghost} label="GhostView 👻" onClick={() => setSettingsPanel("GhostView")} />
+                      <SettingRow icon={Activity} label="FriendPulse 💫" onClick={() => setSettingsPanel("FriendPulse")} />
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">How others can interact with you</p>
                       <SettingRow icon={MessageSquare} label="Messages and story replies" onClick={() => setSettingsPanel("Messages and story replies")} />
                       <SettingRow icon={AtSign} label="Tags and mentions" onClick={() => setSettingsPanel("Tags and mentions")} />
