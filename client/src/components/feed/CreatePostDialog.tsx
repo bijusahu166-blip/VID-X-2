@@ -237,22 +237,16 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         cameraStreamRef.current.getTracks().forEach(t => t.stop());
         cameraStreamRef.current = null;
       }
-      // 5-second timeout — fall to demo mode if camera hangs
-      const stream = await Promise.race([
-        navigator.mediaDevices.getUserMedia({
-          video: { facingMode: front ? "user" : "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("CameraTimeout")), 5000)
-        ),
-      ]);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: front ? "user" : "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
       cameraStreamRef.current = stream;
       attachStream(stream);
     } catch (err: any) {
-      // Fall to demo mode instead of hard error
+      // Only fall to demo mode — never show a hard error
       setDemoMode(true);
-      setCameraReady(true); // treat demo as "ready"
+      setCameraReady(true);
     }
   }, [attachStream]);
 
