@@ -8,7 +8,7 @@ import {
   CreditCard, BadgeCheck, Lock, Star, Users2, Ban, EyeOff,
   UserPlus, MessageSquare, AtSign, MessageCircle, Share2,
   LogOut, Menu, Zap, Trophy, Flame, Shield, Sword, Target,
-  Crown, Cpu, Wifi, Battery, Signal
+  Crown, Cpu
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePosts } from "@/hooks/use-posts";
@@ -116,15 +116,7 @@ export default function Profile() {
         />
 
         {/* Top HUD bar */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-14 pb-2">
-          <div className="flex items-center gap-1 text-pink-400 text-[10px] font-mono font-bold">
-            <Signal className="w-3 h-3" />
-            <span>5G</span>
-            <Wifi className="w-3 h-3 ml-1" />
-            <Battery className="w-3 h-3 ml-1" />
-            <span>98%</span>
-          </div>
-
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-end px-4 pt-14 pb-2">
           <div className="flex items-center gap-1">
             {/* Settings */}
             <Dialog>
