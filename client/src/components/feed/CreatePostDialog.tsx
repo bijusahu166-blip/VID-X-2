@@ -115,6 +115,15 @@ const LIVE_FAKE_MSGS = [
 ];
 const LIVE_REACTIONS_LIST = ["❤️", "🔥", "😂", "🙌", "💯", "⚡", "🥳", "👏"];
 
+const LIVE_ACHIEVEMENTS = [
+  { id: "champion",  label: "Champion",  emoji: "🏆", color: "#f59e0b", glow: "rgba(245,158,11,0.6)",  desc: "Top streamer of the week" },
+  { id: "on_fire",   label: "On Fire",   emoji: "🔥", color: "#f97316", glow: "rgba(249,115,22,0.6)",  desc: "Trending right now" },
+  { id: "defender",  label: "Defender",  emoji: "🛡️", color: "#22c55e", glow: "rgba(34,197,94,0.6)",   desc: "Community protector" },
+  { id: "warrior",   label: "Warrior",   emoji: "⚔️", color: "#a855f7", glow: "rgba(168,85,247,0.6)",  desc: "Battle-tested creator" },
+  { id: "sharpshot", label: "Sharpshot", emoji: "🎯", color: "#06b6d4", glow: "rgba(6,182,212,0.6)",   desc: "Precision content" },
+  { id: "royalty",   label: "Royalty",   emoji: "👑", color: "#eab308", glow: "rgba(234,179,8,0.6)",   desc: "VIP live streamer" },
+] as const;
+
 function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -282,6 +291,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [showStoryMusic, setShowStoryMusic] = useState(false);
   // Live stream
   const [liveStarted, setLiveStarted] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<typeof LIVE_ACHIEVEMENTS[number] | null>(null);
+  const [showAchievementUnlocked, setShowAchievementUnlocked] = useState(false);
   const [liveViewers, setLiveViewers] = useState(0);
   const [liveMuted, setLiveMuted] = useState(false);
   const [liveCameraOff, setLiveCameraOff] = useState(false);
@@ -480,7 +491,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     setLiveViewers(0);
     setLiveChat([]);
     setLiveReactions([]);
-  }, [stopCamera, livePostId]);
+    if (selectedBadge) {
+      setShowAchievementUnlocked(true);
+      setTimeout(() => setShowAchievementUnlocked(false), 5000);
+    }
+  }, [stopCamera, livePostId, selectedBadge]);
 
   useEffect(() => {
     return () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); };
@@ -1247,6 +1262,41 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                       ))}
                     </div>
                   </div>
+
+                  {/* Achievement badge picker */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Pick your stream badge</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {LIVE_ACHIEVEMENTS.map(badge => {
+                        const isActive = selectedBadge?.id === badge.id;
+                        return (
+                          <button
+                            key={badge.id}
+                            type="button"
+                            onClick={() => setSelectedBadge(isActive ? null : badge)}
+                            className="flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all active:scale-95"
+                            style={{
+                              background: isActive ? `${badge.color}18` : "rgba(255,255,255,0.04)",
+                              borderColor: isActive ? badge.color : "rgba(255,255,255,0.08)",
+                              boxShadow: isActive ? `0 0 12px ${badge.glow}` : "none",
+                            }}
+                            data-testid={`badge-${badge.id}`}
+                          >
+                            <span className="text-2xl leading-none">{badge.emoji}</span>
+                            <span className="text-[9px] font-black" style={{ color: isActive ? badge.color : "#71717a" }}>
+                              {badge.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedBadge && (
+                      <p className="text-[10px] text-center" style={{ color: selectedBadge.color }}>
+                        {selectedBadge.emoji} {selectedBadge.desc}
+                      </p>
+                    )}
+                  </div>
+
                   {/* Advanced options */}
                   <div className="grid grid-cols-3 gap-2">
                     {[
@@ -1317,6 +1367,15 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                         </div>
                       </div>
                       <p className="text-[10px] text-white/80 font-semibold drop-shadow-md max-w-[140px] truncate">{liveTitle}</p>
+                      {selectedBadge && (
+                        <div
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-full border w-fit"
+                          style={{ background: `${selectedBadge.color}22`, borderColor: `${selectedBadge.color}66` }}
+                        >
+                          <span className="text-[11px] leading-none">{selectedBadge.emoji}</span>
+                          <span className="text-[9px] font-black" style={{ color: selectedBadge.color }}>{selectedBadge.label}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-1.5">
                       <button onClick={toggleCameraFace} className="w-8 h-8 rounded-full bg-black/60 border border-white/15 flex items-center justify-center">
@@ -1414,6 +1473,44 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   className="w-full h-11 rounded-xl font-black text-sm flex items-center justify-center gap-2 bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 transition-all">
                   <PhoneOff className="w-4 h-4" /> End Stream
                 </button>
+              )}
+
+              {/* Achievement Unlocked popup */}
+              {showAchievementUnlocked && selectedBadge && (
+                <div
+                  className="rounded-2xl p-4 space-y-3 border text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
+                  style={{ background: `${selectedBadge.color}12`, borderColor: `${selectedBadge.color}50`, boxShadow: `0 0 30px ${selectedBadge.glow}` }}
+                >
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Achievements Unlocked</p>
+                  <div className="flex justify-center">
+                    <div
+                      className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl"
+                      style={{ background: `${selectedBadge.color}22`, boxShadow: `0 0 24px ${selectedBadge.glow}` }}
+                    >
+                      {selectedBadge.emoji}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-lg font-black" style={{ color: selectedBadge.color }}>{selectedBadge.label}</p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">{selectedBadge.desc}</p>
+                  </div>
+                  <div className="flex gap-1.5 justify-center">
+                    {LIVE_ACHIEVEMENTS.map(b => (
+                      <div
+                        key={b.id}
+                        className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
+                        style={{
+                          background: b.id === selectedBadge.id ? `${b.color}30` : "rgba(255,255,255,0.05)",
+                          border: b.id === selectedBadge.id ? `1.5px solid ${b.color}` : "1.5px solid rgba(255,255,255,0.1)",
+                          boxShadow: b.id === selectedBadge.id ? `0 0 10px ${b.glow}` : "none",
+                          opacity: b.id === selectedBadge.id ? 1 : 0.35,
+                        }}
+                      >
+                        {b.emoji}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}
