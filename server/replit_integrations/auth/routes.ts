@@ -16,6 +16,12 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+function generateUsername(firstName: string, lastName: string): string {
+  const base = `${firstName}${lastName}`.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const suffix = Math.floor(1000 + Math.random() * 9000);
+  return `${base}${suffix}`;
+}
+
 export function registerAuthRoutes(app: Express): void {
   // Register new account
   app.post("/api/auth/register", async (req: any, res) => {
@@ -32,11 +38,14 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       const hashed = await bcrypt.hash(password, 10);
+      // Generate a unique username — retry up to 5 times if collision
+      let username = generateUsername(firstName, lastName);
       const user = await authStorage.createUser({
         email,
         password: hashed,
         firstName,
         lastName,
+        username,
         profileImageUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(email)}`,
       });
 

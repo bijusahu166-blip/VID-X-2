@@ -26,6 +26,7 @@ async function seed() {
       password: hashed,
       firstName: "Alice",
       lastName: "Wonder",
+      username: "alicewonder7842",
       isCelebrity: true,
       profileImageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice",
   }).returning();
@@ -35,6 +36,7 @@ async function seed() {
       password: hashed,
       firstName: "Bob",
       lastName: "Builder",
+      username: "bobbuilder3516",
       profileImageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob",
   }).returning();
 
@@ -319,16 +321,27 @@ export async function registerRoutes(
   // ── Update own profile ────────────────────────────────────────────────────
   app.patch("/api/profile", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
-    const { firstName, lastName, profileImageUrl } = req.body;
+    const { firstName, lastName, username, bio, profileImageUrl } = req.body;
     const existing = await authStorage.getUser(userId);
     if (!existing) return res.status(404).json({ message: "User not found" });
+    // If username is changing, check it's not taken by another user
+    if (username && username !== (existing as any).username) {
+      const taken = await db.select({ id: users.id }).from(users)
+        .where(eq(users.username, username)).limit(1);
+      if (taken.length > 0 && taken[0].id !== userId) {
+        return res.status(409).json({ message: "That username is already taken." });
+      }
+    }
     const updated = await authStorage.upsertUser({
       ...existing,
       firstName: firstName ?? existing.firstName,
       lastName: lastName ?? existing.lastName,
+      username: username ?? (existing as any).username,
+      bio: bio ?? (existing as any).bio,
       profileImageUrl: profileImageUrl ?? existing.profileImageUrl,
     });
-    res.json(updated);
+    const { password: _, ...safeUser } = updated as any;
+    res.json(safeUser);
   });
 
   // ── Users list (for new chat) ─────────────────────────────────────────────
@@ -336,6 +349,14 @@ export async function registerRoutes(
     const allUsers = await db.select().from(users);
     const me = (req.session as any).userId;
     res.json(allUsers.filter(u => u.id !== me));
+  });
+
+  // Get a single user by ID (for OtherUserProfile)
+  app.get("/api/users/:id", isAuthenticated, async (req, res) => {
+    const user = await authStorage.getUser(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    const { password: _, ...safeUser } = user as any;
+    res.json(safeUser);
   });
 
   // ── Online status ─────────────────────────────────────────────────────────

@@ -102,7 +102,7 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
                 <div className="flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="text-[11px] font-bold text-white">
-                      {c.user ? `${c.user.firstName} ${c.user.lastName}` : "User"}
+                      {c.user ? `@${(c.user as any).username || c.user.firstName?.toLowerCase()}` : "@user"}
                     </span>
                     <span className="text-[9px] text-zinc-600">
                       {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
@@ -589,7 +589,7 @@ export default function Home() {
                       </p>
                       <div className="flex items-center gap-1 text-[11px] text-zinc-500">
                         <span className="flex items-center gap-1">
-                          {post.user?.firstName} {post.user?.lastName}
+                          @{(post.user as any)?.username || post.user?.firstName?.toLowerCase()}
                           {post.user?.isCelebrity && <CheckCircle2 className="w-3 h-3 text-blue-400 fill-blue-400" />}
                         </span>
                         <span>·</span>

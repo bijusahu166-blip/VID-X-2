@@ -12,6 +12,7 @@ interface UserResult {
   firstName: string;
   lastName: string;
   email: string;
+  username?: string;
   profileImageUrl?: string;
   isCelebrity?: boolean;
   bio?: string;
@@ -44,7 +45,9 @@ function UserCard({ user }: { user: UserResult }) {
             <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400 shrink-0" />
           )}
         </div>
-        <p className="text-[11px] text-zinc-500 truncate">{user.email}</p>
+        <p className="text-[11px] text-pink-400/70 font-mono truncate">
+          @{user.username || user.email.split("@")[0]}
+        </p>
         {user.bio && (
           <p className="text-[11px] text-zinc-400 truncate mt-0.5">{user.bio}</p>
         )}

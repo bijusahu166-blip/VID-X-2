@@ -129,6 +129,9 @@ function OtherUserProfile({ userId }: { userId: string }) {
               <h1 className="text-lg font-black text-white">{name}</h1>
               {u?.isCelebrity && <span className="text-blue-400 text-sm">✓</span>}
             </div>
+            <p className="text-[12px] text-pink-400/70 font-mono mt-0.5">
+              @{u?.username || u?.firstName?.toLowerCase() || "user"}
+            </p>
             {u?.bio && <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{u.bio}</p>}
           </div>
           <button className="bg-red-500 text-white text-sm font-bold px-5 py-2 rounded-full hover:bg-red-600 transition-colors">
@@ -220,19 +223,22 @@ export default function Profile() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
-  const [editBio, setEditBio] = useState("📸 Digital Creator · Content Warrior\nCapturing worlds, one frame at a time.");
+  const [editUsername, setEditUsername] = useState("");
+  const [editBio, setEditBio] = useState("");
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openEditProfile = () => {
     setEditFirstName(user?.firstName || "");
     setEditLastName(user?.lastName || "");
+    setEditUsername((user as any)?.username || "");
+    setEditBio((user as any)?.bio || "");
     setEditAvatarUrl(user?.profileImageUrl || "");
     setShowEditProfile(true);
   };
 
   const updateProfileMutation = useMutation({
-    mutationFn: (data: { firstName: string; lastName: string; profileImageUrl?: string }) =>
+    mutationFn: (data: { firstName: string; lastName: string; username?: string; bio?: string; profileImageUrl?: string }) =>
       apiRequest("PATCH", "/api/profile", data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
@@ -252,6 +258,8 @@ export default function Profile() {
     updateProfileMutation.mutate({
       firstName: editFirstName.trim(),
       lastName: editLastName.trim(),
+      username: editUsername.trim() || undefined,
+      bio: editBio.trim() || undefined,
       profileImageUrl: editAvatarUrl || undefined,
     });
   };
@@ -635,9 +643,9 @@ export default function Profile() {
                     <span className="text-[9px] font-black text-yellow-400">LV.{level}</span>
                   </div>
                 </div>
-                <p className="text-[11px] text-pink-400/70 font-mono mt-0.5">@{user?.firstName?.toLowerCase()}_litlink</p>
+                <p className="text-[11px] text-pink-400/70 font-mono mt-0.5">@{(user as any)?.username ?? `${user?.firstName?.toLowerCase()}_litlink`}</p>
                 <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
-                  📸 Digital Creator · Content Warrior<br />Capturing worlds, one frame at a time.
+                  {(user as any)?.bio || "📸 Digital Creator · Content Warrior"}
                 </p>
               </div>
             </div>
@@ -929,6 +937,22 @@ export default function Profile() {
                     />
                     <Pencil className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Username</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-pink-400 font-mono text-sm">@</span>
+                    <Input
+                      value={editUsername}
+                      onChange={e => setEditUsername(e.target.value.replace(/[^a-z0-9_]/gi, "").toLowerCase())}
+                      placeholder="your_handle"
+                      className="bg-white/5 border-white/10 focus:border-pink-500/50 rounded-xl h-11 pl-8 pr-10 font-mono text-sm"
+                      data-testid="input-username"
+                    />
+                    <Pencil className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  </div>
+                  <p className="text-[10px] text-zinc-600">Only letters, numbers, and underscores</p>
                 </div>
 
                 <div className="space-y-1.5">
