@@ -38,6 +38,7 @@ function Router() {
       <Route path="/reels" component={Reels} />
       <Route path="/messages" component={Messages} />
       <Route path="/profile" component={Profile} />
+      <Route path="/profile/:id" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );

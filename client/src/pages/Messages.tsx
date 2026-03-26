@@ -498,7 +498,13 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
-  if (showVideoCall) return <VideoCallScreen onClose={() => setShowVideoCall(false)} />;
+  if (showVideoCall) return (
+    <VideoCallScreen
+      onClose={() => setShowVideoCall(false)}
+      callerName={other ? `${other.firstName} ${other.lastName}` : undefined}
+      callerAvatar={other?.profileImageUrl || undefined}
+    />
+  );
 
   return (
     <div className={cn("flex flex-col h-full", T.bg)}>

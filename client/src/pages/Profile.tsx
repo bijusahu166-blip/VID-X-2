@@ -2,6 +2,8 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useParams, useLocation } from "wouter";
+import { ArrowLeft } from "lucide-react";
 import {
   Settings, Grid, Bookmark, Users, PawPrint,
   History as HistoryIcon, BarChart3, ChevronRight, UserCheck,
@@ -70,8 +72,92 @@ function SettingRow({ icon: Icon, label, sub, onClick }: { icon: any; label: str
   );
 }
 
+function OtherUserProfile({ userId }: { userId: string }) {
+  const [, navigate] = useLocation();
+  const { data: profileData, isLoading } = useQuery<any>({
+    queryKey: ["/api/users", userId],
+    queryFn: () => fetch(`/api/users/${userId}`, { credentials: "include" }).then(r => r.json()),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  const u = profileData;
+  const name = u ? `${u.firstName} ${u.lastName}` : "User";
+  const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase();
+
+  return (
+    <div className="min-h-screen bg-black pb-20">
+      {/* Back header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 sticky top-0 z-40 bg-black/95 backdrop-blur">
+        <button onClick={() => navigate("/search")} className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center">
+          <ArrowLeft className="w-4 h-4 text-white" />
+        </button>
+        <span className="font-bold text-white">{name}</span>
+      </div>
+
+      {/* Profile hero */}
+      <div className="relative">
+        <div className="h-36 w-full" style={{ background: "linear-gradient(135deg, #1a0030, #0d001a)" }} />
+        <div className="absolute -bottom-10 left-4">
+          <div className="w-20 h-20 rounded-full border-4 border-black overflow-hidden bg-zinc-800">
+            {u?.profileImageUrl
+              ? <img src={u.profileImageUrl} className="w-full h-full object-cover" />
+              : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-pink-600 text-2xl font-black text-white">{initials}</div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 pt-14">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-lg font-black text-white">{name}</h1>
+              {u?.isCelebrity && <span className="w-4 h-4 text-blue-400">✓</span>}
+            </div>
+            {u?.bio && <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{u.bio}</p>}
+          </div>
+          <button className="bg-red-500 text-white text-sm font-bold px-5 py-2 rounded-full hover:bg-red-600 transition-colors">
+            Follow
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {[
+            { label: "Posts", value: u?.postsCount ?? 0 },
+            { label: "Followers", value: u?.followersCount ?? 0 },
+            { label: "Following", value: u?.followingCount ?? 0 },
+          ].map(stat => (
+            <div key={stat.label} className="text-center">
+              <div className="text-xl font-black text-white">{stat.value}</div>
+              <div className="text-xs text-zinc-500">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-zinc-600 text-center py-8">No posts to show yet.</p>
+      </div>
+
+      <BottomNav />
+    </div>
+  );
+}
+
 export default function Profile() {
+  const params = useParams<{ id?: string }>();
   const { user, logout } = useAuth();
+
+  if (params?.id && params.id !== user?.id) {
+    return <OtherUserProfile userId={params.id} />;
+  }
+
   const { data: posts } = usePosts();
   const qc = useQueryClient();
   const { toast } = useToast();

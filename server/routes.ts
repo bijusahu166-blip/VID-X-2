@@ -199,6 +199,30 @@ export async function registerRoutes(
     res.status(201).json(comment);
   });
 
+  // GET comments for a post
+  app.get("/api/posts/:id/comments", isAuthenticated, async (req, res) => {
+    const postId = Number(req.params.id);
+    const commentList = await storage.getComments(postId);
+    // Attach user info
+    const withUsers = await Promise.all(commentList.map(async (c) => {
+      const u = await authStorage.getUser(c.userId);
+      return { ...c, user: u ? { firstName: u.firstName, lastName: u.lastName, profileImageUrl: u.profileImageUrl } : null };
+    }));
+    res.json(withUsers);
+  });
+
+  // User search
+  app.get("/api/users/search", isAuthenticated, async (req, res) => {
+    const q = ((req.query.q as string) || "").toLowerCase().trim();
+    const allUsers = await db.select().from(users);
+    const me = (req.session as any).userId;
+    const filtered = allUsers.filter(u => u.id !== me && (
+      !q || (u.firstName + " " + u.lastName).toLowerCase().includes(q) ||
+      (u.email || "").toLowerCase().includes(q)
+    ));
+    res.json(filtered);
+  });
+
   // Users
   app.get(api.users.get.path, isAuthenticated, async (req, res) => {
     const userId = req.params.id as string;

@@ -9,16 +9,16 @@ import type { AREffect } from "@/lib/arEffects";
 import filterIconSrc from "@assets/image_1774511462472.png";
 import heroIconSrc from "@assets/image_1774512160722.png";
 
-const MOCK_CALLERS = [
-  { name: "Alice Wonder", handle: "@alice_litlink", avatar: "🧝‍♀️" },
-  { name: "Bob Builder", handle: "@bob_litlink", avatar: "👨‍💻" },
-];
-
 interface VideoCallScreenProps {
   onClose: () => void;
+  callerName?: string;
+  callerAvatar?: string;
 }
 
-export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
+export function VideoCallScreen({ onClose, callerName, callerAvatar }: VideoCallScreenProps) {
+  const displayName = callerName || "Unknown";
+  const displayHandle = `@${(callerName || "user").toLowerCase().replace(/\s+/g, "_")}`;
+  const displayAvatar = callerAvatar || null;
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -36,8 +36,6 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [lowDataMode, setLowDataMode] = useState(false);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  const caller = MOCK_CALLERS[0];
-
   const visibleEffects = AR_EFFECTS.filter(e =>
     (EFFECT_CATEGORIES.find(c => c.label === activeEffectTab)?.ids ?? AR_EFFECTS.map(x => x.id)).includes(e.id)
   );
@@ -172,10 +170,13 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
             {/* Remote caller avatar */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="flex flex-col items-center gap-4">
-                <div className="text-8xl animate-bounce" style={{ animationDuration: "3s" }}>
-                  {caller.avatar}
+                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white/20 animate-bounce" style={{ animationDuration: "3s" }}>
+                  {displayAvatar
+                    ? <img src={displayAvatar} className="w-full h-full object-cover" alt={displayName} />
+                    : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-pink-600 text-3xl font-black text-white">{displayName.charAt(0)}</div>
+                  }
                 </div>
-                <div className="text-white font-bold text-xl">{caller.name}</div>
+                <div className="text-white font-bold text-xl">{displayName}</div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                   <span className="text-green-400 text-sm font-medium">HD Connected</span>
@@ -194,7 +195,10 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
                   boxShadow: "0 0 60px rgba(168,85,247,0.5)",
                 }}
               >
-                {caller.avatar}
+                {displayAvatar
+                  ? <img src={displayAvatar} className="w-full h-full object-cover rounded-full" alt={displayName} />
+                  : <span className="text-4xl font-black text-white">{displayName.charAt(0)}</span>
+                }
               </div>
               {/* Ripple rings */}
               {[1, 2, 3].map(i => (
@@ -209,7 +213,7 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
               ))}
             </div>
             <div className="text-center space-y-1">
-              <p className="text-white text-2xl font-bold">{caller.name}</p>
+              <p className="text-white text-2xl font-bold">{displayName}</p>
               <p className="text-purple-300 text-sm">
                 {callState === "connecting" ? "Connecting..." : "Ringing..."}
               </p>
