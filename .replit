@@ -42,7 +42,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "PORT=5001 npm run dev"
 
 [workflows.workflow.metadata]
 outputType = "webview"

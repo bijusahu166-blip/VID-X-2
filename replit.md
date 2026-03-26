@@ -19,6 +19,8 @@ Preferred communication style: Simple, everyday language.
 
 ## Backend (Express API)
 - **Framework**: Express.js running on Node with TypeScript (via tsx)
+- **Port**: Runs on port 5001 (mapped to external port 80 in .replit). Workflow command: `PORT=5001 npm run dev`
+- **Body Limit**: express.json and express.urlencoded both set to 50MB (for base64 image/photo uploads)
 - **API Pattern**: RESTful JSON API under `/api/*` prefix
 - **Build**: Vite for client, esbuild for server bundling (output to `dist/`)
 - **Dev Server**: Vite dev middleware with HMR in development; static file serving in production

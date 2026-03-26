@@ -106,6 +106,51 @@ function readFileAsDataURL(file: File): Promise<string> {
   });
 }
 
+function generateVideoThumbnail(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const fallback = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 640; canvas.height = 360;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const grad = ctx.createLinearGradient(0, 0, 640, 360);
+        grad.addColorStop(0, "#1a0030");
+        grad.addColorStop(0.5, "#0d1a40");
+        grad.addColorStop(1, "#200010");
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, 640, 360);
+        // Play icon
+        ctx.fillStyle = "rgba(255,255,255,0.2)";
+        ctx.beginPath(); ctx.arc(320, 180, 50, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.beginPath(); ctx.moveTo(305, 155); ctx.lineTo(355, 180); ctx.lineTo(305, 205); ctx.closePath(); ctx.fill();
+      }
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    const video = document.createElement("video");
+    const objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.preload = "metadata";
+    video.onloadeddata = () => {
+      video.currentTime = Math.min(1, video.duration * 0.1);
+    };
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 360;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(objectUrl);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      } catch { URL.revokeObjectURL(objectUrl); fallback(); }
+    };
+    video.onerror = () => { URL.revokeObjectURL(objectUrl); fallback(); };
+    video.load();
+  });
+}
+
 function ARFilterStrip({
   selected,
   onSelect,
@@ -358,6 +403,16 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
     if (!videoTitle) setVideoTitle(file.name.replace(/\.[^.]+$/, ""));
+    // Generate a persistent thumbnail (base64) to use as imageUrl in the DB
+    setIsReadingFile(true);
+    try {
+      const thumb = await generateVideoThumbnail(file);
+      setImageUrl(thumb);
+    } catch {
+      // fallback handled inside generateVideoThumbnail
+    } finally {
+      setIsReadingFile(false);
+    }
   };
 
   const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -492,11 +547,23 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 style={{ minHeight: previewUrl ? "auto" : "9rem" }}
               >
                 {previewUrl ? (
-                  <div className="w-full">
-                    <video src={previewUrl} className="w-full rounded-2xl max-h-48 object-cover" controls muted />
-                    <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border-t border-green-500/20">
-                      <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-                      <span className="text-[11px] text-green-400 font-semibold truncate">{selectedFile?.name}</span>
+                  <div className="w-full" onClick={e => e.stopPropagation()}>
+                    <video src={previewUrl} className="w-full rounded-t-2xl max-h-48 object-cover" controls muted />
+                    <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border-t border-green-500/20 rounded-b-2xl">
+                      {isReadingFile ? (
+                        <>
+                          <Loader2 className="w-4 h-4 text-yellow-400 shrink-0 animate-spin" />
+                          <span className="text-[11px] text-yellow-400 font-semibold">Generating thumbnail…</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                          <span className="text-[11px] text-green-400 font-semibold truncate flex-1">{selectedFile?.name}</span>
+                          {imageUrl && (
+                            <img src={imageUrl} alt="thumb" className="w-8 h-8 rounded object-cover border border-white/20 shrink-0" />
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -604,14 +671,14 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 </div>
               </div>
 
-              <button type="submit" disabled={!videoTitle || createPost.isPending}
+              <button type="submit" disabled={!videoTitle || createPost.isPending || isReadingFile}
                 className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 style={{
                   background: videoTitle ? "linear-gradient(135deg, #ef4444, #f97316)" : "rgba(255,255,255,0.05)",
                   boxShadow: videoTitle ? "0 0 20px rgba(239,68,68,0.4)" : "none",
                   color: "white",
                 }}>
-                {createPost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Upload className="w-4 h-4" /> Publish Video</>}
+                {isReadingFile ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating thumbnail…</> : createPost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Upload className="w-4 h-4" /> Publish Video</>}
               </button>
             </form>
           )}
