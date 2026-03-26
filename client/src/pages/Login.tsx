@@ -32,23 +32,27 @@ async function apiPost(path: string, body: object) {
 function ForgotPasswordView({ onBack }: { onBack: () => void }) {
   const [step, setStep] = useState<"email" | "newpw" | "done">("email");
   const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const { toast } = useToast();
 
+  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
   const verifyEmail = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/users/check-email?email=${encodeURIComponent(email.toLowerCase().trim())}`, { credentials: "include" });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.message || "No account found");
-      }
-      return res.json();
+      const trimmed = email.toLowerCase().trim();
+      if (!trimmed) throw new Error("Please enter your email address");
+      if (!isValidEmail(trimmed)) throw new Error("Please enter a valid email address");
+      const res = await fetch(`/api/users/check-email?email=${encodeURIComponent(trimmed)}`, { credentials: "include" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || "No account found");
+      return d;
     },
-    onSuccess: () => setStep("newpw"),
-    onError: (err: Error) => toast({ title: err.message, variant: "destructive" }),
+    onSuccess: () => { setEmailError(""); setStep("newpw"); },
+    onError: (err: Error) => setEmailError(err.message),
   });
 
   const resetPassword = useMutation({
@@ -133,20 +137,37 @@ function ForgotPasswordView({ onBack }: { onBack: () => void }) {
                 Account Email
               </label>
               <input
-                type="email"
-                required
+                type="text"
+                inputMode="email"
                 data-testid="input-reset-email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setEmailError(""); }}
                 placeholder="you@example.com"
                 autoComplete="email"
-                onKeyDown={(e) => { if (e.key === "Enter" && email.trim()) verifyEmail.mutate(); }}
-                className="w-full h-11 px-3.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-red-500 transition-colors"
+                onKeyDown={(e) => { if (e.key === "Enter") verifyEmail.mutate(); }}
+                className={`w-full h-11 px-3.5 rounded-xl bg-zinc-900 border text-white text-sm placeholder:text-zinc-600 focus:outline-none transition-colors ${
+                  emailError ? "border-red-500 focus:border-red-500" : "border-zinc-700 focus:border-red-500"
+                }`}
               />
-              <p className="text-[11px] text-zinc-600 mt-2">We'll verify your email and let you set a new password.</p>
+              {emailError ? (
+                <div className="mt-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 flex items-start gap-2">
+                  <span className="text-red-400 text-base leading-none mt-0.5">⚠</span>
+                  <div>
+                    <p className="text-[12px] text-red-400 font-semibold">{emailError}</p>
+                    {emailError.toLowerCase().includes("no account") && (
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Use the exact email you registered with, or{" "}
+                        <button type="button" onClick={onBack} className="text-red-400 underline">create a new account</button>.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-600 mt-2">Enter the email address you used to register.</p>
+              )}
             </div>
             <button
-              onClick={() => email.trim() && verifyEmail.mutate()}
+              onClick={() => verifyEmail.mutate()}
               disabled={!email.trim() || verifyEmail.isPending}
               data-testid="button-verify-email"
               className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
