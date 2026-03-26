@@ -1,19 +1,22 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { 
-  BookOpen, 
-  Upload, 
-  Download, 
-  Play, 
-  Pause, 
-  User, 
-  Volume2, 
+import {
+  BookOpen,
+  Upload,
+  Download,
+  Play,
+  Pause,
+  User,
+  Volume2,
   Sparkles,
   ChevronLeft,
-  Loader2
+  Loader2,
+  X,
+  Image as ImageIcon,
+  FileText,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
@@ -36,9 +39,20 @@ export default function Reading() {
   const [voice, setVoice] = useState<"male" | "female">("female");
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
   const { toast } = useToast();
   const synth = window.speechSynthesis;
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Upload form state
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadAuthor, setUploadAuthor] = useState("");
+  const [uploadContent, setUploadContent] = useState("");
+  const [uploadCoverUrl, setUploadCoverUrl] = useState("");
+  const [uploadCoverPreview, setUploadCoverPreview] = useState("");
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const { data: books, isLoading } = useQuery<Book[]>({
     queryKey: ["/api/books"],
@@ -54,12 +68,6 @@ export default function Reading() {
     },
   });
 
-  useEffect(() => {
-    if (selectedBook) {
-      historyMutation.mutate(selectedBook);
-    }
-  }, [selectedBook]);
-
   const uploadMutation = useMutation({
     mutationFn: async (newBook: any) => {
       const res = await fetch("/api/books", {
@@ -67,41 +75,97 @@ export default function Reading() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newBook),
       });
+      if (!res.ok) throw new Error("Upload failed");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/books"] });
-      toast({ title: "Success", description: "Book uploaded successfully" });
+      toast({ title: "Book uploaded!", description: "Your book is now in the library." });
+      resetUploadForm();
+      setShowUpload(false);
+    },
+    onError: () => {
+      toast({ title: "Upload failed", description: "Please try again.", variant: "destructive" });
     },
   });
 
-  const handleFileUpload = () => {
-    // Demo upload
+  const resetUploadForm = () => {
+    setUploadTitle("");
+    setUploadAuthor("");
+    setUploadContent("");
+    setUploadCoverUrl("");
+    setUploadCoverPreview("");
+  };
+
+  const handleTextFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!uploadTitle) {
+      setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+    }
+
+    setIsReadingFile(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setUploadContent(text || "");
+      setIsReadingFile(false);
+      toast({ title: "File loaded", description: `${text.length.toLocaleString()} characters read.` });
+    };
+    reader.onerror = () => {
+      setIsReadingFile(false);
+      toast({ title: "Could not read file", variant: "destructive" });
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setUploadCoverPreview(dataUrl);
+      setUploadCoverUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleUploadSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadTitle.trim()) {
+      toast({ title: "Title is required", variant: "destructive" });
+      return;
+    }
+    if (!uploadContent.trim()) {
+      toast({ title: "Book content is required", description: "Upload a .txt file or paste the text.", variant: "destructive" });
+      return;
+    }
     uploadMutation.mutate({
-      title: "Sample High-Quality Book",
-      author: "AI Author",
-      content: "This is a high-quality book content for testing the AI reading aloud feature. It can be read by both male and female voices.",
+      title: uploadTitle.trim(),
+      author: uploadAuthor.trim() || "Unknown Author",
+      content: uploadContent.trim(),
       type: "book",
-      imageUrl: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400"
+      imageUrl: uploadCoverUrl || `https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400`,
     });
   };
 
   const togglePlayback = () => {
     if (!selectedBook) return;
-
     if (isReading) {
       synth.cancel();
       setIsReading(false);
     } else {
       const utterance = new SpeechSynthesisUtterance(selectedBook.content);
-      // Simple voice selection simulation
       const voices = synth.getVoices();
       if (voice === "male") {
         utterance.voice = voices.find(v => v.name.includes("Male") || v.name.includes("David")) || voices[0];
       } else {
         utterance.voice = voices.find(v => v.name.includes("Female") || v.name.includes("Zira")) || voices[1];
       }
-      
       utterance.onend = () => setIsReading(false);
       utteranceRef.current = utterance;
       synth.speak(utterance);
@@ -112,7 +176,6 @@ export default function Reading() {
   const handleSummarize = async () => {
     if (!selectedBook) return;
     setIsSummarizing(true);
-    // Simulate AI summarization
     setTimeout(() => {
       setSummary("This book discusses the intersection of technology and creativity, emphasizing the importance of human-like interaction in AI systems.");
       setIsSummarizing(false);
@@ -123,14 +186,14 @@ export default function Reading() {
   return (
     <div className="min-h-screen bg-background pb-20 pt-14">
       <Header />
-      
+
       <main className="p-4 max-w-md mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {selectedBook && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => { setSelectedBook(null); setSummary(null); synth.cancel(); setIsReading(false); }}
               >
                 <ChevronLeft className="w-5 h-5" />
@@ -141,16 +204,161 @@ export default function Reading() {
             </h1>
           </div>
           {!selectedBook && (
-            <Button onClick={handleFileUpload} size="sm" className="gap-2 rounded-full">
+            <Button onClick={() => setShowUpload(true)} size="sm" className="gap-2 rounded-full" data-testid="button-upload-book">
               <Upload className="w-4 h-4" />
               Upload
             </Button>
           )}
         </div>
 
+        {/* ── Upload Dialog ─────────────────────────────────────────── */}
+        <AnimatePresence>
+          {showUpload && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm"
+              onClick={(e) => { if (e.target === e.currentTarget) setShowUpload(false); }}
+            >
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 26, stiffness: 300 }}
+                className="w-full max-w-md rounded-t-3xl bg-zinc-950 border-t border-zinc-800 p-5 pb-10 max-h-[92vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h2 className="text-lg font-black text-white">Upload Book</h2>
+                    <p className="text-xs text-zinc-500 mt-0.5">Add a book or article to the library</p>
+                  </div>
+                  <button onClick={() => { setShowUpload(false); resetUploadForm(); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleUploadSubmit} className="space-y-4">
+                  {/* Cover image */}
+                  <div className="flex gap-3 items-start">
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      className="shrink-0 w-20 h-28 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-1 text-zinc-600 hover:border-zinc-500 hover:text-zinc-400 transition-colors overflow-hidden"
+                    >
+                      {uploadCoverPreview ? (
+                        <img src={uploadCoverPreview} className="w-full h-full object-cover" alt="Cover" />
+                      ) : (
+                        <>
+                          <ImageIcon className="w-5 h-5" />
+                          <span className="text-[9px] font-semibold uppercase tracking-wider">Cover</span>
+                        </>
+                      )}
+                    </button>
+                    <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverSelect} />
+
+                    <div className="flex-1 space-y-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1 block">Title *</label>
+                        <input
+                          required
+                          value={uploadTitle}
+                          onChange={(e) => setUploadTitle(e.target.value)}
+                          placeholder="Book title"
+                          data-testid="input-book-title"
+                          className="w-full h-10 px-3 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-red-500 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1 block">Author</label>
+                        <input
+                          value={uploadAuthor}
+                          onChange={(e) => setUploadAuthor(e.target.value)}
+                          placeholder="Author name"
+                          data-testid="input-book-author"
+                          className="w-full h-10 px-3 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-red-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* File upload area */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 block">Book Content *</label>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-zinc-700 hover:border-zinc-500 transition-colors text-left"
+                    >
+                      {isReadingFile ? (
+                        <Loader2 className="w-5 h-5 text-red-400 animate-spin shrink-0" />
+                      ) : (
+                        <FileText className="w-5 h-5 text-zinc-500 shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        {isReadingFile ? (
+                          <p className="text-sm text-zinc-300">Reading file…</p>
+                        ) : uploadContent ? (
+                          <p className="text-sm text-green-400 font-semibold truncate">
+                            ✓ {uploadContent.length.toLocaleString()} characters loaded
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-sm text-zinc-300">Upload a .txt file</p>
+                            <p className="text-[11px] text-zinc-600 mt-0.5">Tap to browse files</p>
+                          </>
+                        )}
+                      </div>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".txt,.text,text/plain"
+                      className="hidden"
+                      onChange={handleTextFileSelect}
+                      data-testid="input-book-file"
+                    />
+                  </div>
+
+                  {/* Manual paste fallback */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 block">Or paste text directly</label>
+                    <textarea
+                      value={uploadContent}
+                      onChange={(e) => setUploadContent(e.target.value)}
+                      placeholder="Paste your book or article text here…"
+                      data-testid="input-book-content"
+                      rows={5}
+                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-red-500 transition-colors resize-none"
+                    />
+                    <p className="text-[10px] text-zinc-600 mt-1 text-right">{uploadContent.length.toLocaleString()} chars</p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={uploadMutation.isPending || isReadingFile || !uploadTitle.trim() || !uploadContent.trim()}
+                    data-testid="button-submit-book"
+                    className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    style={{
+                      background: "linear-gradient(135deg, #ef4444, #f97316)",
+                      boxShadow: "0 0 20px rgba(239,68,68,0.3)",
+                    }}
+                  >
+                    {uploadMutation.isPending ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
+                    ) : (
+                      <><Upload className="w-4 h-4" /> Add to Library</>
+                    )}
+                  </button>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence mode="wait">
           {!selectedBook ? (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
@@ -160,12 +368,13 @@ export default function Reading() {
                 Array(4).fill(0).map((_, i) => (
                   <div key={i} className="aspect-[3/4] bg-muted animate-pulse rounded-xl" />
                 ))
-              ) : (
-                books?.map((book) => (
-                  <Card 
-                    key={book.id} 
+              ) : books && books.length > 0 ? (
+                books.map((book) => (
+                  <Card
+                    key={book.id}
                     className="overflow-hidden border-none shadow-md hover-elevate cursor-pointer"
-                    onClick={() => setSelectedBook(book)}
+                    onClick={() => { setSelectedBook(book); historyMutation.mutate(book); }}
+                    data-testid={`card-book-${book.id}`}
                   >
                     <div className="aspect-[3/4] bg-muted relative">
                       {book.imageUrl ? (
@@ -181,17 +390,30 @@ export default function Reading() {
                     </div>
                   </Card>
                 ))
+              ) : (
+                <div className="col-span-2 flex flex-col items-center justify-center py-16 text-zinc-600 gap-3">
+                  <BookOpen className="w-12 h-12 opacity-30" />
+                  <p className="text-sm">No books yet. Upload one to get started!</p>
+                  <button
+                    onClick={() => setShowUpload(true)}
+                    className="mt-1 text-red-400 text-sm font-semibold hover:text-red-300 transition-colors"
+                  >
+                    + Upload a book
+                  </button>
+                </div>
               )}
             </motion.div>
           ) : (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
               <div className="aspect-[4/3] rounded-2xl bg-muted overflow-hidden">
-                <img src={selectedBook.imageUrl || ""} alt={selectedBook.title} className="w-full h-full object-cover" />
+                {selectedBook.imageUrl && (
+                  <img src={selectedBook.imageUrl} alt={selectedBook.title} className="w-full h-full object-cover" />
+                )}
               </div>
 
               <div className="space-y-2">
@@ -199,7 +421,7 @@ export default function Reading() {
                 <p className="text-muted-foreground">By {selectedBook.author}</p>
               </div>
 
-              <div className="bg-muted/50 rounded-2xl p-6 text-lg leading-relaxed font-serif">
+              <div className="bg-muted/50 rounded-2xl p-6 text-lg leading-relaxed font-serif whitespace-pre-wrap">
                 {selectedBook.content}
               </div>
 
@@ -210,26 +432,26 @@ export default function Reading() {
                 <CardContent className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex gap-2">
-                      <Button 
-                        variant={voice === "female" ? "default" : "outline"} 
-                        size="sm" 
+                      <Button
+                        variant={voice === "female" ? "default" : "outline"}
+                        size="sm"
                         onClick={() => setVoice("female")}
                         className="rounded-full gap-2"
                       >
                         <User className="w-4 h-4" /> Female
                       </Button>
-                      <Button 
-                        variant={voice === "male" ? "default" : "outline"} 
-                        size="sm" 
+                      <Button
+                        variant={voice === "male" ? "default" : "outline"}
+                        size="sm"
                         onClick={() => setVoice("male")}
                         className="rounded-full gap-2"
                       >
                         <User className="w-4 h-4" /> Male
                       </Button>
                     </div>
-                    <Button 
-                      onClick={togglePlayback} 
-                      size="icon" 
+                    <Button
+                      onClick={togglePlayback}
+                      size="icon"
                       className="w-12 h-12 rounded-full bg-primary shadow-lg shadow-primary/20"
                     >
                       {isReading ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
@@ -240,8 +462,8 @@ export default function Reading() {
                     <Button variant="secondary" className="flex-1 gap-2 rounded-xl h-11" onClick={() => toast({ title: "Downloading...", description: "Book saved to your library" })}>
                       <Download className="w-4 h-4" /> Download
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="flex-1 gap-2 rounded-xl h-11 border-primary/20 hover:bg-primary/5"
                       onClick={handleSummarize}
                       disabled={isSummarizing}
@@ -252,7 +474,7 @@ export default function Reading() {
                   </div>
 
                   {summary && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       className="pt-4 border-t border-border/50"

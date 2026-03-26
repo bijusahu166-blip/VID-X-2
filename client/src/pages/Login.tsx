@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Loader2, Play, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
 
 type Tab = "login" | "signup";
 
@@ -83,13 +84,14 @@ export default function Login() {
         className="flex flex-col items-center mb-10"
       >
         <div className="relative w-20 h-20 mb-4">
-          <div className="absolute inset-0 rounded-2xl rotate-6"
+          <div className="absolute inset-0 rounded-[22px] rotate-6 opacity-60"
             style={{ background: "linear-gradient(135deg, #ef4444, #f97316)" }} />
-          <div className="relative w-full h-full rounded-2xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #dc2626, #ea580c)" }}>
-            <Play className="w-9 h-9 text-white fill-white ml-1" />
-          </div>
-          <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-yellow-400" />
+          <img
+            src={logoSrc}
+            alt="VID-X"
+            className="relative w-full h-full rounded-[18px] object-cover shadow-2xl"
+            style={{ boxShadow: "0 0 30px rgba(239,68,68,0.35)" }}
+          />
         </div>
         <h1 className="text-3xl font-black text-white tracking-tight">VID-X</h1>
         <p className="text-zinc-500 text-sm mt-1">The next generation social platform</p>

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { CreatePostDialog } from "@/components/feed/CreatePostDialog";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
+import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
 
 export function Header() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -26,7 +27,10 @@ export function Header() {
           </Button>
 
           {/* Center: Logo */}
-          <h1 className="font-display bg-clip-text bg-gradient-to-r from-primary to-accent text-[26px] leading-none font-semibold text-[transparent]">VID-X</h1>
+          <div className="flex items-center gap-2">
+            <img src={logoSrc} alt="VID-X" className="w-8 h-8 rounded-lg object-cover" />
+            <h1 className="font-display bg-clip-text bg-gradient-to-r from-primary to-accent text-[22px] leading-none font-black text-[transparent]">VID-X</h1>
+          </div>
 
           {/* Right: Video Call + Notifications */}
           <div className="flex items-center gap-2 shrink-0">
