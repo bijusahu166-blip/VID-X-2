@@ -277,12 +277,23 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     setCameraMode(false);
   }, [selectedArEffect, isFrontCamera, stopCamera]);
 
+  // Start/stop camera when cameraMode changes
   useEffect(() => {
     if (cameraMode) {
       startCamera(isFrontCamera);
+    } else {
+      stopCamera();
     }
     return () => { stopCamera(); };
   }, [cameraMode]);
+
+  // Stop camera when leaving the edit step
+  useEffect(() => {
+    if (step !== "edit" && step !== "details") {
+      stopCamera();
+      setCameraMode(false);
+    }
+  }, [step]);
 
   const toggleCameraFace = () => {
     const next = !isFrontCamera;
@@ -298,10 +309,19 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
   const handleTypeSelect = (type: UploadType) => {
     setUploadType(type);
-    if (type === "video") setStep("video-details");
-    else if (type === "live") setStep("details");
-    else if (type === "editing" || type === "reel" || type === "story") setStep("edit");
-    else setStep("details");
+    if (type === "video") {
+      setStep("video-details");
+    } else if (type === "live") {
+      setStep("details");
+    } else if (type === "reel" || type === "story") {
+      // Go directly to camera mode for Reel and Story
+      setCameraMode(true);
+      setStep("edit");
+    } else if (type === "editing") {
+      setStep("edit");
+    } else {
+      setStep("details");
+    }
   };
 
   const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
