@@ -242,6 +242,21 @@ export async function registerRoutes(
     res.status(201).json(entry);
   });
 
+  // ── Update own profile ────────────────────────────────────────────────────
+  app.patch("/api/profile", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const { firstName, lastName, profileImageUrl } = req.body;
+    const existing = await authStorage.getUser(userId);
+    if (!existing) return res.status(404).json({ message: "User not found" });
+    const updated = await authStorage.upsertUser({
+      ...existing,
+      firstName: firstName ?? existing.firstName,
+      lastName: lastName ?? existing.lastName,
+      profileImageUrl: profileImageUrl ?? existing.profileImageUrl,
+    });
+    res.json(updated);
+  });
+
   // ── Users list (for new chat) ─────────────────────────────────────────────
   app.get("/api/users", isAuthenticated, async (req, res) => {
     const allUsers = await db.select().from(users);
@@ -263,7 +278,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/status/:userId", isAuthenticated, async (req, res) => {
-    const status = await storage.getOnlineStatus(req.params.userId);
+    const status = await storage.getOnlineStatus(req.params.userId as string);
     res.json(status);
   });
 

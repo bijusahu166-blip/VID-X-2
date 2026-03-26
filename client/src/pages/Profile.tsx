@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePosts } from "@/hooks/use-posts";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogTrigger, DialogDescription,
@@ -21,10 +21,15 @@ import { ScrollArea as ScrollAreaUI } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Camera, Pencil } from "lucide-react";
 
 const PETS = [
   { name: "Buddy", emoji: "🐶" }, { name: "Charlie", emoji: "🐱" },
@@ -68,6 +73,8 @@ function SettingRow({ icon: Icon, label, sub, onClick }: { icon: any; label: str
 export default function Profile() {
   const { user, logout } = useAuth();
   const { data: posts } = usePosts();
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const [selectedPet, setSelectedPet] = useState<{ name: string; emoji: string } | null>(null);
   const { data: history } = useQuery<any[]>({ queryKey: ["/api/history"] });
   const myPosts = posts || [];
@@ -76,6 +83,54 @@ export default function Profile() {
   const [allowMessages, setAllowMessages] = useState(true);
   const [allowComments, setAllowComments] = useState(true);
   const [allowTags, setAllowTags] = useState(true);
+
+  // ── Edit Profile ──────────────────────────────────────────────────────────
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editBio, setEditBio] = useState("📸 Digital Creator · Content Warrior\nCapturing worlds, one frame at a time.");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openEditProfile = () => {
+    setEditFirstName(user?.firstName || "");
+    setEditLastName(user?.lastName || "");
+    setEditAvatarUrl(user?.profileImageUrl || "");
+    setShowEditProfile(true);
+  };
+
+  const updateProfileMutation = useMutation({
+    mutationFn: (data: { firstName: string; lastName: string; profileImageUrl?: string }) =>
+      apiRequest("PATCH", "/api/profile", data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      setShowEditProfile(false);
+      toast({ title: "Profile updated!", description: "Your changes have been saved." });
+    },
+    onError: () => {
+      toast({ title: "Update failed", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const handleSaveProfile = () => {
+    if (!editFirstName.trim()) {
+      toast({ title: "Name required", variant: "destructive" });
+      return;
+    }
+    updateProfileMutation.mutate({
+      firstName: editFirstName.trim(),
+      lastName: editLastName.trim(),
+      profileImageUrl: editAvatarUrl || undefined,
+    });
+  };
+
+  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setEditAvatarUrl(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
 
   const xp = 7340;
   const xpMax = 10000;
@@ -522,12 +577,14 @@ export default function Profile() {
 
       {/* ══ ACTION BUTTONS ══ */}
       <div className="px-4 mt-3 flex gap-2">
-        <button className="flex-1 h-10 rounded-xl font-black text-[11px] uppercase tracking-widest relative overflow-hidden group"
+        <button onClick={openEditProfile}
+          className="flex-1 h-10 rounded-xl font-black text-[11px] uppercase tracking-widest relative overflow-hidden group"
           style={{
             background: "linear-gradient(135deg, rgba(124,58,237,0.3), rgba(37,99,235,0.3))",
             border: "1px solid rgba(124,58,237,0.5)",
             boxShadow: "0 0 15px rgba(124,58,237,0.2)",
-          }}>
+          }}
+          data-testid="button-edit-profile">
           <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
             style={{ background: "linear-gradient(135deg, rgba(124,58,237,0.5), rgba(37,99,235,0.5))" }} />
           <span className="relative z-10 text-purple-300">⚙ Edit Profile</span>
@@ -657,6 +714,131 @@ export default function Profile() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* ══ EDIT PROFILE DIALOG ══ */}
+      {showEditProfile && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-zinc-900 border border-white/10 rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+              <button onClick={() => setShowEditProfile(false)} className="text-sm text-zinc-400 hover:text-white transition-colors">
+                Cancel
+              </button>
+              <h2 className="font-bold text-base">Edit Profile</h2>
+              <button
+                onClick={handleSaveProfile}
+                disabled={updateProfileMutation.isPending}
+                className="text-sm font-bold text-violet-400 hover:text-violet-300 transition-colors disabled:opacity-50"
+                data-testid="button-save-profile">
+                {updateProfileMutation.isPending ? "Saving…" : "Save"}
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5 overflow-y-auto max-h-[80vh]">
+              {/* Avatar picker */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-violet-500/50"
+                    style={{ boxShadow: "0 0 20px rgba(124,58,237,0.4)" }}>
+                    {editAvatarUrl ? (
+                      <img src={editAvatarUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-violet-900 to-pink-900 flex items-center justify-center text-2xl font-black text-white">
+                        {editFirstName?.[0] || user?.firstName?.[0] || "?"}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center border-2 border-zinc-900 hover:bg-violet-500 transition-colors"
+                    data-testid="button-change-avatar">
+                    <Camera className="w-4 h-4 text-white" />
+                  </button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarFile}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-sm font-semibold text-violet-400 hover:text-violet-300 transition-colors">
+                  Change photo
+                </button>
+              </div>
+
+              {/* Name fields */}
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">First Name</Label>
+                  <div className="relative">
+                    <Input
+                      value={editFirstName}
+                      onChange={e => setEditFirstName(e.target.value)}
+                      placeholder="First name"
+                      className="bg-white/5 border-white/10 focus:border-violet-500/50 rounded-xl h-11 pl-4 pr-10"
+                      data-testid="input-first-name"
+                    />
+                    <Pencil className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Last Name</Label>
+                  <div className="relative">
+                    <Input
+                      value={editLastName}
+                      onChange={e => setEditLastName(e.target.value)}
+                      placeholder="Last name"
+                      className="bg-white/5 border-white/10 focus:border-violet-500/50 rounded-xl h-11 pl-4 pr-10"
+                      data-testid="input-last-name"
+                    />
+                    <Pencil className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Bio</Label>
+                  <Textarea
+                    value={editBio}
+                    onChange={e => setEditBio(e.target.value)}
+                    placeholder="Tell your story..."
+                    rows={3}
+                    className="bg-white/5 border-white/10 focus:border-violet-500/50 rounded-xl resize-none text-sm"
+                    data-testid="input-bio"
+                  />
+                  <p className="text-[10px] text-zinc-600 text-right">{editBio.length}/150</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Photo URL (optional)</Label>
+                  <Input
+                    value={editAvatarUrl}
+                    onChange={e => setEditAvatarUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="bg-white/5 border-white/10 focus:border-violet-500/50 rounded-xl h-11"
+                    data-testid="input-avatar-url"
+                  />
+                </div>
+              </div>
+
+              {/* Save button at bottom */}
+              <button
+                onClick={handleSaveProfile}
+                disabled={updateProfileMutation.isPending}
+                className="w-full h-12 rounded-xl font-bold text-sm text-white relative overflow-hidden disabled:opacity-50"
+                style={{
+                  background: "linear-gradient(135deg, #7c3aed, #db2777)",
+                  boxShadow: "0 0 20px rgba(124,58,237,0.4)",
+                }}>
+                {updateProfileMutation.isPending ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Keyframe styles */}
       <style>{`

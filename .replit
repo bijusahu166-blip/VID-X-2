@@ -9,6 +9,10 @@ modules = ["nodejs-20", "web", "postgresql-16"]
 localPort = 5000
 
 [[ports]]
+localPort = 5001
+externalPort = 80
+
+[[ports]]
 localPort = 5904
 externalPort = 3000
 
@@ -21,28 +25,27 @@ externalPort = 3000
   build = ["npm", "run", "build"]
 
   [workflows]
-  runButton = "Project"
+runButton = "Project"
 
-  [[workflows.workflow]]
-  name = "Project"
-  mode = "parallel"
-  author = "agent"
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
 
-  [[workflows.workflow.tasks]]
-  task = "workflow.run"
-  args = "Start application"
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
 
-  [[workflows.workflow]]
-  name = "Start application"
-  author = "agent"
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
 
-  [workflows.workflow.metadata]
-  outputType = "webview"
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
 
-  [[workflows.workflow.tasks]]
-  task = "shell.exec"
-  args = "npm run dev"
-  waitForPort = 5000
+[workflows.workflow.metadata]
+outputType = "webview"
 
   [agent]
   integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
