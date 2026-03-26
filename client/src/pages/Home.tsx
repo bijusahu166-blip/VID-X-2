@@ -196,20 +196,19 @@ export default function Home() {
           ))}
         </div>
 
-        {/* ── REELS SHELF ── */}
+        {/* ── STORIES SHELF ── */}
         <div className="mt-1 pb-2 border-b border-white/5">
           <div className="flex items-center justify-between px-3 pt-3 pb-2">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 rounded-full bg-gradient-to-b from-pink-500 to-purple-500" />
-              <span className="text-[13px] font-black text-white tracking-wide">Reels</span>
+              <span className="text-[13px] font-black text-white tracking-wide">Stories</span>
               <Zap className="w-3.5 h-3.5 text-yellow-400" />
             </div>
-            <button className="flex items-center gap-0.5 text-[11px] text-zinc-500 hover:text-white transition-colors">
-              View all <ChevronRight className="w-3 h-3" />
-            </button>
+            <span className="text-[10px] text-zinc-600">Visible to everyone</span>
           </div>
 
           <div className="flex gap-2.5 overflow-x-auto scrollbar-hide px-3">
+            {/* Add your story card */}
             <div className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
               <div className="w-[88px] h-[148px] rounded-xl relative overflow-hidden"
                 style={{
@@ -217,12 +216,12 @@ export default function Home() {
                   border: "1px solid rgba(236,72,153,0.3)",
                   boxShadow: "0 0 18px rgba(236,72,153,0.2)",
                 }}>
+                {user?.profileImageUrl && (
+                  <img src={user.profileImageUrl} className="absolute inset-0 w-full h-full object-cover opacity-30" />
+                )}
                 <div className="absolute top-4 left-1/2 -translate-x-1/2">
                   <div className="w-14 h-14 rounded-full p-[2.5px] group-hover:scale-105 transition-transform"
-                    style={{
-                      background: "conic-gradient(from 0deg, #ec4899, #a855f7, #f97316, #ec4899)",
-                      animation: "spin 3s linear infinite",
-                    }}>
+                    style={{ background: "conic-gradient(from 0deg, #ec4899, #a855f7, #f97316, #ec4899)" }}>
                     <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
                       <Plus className="w-5 h-5 text-pink-400" />
                     </div>
@@ -238,32 +237,77 @@ export default function Home() {
               <span className="text-[10px] text-pink-400/80 font-semibold">Your story</span>
             </div>
 
-            {REELS.map((reel) => (
-              <div key={reel.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
-                <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
-                  <img
-                    src={reel.thumb}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                  {reel.live && (
-                    <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wide flex items-center gap-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                      LIVE
-                    </div>
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center">
-                      <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+            {/* Real stories from ALL users */}
+            {posts?.filter(p => p.type === "story").map((story) => {
+              const authorName = story.user ? `${story.user.firstName}` : "User";
+              const authorAvatar = story.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.user?.firstName}`;
+              const isLive = story.type === "live";
+              return (
+                <div key={story.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
+                  <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
+                    {/* Gradient ring around avatar for stories */}
+                    <div className="absolute inset-0"
+                      style={{ background: `linear-gradient(135deg, hsl(${(story.id * 53) % 360}, 60%, 14%), hsl(${(story.id * 53 + 140) % 360}, 50%, 18%))` }} />
+
+                    {story.imageUrl && !story.imageUrl.startsWith("blob:") ? (
+                      <img
+                        src={story.imageUrl}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center p-2">
+                        <p className="text-[9px] text-white/60 text-center leading-tight line-clamp-4">
+                          {story.caption || "Story"}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
+
+                    {isLive && (
+                      <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wide flex items-center gap-0.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        LIVE
+                      </div>
+                    )}
+
+                    {/* Gradient ring avatar at bottom */}
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full p-[2px]"
+                      style={{ background: "linear-gradient(135deg, #ec4899, #a855f7, #f97316)" }}>
+                      <div className="w-full h-full rounded-full overflow-hidden border border-black">
+                        <img src={authorAvatar} className="w-full h-full object-cover" />
+                      </div>
                     </div>
                   </div>
-                  <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full border-2 border-black overflow-hidden">
-                    <img src={reel.avatar} className="w-full h-full object-cover" />
-                  </div>
+                  <span className="text-[9px] text-zinc-400 font-medium max-w-[80px] truncate text-center">{authorName}</span>
                 </div>
-                <span className="text-[9px] text-zinc-500 font-medium mt-2 max-w-[80px] truncate text-center">{reel.user}</span>
-              </div>
-            ))}
+              );
+            })}
+
+            {/* Fallback: no stories yet — show placeholder cards */}
+            {posts?.filter(p => p.type === "story").length === 0 && (
+              REELS.map((reel) => (
+                <div key={reel.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
+                  <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
+                    <img
+                      src={reel.thumb}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    {reel.live && (
+                      <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wide flex items-center gap-0.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        LIVE
+                      </div>
+                    )}
+                    <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full border-2 border-black overflow-hidden">
+                      <img src={reel.avatar} className="w-full h-full object-cover" />
+                    </div>
+                  </div>
+                  <span className="text-[9px] text-zinc-500 font-medium mt-2 max-w-[80px] truncate text-center">{reel.user}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
