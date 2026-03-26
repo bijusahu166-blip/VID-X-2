@@ -5,13 +5,13 @@ modules = ["nodejs-20", "web", "postgresql-16"]
   [nix]
   channel = "stable-24_05"
 
-  [[ports]]
-  localPort = 5000
-  externalPort = 80
+[[ports]]
+localPort = 5000
+externalPort = 80
 
-  [[ports]]
-  localPort = 5904
-  externalPort = 3000
+[[ports]]
+localPort = 5904
+externalPort = 3000
 
   [env]
   PORT = "5000"
@@ -47,4 +47,3 @@ modules = ["nodejs-20", "web", "postgresql-16"]
 
   [agent]
   integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
-  
