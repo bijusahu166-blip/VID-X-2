@@ -12,7 +12,8 @@ export const posts = pgTable("posts", {
   userId: text("user_id").notNull(), // References auth.users.id
   imageUrl: text("image_url").notNull(),
   caption: text("caption"),
-  type: text("type").default("post"), // 'post' or 'reel'
+  type: text("type").default("post"), // 'post', 'reel', 'video', 'live', 'story'
+  videoUrl: text("video_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

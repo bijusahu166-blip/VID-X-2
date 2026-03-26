@@ -14,6 +14,7 @@ import Reading from "@/pages/Reading";
 import Reels from "@/pages/Reels";
 import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
+import Notifications from "@/pages/Notifications";
 
 function Router() {
   const { user, isLoading } = useAuth();
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/reading" component={Reading} />
       <Route path="/reels" component={Reels} />
       <Route path="/messages" component={Messages} />
+      <Route path="/notifications" component={Notifications} />
       <Route path="/profile" component={Profile} />
       <Route path="/profile/:id" component={Profile} />
       <Route component={NotFound} />

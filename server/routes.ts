@@ -10,7 +10,29 @@ import { z } from "zod";
 import { users } from "@shared/models/auth";
 import { posts, comments, ads } from "@shared/schema";
 import { db } from "./db";
+import { sql } from "drizzle-orm";
 import OpenAI from "openai";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+const uploadsDir = path.join(process.cwd(), "uploads", "videos");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const videoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || ".mp4";
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  }),
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("video/")) cb(null, true);
+    else cb(new Error("Only video files allowed"));
+  },
+});
 
 async function seed() {
   const existingUsers = await db.select().from(users).limit(1);
@@ -559,6 +581,149 @@ export async function registerRoutes(
     if (!name) return res.status(400).json({ message: "name required" });
     const group = await storage.createGroupChat({ name, createdBy: userId }, [userId, ...(memberIds || [])]);
     res.status(201).json(group);
+  });
+
+  // ── Video Upload (real file to disk) ─────────────────────────────────────
+  app.use("/uploads", (req, res, next) => {
+    const filePath = path.join(process.cwd(), "uploads", req.path);
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      next();
+    }
+  });
+
+  app.post("/api/upload/video", isAuthenticated, videoUpload.single("video"), (req: any, res) => {
+    if (!req.file) return res.status(400).json({ message: "No video file uploaded" });
+    const fileUrl = `/uploads/videos/${req.file.filename}`;
+    res.json({ url: fileUrl, filename: req.file.filename, size: req.file.size });
+  });
+
+  // ── Follow / Unfollow ─────────────────────────────────────────────────────
+  app.post("/api/users/:id/follow", isAuthenticated, async (req: any, res) => {
+    const followerId = req.session.userId;
+    const followingId = req.params.id;
+    if (followerId === followingId) return res.status(400).json({ message: "Cannot follow yourself" });
+    try {
+      await db.execute(sql`
+        INSERT INTO follows (follower_id, following_id) VALUES (${followerId}, ${followingId})
+        ON CONFLICT DO NOTHING
+      `);
+      // Create notification for the followed user
+      const follower = await authStorage.getUser(followerId);
+      await db.execute(sql`
+        INSERT INTO notifications (user_id, from_user_id, type, message)
+        VALUES (${followingId}, ${followerId}, 'follow', ${`${follower?.firstName ?? "Someone"} started following you`})
+      `);
+      res.json({ following: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to follow" });
+    }
+  });
+
+  app.delete("/api/users/:id/follow", isAuthenticated, async (req: any, res) => {
+    const followerId = req.session.userId;
+    const followingId = req.params.id;
+    await db.execute(sql`DELETE FROM follows WHERE follower_id = ${followerId} AND following_id = ${followingId}`);
+    res.json({ following: false });
+  });
+
+  app.get("/api/users/:id/follow-status", isAuthenticated, async (req: any, res) => {
+    const followerId = req.session.userId;
+    const followingId = req.params.id;
+    const rows = await db.execute(sql`
+      SELECT id FROM follows WHERE follower_id = ${followerId} AND following_id = ${followingId} LIMIT 1
+    `);
+    const isFollowing = ((rows as any).rows ?? rows as any).length > 0;
+    res.json({ following: isFollowing });
+  });
+
+  app.get("/api/users/:id/followers", isAuthenticated, async (req: any, res) => {
+    const rows = await db.execute(sql`
+      SELECT follower_id FROM follows WHERE following_id = ${req.params.id}
+    `);
+    const followerIds = ((rows as any).rows ?? rows as any).map((r: any) => r.follower_id);
+    const followerUsers = await Promise.all(followerIds.map((id: string) => authStorage.getUser(id)));
+    res.json(followerUsers.filter(Boolean));
+  });
+
+  app.get("/api/users/:id/following", isAuthenticated, async (req: any, res) => {
+    const rows = await db.execute(sql`
+      SELECT following_id FROM follows WHERE follower_id = ${req.params.id}
+    `);
+    const ids = ((rows as any).rows ?? rows as any).map((r: any) => r.following_id);
+    const followingUsers = await Promise.all(ids.map((id: string) => authStorage.getUser(id)));
+    res.json(followingUsers.filter(Boolean));
+  });
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  app.get("/api/notifications", isAuthenticated, async (req: any, res) => {
+    const userId = req.session.userId;
+    const rows = await db.execute(sql`
+      SELECT n.*, u.first_name, u.last_name, u.username, u.profile_image_url
+      FROM notifications n
+      LEFT JOIN users u ON u.id = n.from_user_id
+      WHERE n.user_id = ${userId}
+      ORDER BY n.created_at DESC LIMIT 50
+    `);
+    res.json((rows as any).rows ?? rows);
+  });
+
+  app.post("/api/notifications/read-all", isAuthenticated, async (req: any, res) => {
+    const userId = req.session.userId;
+    await db.execute(sql`UPDATE notifications SET read = true WHERE user_id = ${userId}`);
+    res.json({ success: true });
+  });
+
+  app.get("/api/notifications/unread-count", isAuthenticated, async (req: any, res) => {
+    const userId = req.session.userId;
+    const rows = await db.execute(sql`SELECT COUNT(*) as count FROM notifications WHERE user_id = ${userId} AND read = false`);
+    const count = parseInt(((rows as any).rows?.[0] ?? (rows as any)[0])?.count ?? "0");
+    res.json({ count });
+  });
+
+  // ── Live Stream ────────────────────────────────────────────────────────────
+  app.post("/api/live/start", isAuthenticated, async (req: any, res) => {
+    const userId = req.session.userId;
+    const { title, thumbnail } = req.body;
+
+    // Create a real "live" post in DB
+    const post = await storage.createPost({
+      userId,
+      imageUrl: thumbnail || `https://api.dicebear.com/7.x/shapes/svg?seed=${userId}&size=400`,
+      caption: title || "Live Stream",
+      type: "live",
+    });
+
+    // Notify all followers that this user is live
+    const user = await authStorage.getUser(userId);
+    const followerRows = await db.execute(sql`SELECT follower_id FROM follows WHERE following_id = ${userId}`);
+    const followers = ((followerRows as any).rows ?? followerRows as any) as any[];
+    for (const f of followers) {
+      await db.execute(sql`
+        INSERT INTO notifications (user_id, from_user_id, type, message, post_id)
+        VALUES (${f.follower_id}, ${userId}, 'live', ${`${user?.firstName ?? "Someone"} is now LIVE! Tap to watch`}, ${post.id})
+      `);
+    }
+
+    res.json({ post, viewerCount: 0 });
+  });
+
+  app.post("/api/live/end/:postId", isAuthenticated, async (req: any, res) => {
+    const postId = Number(req.params.postId);
+    await db.execute(sql`UPDATE posts SET type = 'video', live_ended_at = NOW() WHERE id = ${postId}`);
+    res.json({ success: true });
+  });
+
+  app.get("/api/live/active", isAuthenticated, async (_req, res) => {
+    const rows = await db.execute(sql`
+      SELECT p.*, u.first_name, u.last_name, u.username, u.profile_image_url
+      FROM posts p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.type = 'live'
+      ORDER BY p.created_at DESC
+    `);
+    res.json((rows as any).rows ?? rows);
   });
 
   return httpServer;

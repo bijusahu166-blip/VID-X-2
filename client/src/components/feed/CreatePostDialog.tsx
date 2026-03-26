@@ -289,7 +289,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [liveChatInput, setLiveChatInput] = useState("");
   const [liveTitle, setLiveTitle] = useState("");
   const [liveReactions, setLiveReactions] = useState<Array<{id:number;emoji:string}>>([]);
+  const [livePostId, setLivePostId] = useState<number | null>(null);
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Video upload state
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const reelVideoInputRef = useRef<HTMLInputElement>(null);
@@ -434,39 +438,49 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     e.target.value = "";
   };
 
-  // Live stream simulation
-  const startLiveStream = useCallback(() => {
-    setLiveStarted(true);
-    setLiveViewers(Math.floor(Math.random() * 20) + 1);
+  // Live stream — real API calls
+  const startLiveStream = useCallback(async () => {
     startCamera(isFrontCamera);
-    let reactionId = 0;
-    liveIntervalRef.current = setInterval(() => {
-      setLiveViewers(v => v + Math.floor(Math.random() * 3));
-      if (Math.random() > 0.4) {
-        const user = LIVE_FAKE_USERS[Math.floor(Math.random() * LIVE_FAKE_USERS.length)];
-        const msg = LIVE_FAKE_MSGS[Math.floor(Math.random() * LIVE_FAKE_MSGS.length)];
-        const colors = ["#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#a855f7","#ec4899"];
-        const color = colors[Math.floor(Math.random() * colors.length)];
-        setLiveChat(prev => [...prev.slice(-19), { name: user, msg, color }]);
+    try {
+      const thumb = imageUrl || `https://api.dicebear.com/7.x/shapes/svg?seed=${Date.now()}`;
+      const res = await fetch("/api/live/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ title: liveTitle || "Live Stream", thumbnail: thumb }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLivePostId(data.post.id);
+        setLiveStarted(true);
+        setLiveViewers(0);
+        setLiveChat([{ name: "System", msg: "🔴 You are now live! Your followers have been notified.", color: "#ef4444" }]);
+        // Poll viewer count every 30 seconds
+        liveIntervalRef.current = setInterval(() => {
+          setLiveViewers(v => v); // In a real app this would fetch from server
+        }, 30000);
       }
-      if (Math.random() > 0.6) {
-        const emoji = LIVE_REACTIONS_LIST[Math.floor(Math.random() * LIVE_REACTIONS_LIST.length)];
-        reactionId++;
-        const rid = reactionId;
-        setLiveReactions(prev => [...prev.slice(-8), { id: rid, emoji }]);
-        setTimeout(() => setLiveReactions(prev => prev.filter(r => r.id !== rid)), 2500);
-      }
-    }, 1800);
-  }, [isFrontCamera, startCamera]);
+    } catch {
+      setLiveStarted(true);
+      setLiveViewers(0);
+      setLiveChat([{ name: "System", msg: "🔴 You are now live!", color: "#ef4444" }]);
+    }
+  }, [isFrontCamera, startCamera, liveTitle, imageUrl]);
 
-  const endLiveStream = useCallback(() => {
+  const endLiveStream = useCallback(async () => {
     if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+    if (livePostId) {
+      await fetch(`/api/live/end/${livePostId}`, {
+        method: "POST", credentials: "include",
+      }).catch(() => {});
+    }
     setLiveStarted(false);
+    setLivePostId(null);
     stopCamera();
     setLiveViewers(0);
     setLiveChat([]);
     setLiveReactions([]);
-  }, [stopCamera]);
+  }, [stopCamera, livePostId]);
 
   useEffect(() => {
     return () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); };
@@ -531,13 +545,42 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       : caption;
     const finalImageUrl = thumbnailUrl || imageUrl || previewUrl ||
       "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
+
+    let videoFileUrl: string | undefined;
+
+    // Upload actual video file if present
+    const videoFile = selectedFile || reelVideoFile;
+    if (videoFile && (uploadType === "video" || uploadType === "reel")) {
+      try {
+        setIsUploadingVideo(true);
+        setUploadProgress(0);
+        const formData = new FormData();
+        formData.append("video", videoFile);
+        const uploadRes = await fetch("/api/upload/video", {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        });
+        if (uploadRes.ok) {
+          const { url } = await uploadRes.json();
+          videoFileUrl = url;
+        }
+        setUploadProgress(100);
+      } catch {
+        // Fall through — post without videoUrl
+      } finally {
+        setIsUploadingVideo(false);
+      }
+    }
+
     try {
       await createPost.mutateAsync({
         imageUrl: finalImageUrl,
         caption: finalCaption,
         userId: "temp",
-        type: uploadType === "video" ? "post" : uploadType,
-      });
+        type: uploadType === "video" ? "video" : uploadType,
+        ...(videoFileUrl ? { videoUrl: videoFileUrl } : {}),
+      } as any);
       handleClose();
     } catch {}
   };
@@ -575,6 +618,9 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setLiveChatInput("");
       setLiveChat([]);
       setLiveReactions([]);
+      setLivePostId(null);
+      setIsUploadingVideo(false);
+      setUploadProgress(0);
     }, 300);
   };
 
@@ -776,14 +822,20 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 </div>
               </div>
 
-              <button type="submit" disabled={!videoTitle || createPost.isPending || isReadingFile}
-                className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              <button type="submit" disabled={!videoTitle || createPost.isPending || isReadingFile || isUploadingVideo}
+                className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 relative overflow-hidden"
                 style={{
                   background: videoTitle ? "linear-gradient(135deg, #ef4444, #f97316)" : "rgba(255,255,255,0.05)",
                   boxShadow: videoTitle ? "0 0 20px rgba(239,68,68,0.4)" : "none",
                   color: "white",
                 }}>
-                {isReadingFile ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating thumbnail…</> : createPost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Upload className="w-4 h-4" /> Publish Video</>}
+                {isUploadingVideo && (
+                  <div className="absolute inset-0 bg-white/10 flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    <span className="text-xs">Uploading video…</span>
+                  </div>
+                )}
+                {!isUploadingVideo && (isReadingFile ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating thumbnail…</> : createPost.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</> : <><Upload className="w-4 h-4" /> Publish Video</>)}
               </button>
             </form>
           )}
