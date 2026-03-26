@@ -9,7 +9,10 @@ import {
   ImagePlus, Loader2, Video, Radio,
   Music, Scissors, Type, Smile, Sparkles,
   Upload, Film, Globe, Lock, Users, ChevronRight,
-  Tag, AlignLeft, Captions, ListVideo, X, CheckCircle2, RotateCcw
+  Tag, AlignLeft, Captions, ListVideo, X, CheckCircle2, RotateCcw,
+  Mic, MicOff, VideoOff, PhoneOff, MessageCircle, Heart, Share2,
+  Eye, Zap, Star, Gift, Settings2, MonitorPlay, PlayCircle,
+  PauseCircle, SkipForward, ChevronUp, ChevronDown, Bold, Palette
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AR_EFFECTS, EFFECT_CATEGORIES } from "@/lib/arEffects";
@@ -89,13 +92,28 @@ const UPLOAD_OPTIONS = [
   },
 ];
 
-const EDITING_TOOLS = [
-  { icon: Music, label: "Music" },
-  { icon: Scissors, label: "Trim" },
-  { icon: Type, label: "Text" },
-  { icon: Smile, label: "Stickers" },
-  { icon: Sparkles, label: "Effects" },
+const STORY_SONGS = [
+  { title: "Neon Lights", artist: "The Midnight", duration: "3:42", emoji: "🌙" },
+  { title: "Blinding Lights", artist: "The Weeknd", duration: "3:20", emoji: "✨" },
+  { title: "Levitating", artist: "Dua Lipa", duration: "3:23", emoji: "🪐" },
+  { title: "Save Your Tears", artist: "The Weeknd", duration: "3:35", emoji: "💧" },
+  { title: "Midnight Rain", artist: "Taylor Swift", duration: "3:02", emoji: "🌧️" },
+  { title: "As It Was", artist: "Harry Styles", duration: "2:37", emoji: "🎸" },
+  { title: "Stay", artist: "The Kid LAROI", duration: "2:21", emoji: "🔥" },
+  { title: "Good 4 U", artist: "Olivia Rodrigo", duration: "2:58", emoji: "💚" },
+  { title: "Peaches", artist: "Justin Bieber", duration: "3:18", emoji: "🍑" },
+  { title: "Industry Baby", artist: "Lil Nas X", duration: "3:32", emoji: "🎺" },
+  { title: "MONTERO", artist: "Lil Nas X", duration: "2:17", emoji: "🍎" },
+  { title: "Butter", artist: "BTS", duration: "2:44", emoji: "🧈" },
 ];
+
+const LIVE_FAKE_USERS = ["alex_x", "sarah.j", "vibes2k", "darky_b", "neon.leo", "kira_m", "zara99", "max.dev"];
+const LIVE_FAKE_MSGS = [
+  "let's gooo 🔥", "hello from NYC!", "ur amazing!!", "first here 🙌", "this is fire 🎆",
+  "love this stream!", "yooo what's up", "more content plz", "W streamer 🏆", "👀👀👀",
+  "this is crazy good", "sending love ❤️", "omg yes!!!", "tune in everyone", "iconic as always",
+];
+const LIVE_REACTIONS_LIST = ["❤️", "🔥", "😂", "🙌", "💯", "⚡", "🥳", "👏"];
 
 function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -252,8 +270,29 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [cameraReady, setCameraReady] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
+  // Reel/Story video upload
+  const [reelMediaMode, setReelMediaMode] = useState<"camera" | "photo" | "video">("camera");
+  const [reelVideoFile, setReelVideoFile] = useState<File | null>(null);
+  const [reelVideoUrl, setReelVideoUrl] = useState<string>("");
+  // Story extras
+  const [storyMusic, setStoryMusic] = useState<string>("");
+  const [storyText, setStoryText] = useState<string>("");
+  const [storyTextColor, setStoryTextColor] = useState<string>("#ffffff");
+  const [showStoryText, setShowStoryText] = useState(false);
+  const [showStoryMusic, setShowStoryMusic] = useState(false);
+  // Live stream
+  const [liveStarted, setLiveStarted] = useState(false);
+  const [liveViewers, setLiveViewers] = useState(0);
+  const [liveMuted, setLiveMuted] = useState(false);
+  const [liveCameraOff, setLiveCameraOff] = useState(false);
+  const [liveChat, setLiveChat] = useState<Array<{name:string;msg:string;color:string}>>([]);
+  const [liveChatInput, setLiveChatInput] = useState("");
+  const [liveTitle, setLiveTitle] = useState("");
+  const [liveReactions, setLiveReactions] = useState<Array<{id:number;emoji:string}>>([]);
+  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const reelVideoInputRef = useRef<HTMLInputElement>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -379,6 +418,60 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     setCameraMode(true);
   };
 
+  const handleReelVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReelVideoFile(file);
+    const url = URL.createObjectURL(file);
+    setReelVideoUrl(url);
+    setIsReadingFile(true);
+    try {
+      const thumb = await generateVideoThumbnail(file);
+      setImageUrl(thumb);
+    } finally {
+      setIsReadingFile(false);
+    }
+    e.target.value = "";
+  };
+
+  // Live stream simulation
+  const startLiveStream = useCallback(() => {
+    setLiveStarted(true);
+    setLiveViewers(Math.floor(Math.random() * 20) + 1);
+    startCamera(isFrontCamera);
+    let reactionId = 0;
+    liveIntervalRef.current = setInterval(() => {
+      setLiveViewers(v => v + Math.floor(Math.random() * 3));
+      if (Math.random() > 0.4) {
+        const user = LIVE_FAKE_USERS[Math.floor(Math.random() * LIVE_FAKE_USERS.length)];
+        const msg = LIVE_FAKE_MSGS[Math.floor(Math.random() * LIVE_FAKE_MSGS.length)];
+        const colors = ["#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#a855f7","#ec4899"];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        setLiveChat(prev => [...prev.slice(-19), { name: user, msg, color }]);
+      }
+      if (Math.random() > 0.6) {
+        const emoji = LIVE_REACTIONS_LIST[Math.floor(Math.random() * LIVE_REACTIONS_LIST.length)];
+        reactionId++;
+        const rid = reactionId;
+        setLiveReactions(prev => [...prev.slice(-8), { id: rid, emoji }]);
+        setTimeout(() => setLiveReactions(prev => prev.filter(r => r.id !== rid)), 2500);
+      }
+    }, 1800);
+  }, [isFrontCamera, startCamera]);
+
+  const endLiveStream = useCallback(() => {
+    if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+    setLiveStarted(false);
+    stopCamera();
+    setLiveViewers(0);
+    setLiveChat([]);
+    setLiveReactions([]);
+  }, [stopCamera]);
+
+  useEffect(() => {
+    return () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); };
+  }, []);
+
   const handleTypeSelect = (type: UploadType) => {
     setUploadType(type);
     if (type === "video") {
@@ -450,6 +543,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   };
 
   const handleClose = () => {
+    endLiveStream();
     stopCamera();
     setCameraMode(false);
     onOpenChange(false);
@@ -470,6 +564,17 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setCameraError(null);
       setCameraReady(false);
       setDemoMode(false);
+      setReelMediaMode("camera");
+      setReelVideoFile(null);
+      setReelVideoUrl("");
+      setStoryMusic("");
+      setStoryText("");
+      setShowStoryText(false);
+      setShowStoryMusic(false);
+      setLiveTitle("");
+      setLiveChatInput("");
+      setLiveChat([]);
+      setLiveReactions([]);
     }, 300);
   };
 
@@ -809,65 +914,123 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
               ) : (
                 /* ── UPLOAD MODE ── */
                 <div className="space-y-3">
-                  <div
-                    className="aspect-[9/16] rounded-2xl bg-white/5 relative overflow-hidden flex items-center justify-center border border-dashed border-white/15 cursor-pointer"
-                    onClick={() => !imageUrl && photoInputRef.current?.click()}
-                  >
-                    {isReadingFile ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
-                        <p className="text-xs text-zinc-500">Loading preview...</p>
-                      </div>
-                    ) : imageUrl ? (
-                      <>
-                        <img
-                          src={imageUrl}
-                          alt="Preview"
-                          className="w-full h-full object-cover"
-                          style={{ filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined }}
-                        />
-                        {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
-                          <div className="absolute inset-0 pointer-events-none" style={{ background: selectedArEffect.overlay }} />
-                        )}
-                        {selectedArEffect.id !== "none" && (
-                          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/15">
-                            <span className="text-sm">{selectedArEffect.emoji}</span>
-                            <span className="text-[10px] text-white/80 font-semibold">{selectedArEffect.name}</span>
-                          </div>
-                        )}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); photoInputRef.current?.click(); }}
-                          className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center border border-white/15 hover:bg-white/20 transition-colors"
-                        >
-                          <ImagePlus className="w-4 h-4 text-white" />
-                        </button>
-                      </>
-                    ) : (
-                      <div className="text-center space-y-2">
-                        <ImagePlus className="w-10 h-10 text-zinc-600 mx-auto" />
-                        <p className="text-xs text-zinc-500">Tap to select photo</p>
-                        <p className="text-[10px] text-zinc-600">JPG, PNG, WEBP</p>
-                      </div>
-                    )}
-                    <input
-                      ref={photoInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handlePhotoFileChange}
-                    />
+                  {/* Photo / Video sub-tabs */}
+                  <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+                    <button onClick={() => { setReelMediaMode("photo"); setReelVideoFile(null); if (reelVideoUrl) { URL.revokeObjectURL(reelVideoUrl); setReelVideoUrl(""); } }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${reelMediaMode === "photo" ? "bg-pink-500 text-white" : "text-zinc-400 hover:text-white"}`}>
+                      <ImagePlus className="w-3.5 h-3.5" /> Photo
+                    </button>
+                    <button onClick={() => { setReelMediaMode("video"); setImageUrl(""); setPreviewUrl(""); setSelectedFile(null); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${reelMediaMode === "video" ? "bg-red-500 text-white" : "text-zinc-400 hover:text-white"}`}>
+                      <Film className="w-3.5 h-3.5" /> Video
+                    </button>
                   </div>
 
-                  {imageUrl && (
+                  {reelMediaMode === "photo" ? (
+                    <div
+                      className="aspect-[9/16] rounded-2xl bg-white/5 relative overflow-hidden flex items-center justify-center border border-dashed border-white/15 cursor-pointer"
+                      onClick={() => !imageUrl && photoInputRef.current?.click()}
+                    >
+                      {isReadingFile ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
+                          <p className="text-xs text-zinc-500">Loading preview...</p>
+                        </div>
+                      ) : imageUrl ? (
+                        <>
+                          <img src={imageUrl} alt="Preview" className="w-full h-full object-cover"
+                            style={{ filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined }} />
+                          {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
+                            <div className="absolute inset-0 pointer-events-none" style={{ background: selectedArEffect.overlay }} />
+                          )}
+                          {storyText && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                              <p className="text-xl font-black text-center px-4 drop-shadow-2xl leading-tight"
+                                style={{ color: storyTextColor, textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}>{storyText}</p>
+                            </div>
+                          )}
+                          {storyMusic && (
+                            <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 border border-white/20 z-10">
+                              <Music className="w-3 h-3 text-yellow-400" />
+                              <span className="text-[9px] text-yellow-300 font-semibold max-w-[80px] truncate">{storyMusic}</span>
+                            </div>
+                          )}
+                          {selectedArEffect.id !== "none" && (
+                            <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 border border-white/15 z-10">
+                              <span className="text-sm">{selectedArEffect.emoji}</span>
+                              <span className="text-[10px] text-white/80 font-semibold">{selectedArEffect.name}</span>
+                            </div>
+                          )}
+                          <button onClick={(e) => { e.stopPropagation(); photoInputRef.current?.click(); }}
+                            className="absolute bottom-2 right-2 z-10 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center border border-white/15 hover:bg-white/20 transition-colors">
+                            <ImagePlus className="w-4 h-4 text-white" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-center space-y-2">
+                          <ImagePlus className="w-10 h-10 text-zinc-600 mx-auto" />
+                          <p className="text-xs text-zinc-500">Tap to select photo</p>
+                          <p className="text-[10px] text-zinc-600">JPG, PNG, WEBP</p>
+                        </div>
+                      )}
+                      <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileChange} />
+                    </div>
+                  ) : (
+                    /* ── VIDEO UPLOAD for Reel/Story ── */
+                    <div
+                      className="aspect-[9/16] rounded-2xl bg-zinc-950 relative overflow-hidden flex items-center justify-center border border-dashed border-red-500/30 cursor-pointer"
+                      onClick={() => !reelVideoUrl && reelVideoInputRef.current?.click()}
+                    >
+                      {isReadingFile ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="w-8 h-8 text-red-400 animate-spin" />
+                          <p className="text-xs text-zinc-500">Processing video...</p>
+                        </div>
+                      ) : reelVideoUrl ? (
+                        <>
+                          <video src={reelVideoUrl} className="w-full h-full object-cover" controls playsInline loop
+                            style={{ filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined }} />
+                          {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
+                            <div className="absolute inset-0 pointer-events-none" style={{ background: selectedArEffect.overlay }} />
+                          )}
+                          {storyText && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                              <p className="text-xl font-black text-center px-4 drop-shadow-2xl"
+                                style={{ color: storyTextColor, textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}>{storyText}</p>
+                            </div>
+                          )}
+                          {storyMusic && (
+                            <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 border border-white/20 z-20">
+                              <Music className="w-3 h-3 text-yellow-400" />
+                              <span className="text-[9px] text-yellow-300 font-semibold max-w-[80px] truncate">{storyMusic}</span>
+                            </div>
+                          )}
+                          <button onClick={(e) => { e.stopPropagation(); reelVideoInputRef.current?.click(); }}
+                            className="absolute bottom-2 right-2 z-30 w-8 h-8 rounded-full bg-black/70 flex items-center justify-center border border-white/20 hover:bg-white/20 transition-colors">
+                            <Film className="w-4 h-4 text-white" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-center space-y-3">
+                          <div className="w-14 h-14 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto">
+                            <Film className="w-7 h-7 text-red-400" />
+                          </div>
+                          <p className="text-xs text-zinc-400 font-semibold">Tap to select video</p>
+                          <p className="text-[10px] text-zinc-600">MP4, MOV, AVI</p>
+                        </div>
+                      )}
+                      <input ref={reelVideoInputRef} type="file" accept="video/*" className="hidden" onChange={handleReelVideoFileChange} />
+                    </div>
+                  )}
+
+                  {/* AR Filters for photo mode */}
+                  {reelMediaMode === "photo" && imageUrl && (
                     <>
-                      <button
-                        type="button"
+                      <button type="button"
                         onClick={() => { setImageUrl(""); setPreviewUrl(""); setSelectedFile(null); setSelectedArEffect(AR_EFFECTS[0]); }}
-                        className="w-full text-[11px] text-zinc-500 hover:text-red-400 transition-colors"
-                      >
+                        className="w-full text-[11px] text-zinc-500 hover:text-red-400 transition-colors">
                         Remove photo
                       </button>
-                      {/* Filter picker for uploaded photo */}
                       <div className="rounded-xl bg-white/5 border border-white/10 p-3">
                         <div className="flex items-center gap-1.5 mb-2">
                           <img src={filterIconSrc} alt="Filter" className="w-4 h-4 rounded object-cover" />
@@ -878,10 +1041,109 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                       </div>
                     </>
                   )}
+                  {/* AR Filters for video mode */}
+                  {reelMediaMode === "video" && reelVideoUrl && (
+                    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <img src={filterIconSrc} alt="Filter" className="w-4 h-4 rounded object-cover" />
+                        <span className="text-[11px] font-bold text-white">AR Filters</span>
+                      </div>
+                      <ARFilterStrip selected={selectedArEffect} onSelect={setSelectedArEffect} />
+                    </div>
+                  )}
                 </div>
               )}
 
-              {uploadType === "story" && (
+              {/* ── Story: Music + Text tools ── */}
+              {uploadType === "story" && (imageUrl || reelVideoUrl) && (
+                <div className="space-y-2 pt-3 border-t border-white/8">
+                  {/* Editing toolbar */}
+                  <div className="flex gap-2">
+                    <button type="button"
+                      onClick={() => setShowStoryText(s => !s)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold border transition-all ${showStoryText ? "bg-blue-500/20 border-blue-500/50 text-blue-300" : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"}`}>
+                      <Type className="w-3.5 h-3.5" /> Text
+                    </button>
+                    <button type="button"
+                      onClick={() => setShowStoryMusic(s => !s)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold border transition-all ${showStoryMusic ? "bg-yellow-500/20 border-yellow-500/50 text-yellow-300" : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"}`}>
+                      <Music className="w-3.5 h-3.5" /> Music
+                    </button>
+                    <button type="button"
+                      onClick={() => setShowArFilters(s => !s)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold border transition-all ${showArFilters ? "bg-purple-500/20 border-purple-500/50 text-purple-300" : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"}`}>
+                      <Sparkles className="w-3.5 h-3.5" /> FX
+                    </button>
+                  </div>
+
+                  {/* Text overlay panel */}
+                  {showStoryText && (
+                    <div className="rounded-xl bg-white/5 border border-blue-500/20 p-3 space-y-2">
+                      <Input
+                        placeholder="Add text to your story..."
+                        value={storyText}
+                        onChange={(e) => setStoryText(e.target.value)}
+                        maxLength={60}
+                        className="bg-white/5 border-white/10 text-white placeholder:text-zinc-600 rounded-xl text-sm"
+                      />
+                      <div className="flex gap-2 items-center">
+                        <span className="text-[10px] text-zinc-500 font-semibold">Color:</span>
+                        {["#ffffff","#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#a855f7","#ec4899"].map(c => (
+                          <button key={c} type="button" onClick={() => setStoryTextColor(c)}
+                            className={`w-5 h-5 rounded-full border-2 transition-all ${storyTextColor === c ? "scale-125 border-white" : "border-transparent"}`}
+                            style={{ background: c }} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Music picker panel */}
+                  {showStoryMusic && (
+                    <div className="rounded-xl bg-white/5 border border-yellow-500/20 p-3 space-y-2">
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Choose a Song</p>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                        {STORY_SONGS.map(song => (
+                          <button key={song.title} type="button"
+                            onClick={() => { setStoryMusic(storyMusic === song.title ? "" : song.title); }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all ${
+                              storyMusic === song.title
+                                ? "bg-yellow-500/15 border-yellow-500/50"
+                                : "bg-white/3 border-white/8 hover:border-white/20"
+                            }`}>
+                            <span className="text-lg shrink-0">{song.emoji}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-[11px] font-bold truncate ${storyMusic === song.title ? "text-yellow-300" : "text-white"}`}>{song.title}</p>
+                              <p className="text-[9px] text-zinc-500 truncate">{song.artist}</p>
+                            </div>
+                            <span className="text-[9px] text-zinc-600 shrink-0">{song.duration}</span>
+                            {storyMusic === song.title && <Music className="w-3 h-3 text-yellow-400 shrink-0 animate-pulse" />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Duration */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Duration</span>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["6h", "12h", "24h"] as const).map((d) => (
+                        <button key={d} type="button" onClick={() => setStoryDuration(d)}
+                          className={`py-2 rounded-xl text-[11px] font-black border transition-all ${
+                            storyDuration === d
+                              ? "bg-yellow-500/20 border-yellow-500/60 text-yellow-300"
+                              : "bg-white/5 border-white/10 text-zinc-500 hover:border-white/25"
+                          }`}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Reel duration (no music/text section for reel) */}
+              {uploadType === "reel" && !imageUrl && !reelVideoUrl && (
                 <div className="space-y-2 pt-3 border-t border-white/8">
                   <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Story Duration</span>
                   <div className="grid grid-cols-3 gap-2">
@@ -899,14 +1161,208 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 </div>
               )}
 
-              <Button className="w-full h-11 rounded-xl font-bold" onClick={() => setStep("details")} disabled={!imageUrl}>
+              <Button className="w-full h-11 rounded-xl font-bold" onClick={() => setStep("details")}
+                disabled={reelMediaMode === "photo" ? !imageUrl : !reelVideoUrl}>
                 Next
               </Button>
             </div>
           )}
 
-          {/* ── STEP: DETAILS (Post / Live) ── */}
-          {step === "details" && uploadType !== "video" && (
+          {/* ── STEP: GO LIVE ── */}
+          {step === "details" && uploadType === "live" && (
+            <div className="space-y-3">
+              {/* Title input before going live */}
+              {!liveStarted && (
+                <div className="space-y-3">
+                  <div className="rounded-2xl bg-red-500/8 border border-red-500/20 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-sm font-black text-white">Ready to Go Live</span>
+                    </div>
+                    <Input placeholder="Stream title — what's your live about?" value={liveTitle}
+                      onChange={(e) => setLiveTitle(e.target.value)} maxLength={80}
+                      className="bg-white/5 border-white/10 text-white placeholder:text-zinc-600 rounded-xl" />
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-zinc-500">
+                      {[["🎥", "4K Ready"], ["🎙️", "HD Audio"], ["💬", "Live Chat"], ["🎭", "81 AR Filters"]].map(([e, l]) => (
+                        <div key={l} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 border border-white/8">
+                          <span>{e}</span><span className="font-semibold">{l}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Advanced options */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { icon: Globe, label: "Public", active: visibility === "public", val: "public" },
+                      { icon: Users, label: "Followers", active: visibility === "followers", val: "followers" },
+                      { icon: Lock, label: "Private", active: visibility === "private", val: "private" },
+                    ].map(opt => (
+                      <button key={opt.val} type="button" onClick={() => setVisibility(opt.val)}
+                        className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all ${opt.active ? "bg-red-500/15 border-red-500/40 text-red-300" : "bg-white/5 border-white/10 text-zinc-500"}`}>
+                        <opt.icon className="w-4 h-4" />
+                        <span className="text-[9px] font-bold">{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={startLiveStream}
+                    disabled={!liveTitle}
+                    className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: liveTitle ? "linear-gradient(135deg,#dc2626,#ec4899)" : "rgba(255,255,255,0.05)", color: "white", boxShadow: liveTitle ? "0 0 25px rgba(220,38,38,0.5)" : "none" }}>
+                    <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
+                    Start Live Stream
+                  </button>
+                </div>
+              )}
+
+              {/* Active live stream UI */}
+              {liveStarted && (
+                <div className="relative rounded-2xl overflow-hidden bg-zinc-950" style={{ aspectRatio: "9/16", maxHeight: "60vh" }}>
+                  {/* Camera feed / demo */}
+                  {!liveCameraOff ? (
+                    <>
+                      {!cameraReady && !demoMode && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-950 z-10">
+                          <Loader2 className="w-8 h-8 text-red-400 animate-spin" />
+                          <p className="text-xs text-zinc-500">Starting camera…</p>
+                        </div>
+                      )}
+                      {demoMode && (
+                        <div className="absolute inset-0" style={{
+                          background: "linear-gradient(160deg,#12001f 0%,#0a1030 35%,#001520 65%,#1a000d 100%)"
+                        }}>
+                          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.15) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.15) 1px,transparent 1px)", backgroundSize: "40px 40px" }} />
+                          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 rounded-full border border-white/10 animate-pulse" />
+                        </div>
+                      )}
+                      <video ref={cameraVideoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover"
+                        onCanPlay={() => setCameraReady(true)}
+                        style={{ transform: isFrontCamera ? "scaleX(-1)" : "none", opacity: cameraReady && !demoMode ? 1 : 0, transition: "opacity 0.3s" }} />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-900">
+                      <VideoOff className="w-12 h-12 text-zinc-600" />
+                      <p className="text-xs text-zinc-500">Camera paused</p>
+                    </div>
+                  )}
+
+                  {/* ── TOP HUD ── */}
+                  <div className="absolute top-0 left-0 right-0 z-20 p-3 flex items-start justify-between" style={{ background: "linear-gradient(to bottom,rgba(0,0,0,0.7) 0%,transparent 100%)" }}>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 border border-red-400">
+                          <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          <span className="text-[10px] font-black text-white tracking-wider">LIVE</span>
+                        </div>
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 border border-white/15">
+                          <Eye className="w-2.5 h-2.5 text-white" />
+                          <span className="text-[10px] font-bold text-white">{liveViewers.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-white/80 font-semibold drop-shadow-md max-w-[140px] truncate">{liveTitle}</p>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button onClick={toggleCameraFace} className="w-8 h-8 rounded-full bg-black/60 border border-white/15 flex items-center justify-center">
+                        <RotateCcw className="w-3.5 h-3.5 text-white" />
+                      </button>
+                      <button onClick={() => setShowArFilters(s => !s)} className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${showArFilters ? "bg-purple-500 border-purple-400" : "bg-black/60 border-white/15"}`}>
+                        <Sparkles className="w-3.5 h-3.5 text-white" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* AR filter strip when open */}
+                  {showArFilters && (
+                    <div className="absolute top-14 left-0 right-0 z-20 px-3">
+                      <ARFilterStrip selected={selectedArEffect} onSelect={setSelectedArEffect} />
+                    </div>
+                  )}
+
+                  {/* Floating reactions */}
+                  <div className="absolute right-3 bottom-32 z-20 flex flex-col gap-1 items-end pointer-events-none">
+                    {liveReactions.map(r => (
+                      <div key={r.id} className="text-2xl animate-bounce" style={{ animationDuration: "0.6s" }}>{r.emoji}</div>
+                    ))}
+                  </div>
+
+                  {/* Chat messages */}
+                  <div className="absolute bottom-20 left-0 right-0 z-20 px-3 space-y-1 max-h-32 overflow-hidden">
+                    {liveChat.slice(-5).map((msg, i) => (
+                      <div key={i} className="flex items-baseline gap-1.5">
+                        <span className="text-[10px] font-bold shrink-0" style={{ color: msg.color }}>{msg.name}</span>
+                        <span className="text-[10px] text-white/80">{msg.msg}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* ── BOTTOM CONTROLS ── */}
+                  <div className="absolute bottom-0 left-0 right-0 z-20 px-3 pb-3" style={{ background: "linear-gradient(to top,rgba(0,0,0,0.85) 0%,transparent 100%)" }}>
+                    {/* Reaction bar */}
+                    <div className="flex gap-2 justify-center mb-3">
+                      {LIVE_REACTIONS_LIST.map(emoji => (
+                        <button key={emoji} onClick={() => {
+                          const rid = Date.now();
+                          setLiveReactions(prev => [...prev.slice(-8), { id: rid, emoji }]);
+                          setTimeout(() => setLiveReactions(prev => prev.filter(r => r.id !== rid)), 2500);
+                        }} className="text-xl active:scale-125 transition-transform">{emoji}</button>
+                      ))}
+                    </div>
+                    {/* Chat input row */}
+                    <div className="flex gap-2 items-center">
+                      <input
+                        value={liveChatInput}
+                        onChange={(e) => setLiveChatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && liveChatInput.trim()) {
+                            setLiveChat(prev => [...prev.slice(-19), { name: "you", msg: liveChatInput.trim(), color: "#60a5fa" }]);
+                            setLiveChatInput("");
+                          }
+                        }}
+                        placeholder="Say something..."
+                        className="flex-1 bg-black/60 border border-white/20 rounded-full px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 outline-none"
+                      />
+                      <button onClick={() => setLiveMuted(m => !m)}
+                        className={`w-9 h-9 rounded-full border flex items-center justify-center ${liveMuted ? "bg-red-600 border-red-400" : "bg-black/60 border-white/15"}`}>
+                        {liveMuted ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-white" />}
+                      </button>
+                      <button onClick={() => setLiveCameraOff(c => !c)}
+                        className={`w-9 h-9 rounded-full border flex items-center justify-center ${liveCameraOff ? "bg-red-600 border-red-400" : "bg-black/60 border-white/15"}`}>
+                        {liveCameraOff ? <VideoOff className="w-4 h-4 text-white" /> : <Video className="w-4 h-4 text-white" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Gift / Share tools */}
+              {liveStarted && (
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { icon: Gift, label: "Gifts", color: "text-yellow-400" },
+                    { icon: Share2, label: "Share", color: "text-blue-400" },
+                    { icon: Users, label: "Invite", color: "text-green-400" },
+                    { icon: Settings2, label: "Settings", color: "text-zinc-400" },
+                  ].map(tool => (
+                    <button key={tool.label} className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+                      <tool.icon className={`w-5 h-5 ${tool.color}`} />
+                      <span className="text-[9px] text-zinc-400 font-semibold">{tool.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* End stream button */}
+              {liveStarted && (
+                <button onClick={endLiveStream}
+                  className="w-full h-11 rounded-xl font-black text-sm flex items-center justify-center gap-2 bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 transition-all">
+                  <PhoneOff className="w-4 h-4" /> End Stream
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP: DETAILS (Post / Story / Reel) ── */}
+          {step === "details" && uploadType !== "video" && uploadType !== "live" && (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* ── CAMERA MODE in Details Step ── */}
               {cameraMode && (

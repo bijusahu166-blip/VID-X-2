@@ -313,7 +313,7 @@ export default function Reading() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".txt,.text,text/plain"
+                      accept=".txt,.text,.md,.rtf,text/plain,text/*"
                       className="hidden"
                       onChange={handleTextFileSelect}
                       data-testid="input-book-file"
