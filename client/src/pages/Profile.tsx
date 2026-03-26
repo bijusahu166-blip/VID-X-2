@@ -212,6 +212,9 @@ export default function Profile() {
   const { toast } = useToast();
   const [selectedPet, setSelectedPet] = useState<{ name: string; emoji: string } | null>(null);
   const { data: history } = useQuery<any[]>({ queryKey: ["/api/history"] });
+  const { data: xpData } = useQuery<{ totalXP: number; xpInLevel: number; xpMax: number; level: number; breakdown: any }>({
+    queryKey: ["/api/profile/xp"],
+  });
   const myPosts = posts?.filter(p => p.userId === user?.id) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
@@ -272,11 +275,19 @@ export default function Profile() {
     reader.readAsDataURL(file);
   };
 
-  const xp = 7340;
-  const xpMax = 10000;
-  const level = 42;
-  const rank = "DIAMOND";
-  const rankColor = "#f472b6";
+  const xp = xpData?.xpInLevel ?? 0;
+  const xpMax = xpData?.xpMax ?? 500;
+  const level = xpData?.level ?? 1;
+
+  const getRank = (lv: number) => {
+    if (lv >= 51) return { rank: "DIAMOND",  color: "#f472b6" };
+    if (lv >= 36) return { rank: "PLATINUM", color: "#e2e8f0" };
+    if (lv >= 21) return { rank: "GOLD",     color: "#fbbf24" };
+    if (lv >= 11) return { rank: "SILVER",   color: "#94a3b8" };
+    if (lv >= 6)  return { rank: "BRONZE",   color: "#d97706" };
+    return           { rank: "ROOKIE",    color: "#6b7280" };
+  };
+  const { rank, color: rankColor } = getRank(level);
 
   return (
     <div className="min-h-screen bg-black pb-28 relative">
@@ -653,21 +664,39 @@ export default function Profile() {
             {/* XP Progress bar */}
             <div className="mt-4 space-y-1">
               <div className="flex justify-between items-center">
-                <span className="text-[9px] font-black text-pink-400 uppercase tracking-widest font-mono">XP Progress</span>
-                <span className="text-[9px] font-mono text-zinc-400">{xp.toLocaleString()} / {xpMax.toLocaleString()}</span>
+                <span className="text-[9px] font-black text-pink-400 uppercase tracking-widest font-mono">XP Progress · LV.{level} → LV.{level + 1}</span>
+                <span className="text-[9px] font-mono text-zinc-400">{xp} / {xpMax} XP</span>
               </div>
               <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
                 <div className="h-full rounded-full relative overflow-hidden"
                   style={{
-                    width: `${(xp / xpMax) * 100}%`,
+                    width: `${Math.min((xp / xpMax) * 100, 100)}%`,
                     background: "linear-gradient(90deg, #7c3aed, #db2777, #ec4899)",
-                    boxShadow: "0 0 8px rgba(6,182,212,0.8)",
-                    transition: "width 1s ease",
+                    boxShadow: "0 0 8px rgba(236,72,153,0.8)",
+                    transition: "width 1.2s ease",
                   }}>
-                  <div className="absolute inset-0 animate-pulse opacity-40"
+                  <div className="absolute inset-0 opacity-40"
                     style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)", animation: "shimmer 2s linear infinite" }} />
                 </div>
               </div>
+              {/* XP Breakdown */}
+              {xpData && (
+                <div className="grid grid-cols-4 gap-1 mt-2">
+                  {[
+                    { label: "Posts", value: xpData.breakdown.posts, icon: "📸" },
+                    { label: "Likes", value: xpData.breakdown.likesReceived, icon: "❤️" },
+                    { label: "Comments", value: xpData.breakdown.commentsReceived, icon: "💬" },
+                    { label: "Activity", value: xpData.breakdown.commentsMade, icon: "⚡" },
+                  ].map(b => (
+                    <div key={b.label} className="rounded-lg p-1.5 text-center bg-white/3 border border-white/5">
+                      <div className="text-[10px]">{b.icon}</div>
+                      <div className="text-[9px] font-black text-pink-400">+{b.value}</div>
+                      <div className="text-[7px] text-zinc-600 leading-tight">{b.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[9px] text-zinc-600 text-center pt-0.5">Total XP: {xpData?.totalXP?.toLocaleString() ?? 0}</p>
             </div>
 
             {/* Stats: Posts / Followers / Following */}

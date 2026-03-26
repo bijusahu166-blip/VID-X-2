@@ -318,6 +318,58 @@ export async function registerRoutes(
     res.status(201).json(entry);
   });
 
+  // ── XP / Level ───────────────────────────────────────────────────────────
+  app.get("/api/profile/xp", isAuthenticated, async (req, res) => {
+    const userId = (req.session as any).userId;
+
+    // Count posts by type
+    const userPosts = await db.select().from(posts).where(eq(posts.userId, userId));
+
+    let postXP = 0;
+    for (const p of userPosts) {
+      if (p.type === "reel")        postXP += 150;
+      else if (p.type === "story")  postXP += 50;
+      else if (p.type === "video")  postXP += 120;
+      else                          postXP += 100; // photo / post
+    }
+
+    // Likes received on user's posts
+    let likesXP = 0;
+    for (const p of userPosts) {
+      const count = await storage.getLikesCount(p.id);
+      likesXP += count * 5;
+    }
+
+    // Comments received on user's posts
+    let commentsReceivedXP = 0;
+    for (const p of userPosts) {
+      const comms = await storage.getComments(p.id);
+      commentsReceivedXP += comms.filter(c => c.userId !== userId).length * 10;
+    }
+
+    // Comments the user has made on others' posts
+    const userComments = await db.select().from(comments).where(eq(comments.userId, userId));
+    const commentsMadeXP = userComments.length * 3;
+
+    const totalXP = postXP + likesXP + commentsReceivedXP + commentsMadeXP;
+    const XP_PER_LEVEL = 500;
+    const level = Math.floor(totalXP / XP_PER_LEVEL) + 1;
+    const xpInLevel = totalXP % XP_PER_LEVEL;
+
+    res.json({
+      totalXP,
+      xpInLevel,
+      xpMax: XP_PER_LEVEL,
+      level,
+      breakdown: {
+        posts: postXP,
+        likesReceived: likesXP,
+        commentsReceived: commentsReceivedXP,
+        commentsMade: commentsMadeXP,
+      },
+    });
+  });
+
   // ── Update own profile ────────────────────────────────────────────────────
   app.patch("/api/profile", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
