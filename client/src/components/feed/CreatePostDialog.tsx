@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { AR_EFFECTS, EFFECT_CATEGORIES } from "@/lib/arEffects";
 import type { AREffect } from "@/lib/arEffects";
 import filterIconSrc from "@assets/image_1774511462472.png";
+import heroIconSrc from "@assets/image_1774512160722.png";
 
 interface CreatePostDialogProps {
   open: boolean;
@@ -157,9 +158,9 @@ function ARFilterStrip({
                   background: "rgba(255,255,255,0.05)",
                 }}
               >
-                {/* Filter icon base */}
+                {/* Filter icon base — hero filters use hero icon */}
                 <img
-                  src={filterIconSrc}
+                  src={effect.heroIcon ? heroIconSrc : filterIconSrc}
                   alt={effect.name}
                   className="w-full h-full object-cover"
                   style={{

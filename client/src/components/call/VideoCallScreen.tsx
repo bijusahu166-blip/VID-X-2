@@ -7,6 +7,7 @@ import {
 import { AR_EFFECTS, EFFECT_CATEGORIES } from "@/lib/arEffects";
 import type { AREffect } from "@/lib/arEffects";
 import filterIconSrc from "@assets/image_1774511462472.png";
+import heroIconSrc from "@assets/image_1774512160722.png";
 
 const MOCK_CALLERS = [
   { name: "Alice Wonder", handle: "@alice_litlink", avatar: "🧝‍♀️" },
@@ -347,7 +348,7 @@ export function VideoCallScreen({ onClose }: VideoCallScreenProps) {
                     style={{ background: "rgba(255,255,255,0.06)" }}
                   >
                     <img
-                      src={filterIconSrc}
+                      src={effect.heroIcon ? heroIconSrc : filterIconSrc}
                       alt={effect.name}
                       className="w-full h-full object-cover"
                       style={{ filter: effect.filter !== "none" ? effect.filter : undefined }}
