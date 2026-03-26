@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useCreatePost } from "@/hooks/use-posts";
+import { useToast } from "@/hooks/use-toast";
 import {
   ImagePlus, Loader2, Video, Radio,
   Music, Scissors, Type, Smile, Sparkles,
@@ -146,10 +147,13 @@ function generateVideoThumbnail(file: File): Promise<string> {
     video.crossOrigin = "anonymous";
     video.muted = true;
     video.preload = "metadata";
+    // Safety timeout — if video never loads, use fallback after 8s
+    const timeout = setTimeout(() => { URL.revokeObjectURL(objectUrl); fallback(); }, 8000);
     video.onloadeddata = () => {
-      video.currentTime = Math.min(1, video.duration * 0.1);
+      video.currentTime = Math.min(1, video.duration * 0.1 || 0.1);
     };
     video.onseeked = () => {
+      clearTimeout(timeout);
       try {
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth || 640;
@@ -157,10 +161,10 @@ function generateVideoThumbnail(file: File): Promise<string> {
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(objectUrl);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      } catch { URL.revokeObjectURL(objectUrl); fallback(); }
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      } catch { URL.revokeObjectURL(objectUrl); clearTimeout(timeout); fallback(); }
     };
-    video.onerror = () => { URL.revokeObjectURL(objectUrl); fallback(); };
+    video.onerror = () => { clearTimeout(timeout); URL.revokeObjectURL(objectUrl); fallback(); };
     video.load();
   });
 }
@@ -301,6 +305,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const createPost = useCreatePost();
+  const { toast } = useToast();
 
   const attachStream = useCallback((stream: MediaStream) => {
     const tryAttach = (attempts = 0) => {
@@ -557,20 +562,48 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       try {
         setIsUploadingVideo(true);
         setUploadProgress(0);
-        const formData = new FormData();
-        formData.append("video", videoFile);
-        const uploadRes = await fetch("/api/upload/video", {
-          method: "POST",
-          credentials: "include",
-          body: formData,
+
+        // Use XHR for real upload progress
+        videoFileUrl = await new Promise<string | undefined>((resolve) => {
+          const xhr = new XMLHttpRequest();
+          const formData = new FormData();
+          formData.append("video", videoFile);
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              setUploadProgress(Math.round((e.loaded / e.total) * 95));
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const data = JSON.parse(xhr.responseText);
+                setUploadProgress(100);
+                resolve(data.url);
+              } catch {
+                toast({ title: "Upload error", description: "Could not read server response", variant: "destructive" });
+                resolve(undefined);
+              }
+            } else {
+              let errMsg = "Upload failed";
+              try { errMsg = JSON.parse(xhr.responseText)?.message || errMsg; } catch {}
+              toast({ title: "Upload failed", description: `${errMsg} (${xhr.status})`, variant: "destructive" });
+              resolve(undefined);
+            }
+          };
+
+          xhr.onerror = () => {
+            toast({ title: "Upload failed", description: "Network error — check your connection", variant: "destructive" });
+            resolve(undefined);
+          };
+
+          xhr.open("POST", "/api/upload/video");
+          xhr.withCredentials = true;
+          xhr.send(formData);
         });
-        if (uploadRes.ok) {
-          const { url } = await uploadRes.json();
-          videoFileUrl = url;
-        }
-        setUploadProgress(100);
-      } catch {
-        // Fall through — post without videoUrl
+      } catch (err: any) {
+        toast({ title: "Upload failed", description: err?.message || "Something went wrong", variant: "destructive" });
       } finally {
         setIsUploadingVideo(false);
       }
@@ -594,8 +627,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
           songColor: selectedSong.color,
         } : {}),
       } as any);
+      toast({ title: "Posted!", description: "Your content is live.", });
       handleClose();
-    } catch {}
+    } catch (err: any) {
+      toast({ title: "Post failed", description: err?.message || "Something went wrong. Please try again.", variant: "destructive" });
+    }
   };
 
   const handleClose = () => {
@@ -844,10 +880,16 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   color: "white",
                 }}>
                 {isUploadingVideo && (
-                  <div className="absolute inset-0 bg-white/10 flex items-center justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    <span className="text-xs">Uploading video…</span>
-                  </div>
+                  <>
+                    <div
+                      className="absolute inset-y-0 left-0 bg-white/20 transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                    <div className="relative z-10 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-xs">Uploading… {uploadProgress}%</span>
+                    </div>
+                  </>
                 )}
                 {!isUploadingVideo && (isReadingFile ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating thumbnail…</> : createPost.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</> : <><Upload className="w-4 h-4" /> Publish Video</>)}
               </button>
