@@ -9,6 +9,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { VideoPlayer } from "@/components/shared/VideoPlayer";
 import {
   Play, ThumbsUp, Share2, MoreVertical,
   MessageSquare, ChevronRight, Flame, Music,
@@ -350,6 +351,12 @@ export default function Home() {
   const [viewingPost, setViewingPost] = useState<any | null>(null);
   const [viewingStoryIdx, setViewingStoryIdx] = useState<number | null>(null);
 
+  const { data: liveStreams = [] } = useQuery<any[]>({
+    queryKey: ["/api/live/active"],
+    queryFn: () => fetch("/api/live/active", { credentials: "include" }).then(r => r.json()),
+    refetchInterval: 15000,
+  });
+
   const likeMutation = useMutation({
     mutationFn: (postId: number) => apiRequest("POST", `/api/posts/${postId}/like`),
     onSuccess: (data: any, postId: number) => {
@@ -385,6 +392,47 @@ export default function Home() {
             </button>
           ))}
         </div>
+
+        {/* ── LIVE NOW SHELF ── */}
+        {liveStreams.length > 0 && (
+          <div className="mt-1 pb-3 border-b border-white/5">
+            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[13px] font-black text-white tracking-wide">Live Now</span>
+              <span className="text-[10px] text-red-400 font-bold">{liveStreams.length} live</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide px-3">
+              {liveStreams.map((stream: any) => (
+                <button
+                  key={stream.id}
+                  onClick={() => setLivePost(stream)}
+                  className="flex flex-col items-center gap-1.5 shrink-0 group"
+                  data-testid={`live-stream-${stream.id}`}
+                >
+                  <div className="relative w-[88px] h-[148px] rounded-xl overflow-hidden border-2 border-red-500">
+                    <img
+                      src={stream.image_url || stream.imageUrl || `https://api.dicebear.com/7.x/shapes/svg?seed=${stream.user_id}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded flex items-center gap-1">
+                      <div className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
+                    </div>
+                    <div className="absolute bottom-2 left-0 right-0 text-center px-1">
+                      <div className="w-7 h-7 rounded-full overflow-hidden border-2 border-white mx-auto mb-1">
+                        <img
+                          src={stream.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${stream.username}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <p className="text-[9px] text-white font-bold truncate">@{stream.username}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── STORIES SHELF ── */}
         <div className="mt-1 pb-2 border-b border-white/5">
@@ -532,13 +580,14 @@ export default function Home() {
 
                     {/* Media: real video if available, else thumbnail */}
                     {isVideo && (post as any).videoUrl ? (
-                      <video
+                      <VideoPlayer
                         src={(post as any).videoUrl}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        controls
-                        preload="metadata"
-                        playsInline
-                        data-testid={`video-post-${post.id}`}
+                        poster={post.imageUrl && !post.imageUrl.startsWith("blob:") ? post.imageUrl : undefined}
+                        loop
+                        songTitle={(post as any).songTitle}
+                        songArtist={(post as any).songArtist}
+                        songColor={(post as any).songColor}
+                        className="absolute inset-0 w-full h-full"
                       />
                     ) : post.imageUrl && !post.imageUrl.startsWith("blob:") ? (
                       <img

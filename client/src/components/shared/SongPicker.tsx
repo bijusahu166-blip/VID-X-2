@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Music, Search, Play, Pause, X, Check } from "lucide-react";
+import { Music, Search, Play, Pause, X, Check, Film } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 
 export interface Song {
   id: number;
@@ -68,6 +69,11 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
   const [genre, setGenre] = useState("All");
   const [playingId, setPlayingId] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const { data: reelSongs = [] } = useQuery<any[]>({
+    queryKey: ["/api/posts/reel-songs"],
+    queryFn: () => fetch("/api/posts/reel-songs", { credentials: "include" }).then(r => r.json()),
+  });
 
   const filtered = SONG_LIBRARY.filter(s => {
     const matchesGenre = genre === "All" || s.genre === genre;
@@ -159,6 +165,54 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-1">
+          {/* Trending in Reels section */}
+          {reelSongs.length > 0 && !search && genre === "All" && (
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5 py-2">
+                <Film className="w-3 h-3 text-pink-400" />
+                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Trending in Reels</span>
+              </div>
+              <div className="space-y-1">
+                {reelSongs.slice(0, 5).map((rs: any) => {
+                  const reelSong: Song = {
+                    id: -(rs.id),
+                    title: rs.song_title,
+                    artist: rs.song_artist,
+                    genre: "Trending",
+                    duration: "",
+                    color: rs.song_color || "#ec4899",
+                  };
+                  const isSelected = selectedSong?.title === rs.song_title && selectedSong?.artist === rs.song_artist;
+                  return (
+                    <div
+                      key={`reel-${rs.id}`}
+                      className="flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all active:scale-[0.98]"
+                      style={{
+                        background: isSelected ? "rgba(236,72,153,0.15)" : "rgba(255,255,255,0.03)",
+                        border: isSelected ? "1px solid rgba(236,72,153,0.4)" : "1px solid transparent",
+                      }}
+                      onClick={() => onSelect(isSelected ? null : reelSong)}
+                      data-testid={`reel-song-${rs.id}`}
+                    >
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
+                        style={{ background: `${rs.song_color || "#ec4899"}33` }}
+                      >
+                        🎬
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-[13px] font-bold truncate">{rs.song_title}</p>
+                        <p className="text-zinc-400 text-[11px] truncate">{rs.song_artist} · by @{rs.username}</p>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-pink-400 shrink-0" />}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="h-[1px] bg-zinc-800 my-2" />
+            </div>
+          )}
+
           {filtered.length === 0 && (
             <div className="text-center py-8 text-zinc-500 text-sm">No songs found</div>
           )}

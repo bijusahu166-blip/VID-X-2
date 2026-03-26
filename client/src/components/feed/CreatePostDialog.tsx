@@ -588,6 +588,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         userId: "temp",
         type: uploadType === "video" ? "video" : uploadType,
         ...(videoFileUrl ? { videoUrl: videoFileUrl } : {}),
+        ...(selectedSong ? {
+          songTitle: selectedSong.title,
+          songArtist: selectedSong.artist,
+          songColor: selectedSong.color,
+        } : {}),
       } as any);
       handleClose();
     } catch {}

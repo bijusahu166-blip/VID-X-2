@@ -15,6 +15,11 @@ export const posts = pgTable("posts", {
   type: text("type").default("post"), // 'post', 'reel', 'video', 'live', 'story'
   videoUrl: text("video_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  liveEndedAt: timestamp("live_ended_at"),
+  viewerCount: integer("viewer_count").default(0),
+  songTitle: text("song_title"),
+  songArtist: text("song_artist"),
+  songColor: text("song_color"),
 });
 
 export const comments = pgTable("comments", {

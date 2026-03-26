@@ -814,11 +814,28 @@ export async function registerRoutes(
 
   app.get("/api/live/active", isAuthenticated, async (_req, res) => {
     const rows = await db.execute(sql`
-      SELECT p.*, u.first_name, u.last_name, u.username, u.profile_image_url
+      SELECT p.*, u.first_name, u.last_name, u.username, u.profile_image_url,
+             u.first_name || ' ' || u.last_name AS display_name
       FROM posts p
       JOIN users u ON u.id = p.user_id
       WHERE p.type = 'live'
       ORDER BY p.created_at DESC
+    `);
+    res.json((rows as any).rows ?? rows);
+  });
+
+  // ── Reel Songs (songs used in public reels) ────────────────────────────────
+  app.get("/api/posts/reel-songs", isAuthenticated, async (_req, res) => {
+    const rows = await db.execute(sql`
+      SELECT p.id, p.song_title, p.song_artist, p.song_color,
+             u.username, u.first_name, p.created_at
+      FROM posts p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.type = 'reel'
+        AND p.song_title IS NOT NULL
+        AND p.song_title != ''
+      ORDER BY p.created_at DESC
+      LIMIT 30
     `);
     res.json((rows as any).rows ?? rows);
   });
