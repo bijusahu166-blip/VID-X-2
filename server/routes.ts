@@ -494,7 +494,17 @@ export async function registerRoutes(
     const user = await authStorage.getUser(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     const { password: _, ...safeUser } = user as any;
-    res.json(safeUser);
+
+    // Real follower / following / post counts
+    const followersRow = await db.execute(sql`SELECT COUNT(*) AS cnt FROM follows WHERE following_id = ${req.params.id}`);
+    const followingRow = await db.execute(sql`SELECT COUNT(*) AS cnt FROM follows WHERE follower_id  = ${req.params.id}`);
+    const postsRow    = await db.execute(sql`SELECT COUNT(*) AS cnt FROM posts WHERE user_id = ${req.params.id} AND type NOT IN ('live')`);
+
+    const followersCount = parseInt(((followersRow as any).rows ?? followersRow as any)[0]?.cnt ?? "0");
+    const followingCount = parseInt(((followingRow as any).rows ?? followingRow as any)[0]?.cnt ?? "0");
+    const postsCount    = parseInt(((postsRow     as any).rows ?? postsRow     as any)[0]?.cnt ?? "0");
+
+    res.json({ ...safeUser, followersCount, followingCount, postsCount });
   });
 
   // ── Online status ─────────────────────────────────────────────────────────

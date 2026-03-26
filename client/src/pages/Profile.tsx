@@ -74,10 +74,18 @@ function SettingRow({ icon: Icon, label, sub, onClick }: { icon: any; label: str
   );
 }
 
+function fmtN(n: number | undefined): string {
+  if (n === undefined || n === null) return "0";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1) + "K";
+  return n.toString();
+}
+
 function OtherUserProfile({ userId }: { userId: string }) {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user: me } = useAuth();
 
   const { data: profileData, isLoading } = useQuery<any>({
     queryKey: ["/api/users", userId],
@@ -105,6 +113,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
       await fetch(`/api/users/${userId}/follow`, { method, credentials: "include" });
       qc.invalidateQueries({ queryKey: ["/api/users", userId, "follow-status"] });
       qc.invalidateQueries({ queryKey: ["/api/users", userId] });
+      if (me?.id) qc.invalidateQueries({ queryKey: ["/api/users", me.id] });
       qc.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
       if (!isFollowing) playFollow();
       toast({ title: isFollowing ? "Unfollowed" : "Following! They've been notified." });
@@ -211,9 +220,9 @@ function OtherUserProfile({ userId }: { userId: string }) {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-5">
           {[
-            { label: "Posts", value: postCount },
-            { label: "Followers", value: u?.followersCount ?? 0 },
-            { label: "Following", value: u?.followingCount ?? 0 },
+            { label: "POSTS", value: fmtN(u?.postsCount ?? postCount) },
+            { label: "CREW", value: fmtN(u?.followersCount) },
+            { label: "ALLIES", value: fmtN(u?.followingCount) },
           ].map(stat => (
             <div key={stat.label} className="text-center">
               <div className="text-xl font-black text-white">{stat.value}</div>
@@ -296,6 +305,11 @@ export default function Profile() {
   const { data: history } = useQuery<any[]>({ queryKey: ["/api/history"] });
   const { data: xpData } = useQuery<{ totalXP: number; xpInLevel: number; xpMax: number; level: number; breakdown: any }>({
     queryKey: ["/api/profile/xp"],
+  });
+  const { data: myStats } = useQuery<{ followersCount: number; followingCount: number; postsCount: number }>({
+    queryKey: ["/api/users", user?.id],
+    queryFn: () => fetch(`/api/users/${user?.id}`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!user?.id,
   });
   const myPosts = posts?.filter(p => p.userId === user?.id) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
@@ -785,9 +799,9 @@ export default function Profile() {
             {/* Stats: Posts / Followers / Following */}
             <div className="grid grid-cols-3 gap-2 mt-4">
               {[
-                { value: myPosts.length.toString(), label: "POSTS", color: "#c084fc", glow: "rgba(192,132,252,0.3)" },
-                { value: "1.2K", label: "CREW", color: "#34d399", glow: "rgba(52,211,153,0.3)" },
-                { value: "840", label: "ALLIES", color: "#fb923c", glow: "rgba(251,146,60,0.3)" },
+                { value: fmtN(myStats?.postsCount ?? myPosts.length), label: "POSTS", color: "#c084fc", glow: "rgba(192,132,252,0.3)" },
+                { value: fmtN(myStats?.followersCount), label: "CREW", color: "#34d399", glow: "rgba(52,211,153,0.3)" },
+                { value: fmtN(myStats?.followingCount), label: "ALLIES", color: "#fb923c", glow: "rgba(251,146,60,0.3)" },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl py-2.5 text-center border border-white/5 relative overflow-hidden"
                   style={{ background: `${s.glow.replace("0.3", "0.08")}`, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05)` }}>
