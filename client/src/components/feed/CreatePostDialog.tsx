@@ -3,13 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useCreatePost } from "@/hooks/use-posts";
 import {
   ImagePlus, Loader2, Video, Radio,
   Music, Scissors, Type, Smile, Sparkles,
   Upload, Film, Globe, Lock, Users, ChevronRight,
-  Tag, AlignLeft, Captions, ListVideo, X
+  Tag, AlignLeft, Captions, ListVideo, X, CheckCircle2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -93,18 +93,31 @@ const EDITING_TOOLS = [
   { icon: Sparkles, label: "Effects" },
 ];
 
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target?.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) {
   const [step, setStep] = useState<"select" | "edit" | "video-details" | "details">("select");
   const [uploadType, setUploadType] = useState<UploadType>("post");
   const [imageUrl, setImageUrl] = useState("");
   const [caption, setCaption] = useState("");
-  // Video-specific state
   const [videoTitle, setVideoTitle] = useState("");
   const [videoDesc, setVideoDesc] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Vlog");
   const [visibility, setVisibility] = useState("public");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [storyDuration, setStoryDuration] = useState<"6h" | "12h" | "24h">("24h");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const createPost = useCreatePost();
 
@@ -116,14 +129,41 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     else setStep("details");
   };
 
+  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    if (!videoTitle) setVideoTitle(file.name.replace(/\.[^.]+$/, ""));
+  };
+
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsReadingFile(true);
+    setSelectedFile(file);
+    try {
+      const dataUrl = await readFileAsDataURL(file);
+      setImageUrl(dataUrl);
+      setPreviewUrl(dataUrl);
+    } catch {
+      setImageUrl("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800");
+    } finally {
+      setIsReadingFile(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalCaption = uploadType === "video"
       ? `${videoTitle}${videoDesc ? `\n${videoDesc}` : ""}`
       : caption;
+    const finalImageUrl = thumbnailUrl || imageUrl || previewUrl ||
+      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
     try {
       await createPost.mutateAsync({
-        imageUrl: thumbnailUrl || imageUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60",
+        imageUrl: finalImageUrl,
         caption: finalCaption,
         userId: "temp",
         type: uploadType === "video" ? "post" : uploadType,
@@ -144,6 +184,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setSelectedCategory("Vlog");
       setVisibility("public");
       setThumbnailUrl("");
+      setSelectedFile(null);
+      setPreviewUrl("");
     }, 300);
   };
 
@@ -156,7 +198,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-white/8 flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             {step !== "select" && (
-              <button onClick={() => setStep(step === "video-details" || step === "details" ? "select" : "select")}
+              <button onClick={() => setStep("select")}
                 className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors mr-1">
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -175,7 +217,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
           {/* ── STEP: SELECT TYPE ── */}
           {step === "select" && (
             <div className="space-y-2.5">
-              {/* Featured: Video */}
               {UPLOAD_OPTIONS.filter(o => o.featured).map((opt) => (
                 <button key={opt.id} onClick={() => handleTypeSelect(opt.id as UploadType)}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.01] active:scale-[0.99] text-left"
@@ -194,7 +235,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 </button>
               ))}
 
-              {/* Other options grid */}
               <div className="grid grid-cols-2 gap-2.5 mt-1">
                 {UPLOAD_OPTIONS.filter(o => !o.featured).map((opt) => (
                   <button key={opt.id} onClick={() => handleTypeSelect(opt.id as UploadType)}
@@ -213,19 +253,41 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
             </div>
           )}
 
-          {/* ── STEP: VIDEO UPLOAD DETAILS ── */}
+          {/* ── STEP: VIDEO UPLOAD ── */}
           {step === "video-details" && (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Upload area */}
-              <div className="relative w-full h-36 rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-red-500/40 hover:bg-red-500/5 transition-all group">
-                <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Upload className="w-5 h-5 text-red-400" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-white">Drop video file here</p>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">MP4, MOV, AVI up to 4GB</p>
-                </div>
-                <input type="file" accept="video/*" className="absolute inset-0 opacity-0 cursor-pointer" />
+              <div
+                className="relative w-full rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-red-500/40 hover:bg-red-500/5 transition-all group overflow-hidden"
+                onClick={() => videoInputRef.current?.click()}
+                style={{ minHeight: previewUrl ? "auto" : "9rem" }}
+              >
+                {previewUrl ? (
+                  <div className="w-full">
+                    <video src={previewUrl} className="w-full rounded-2xl max-h-48 object-cover" controls muted />
+                    <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border-t border-green-500/20">
+                      <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                      <span className="text-[11px] text-green-400 font-semibold truncate">{selectedFile?.name}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-8 flex flex-col items-center gap-2">
+                    <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Upload className="w-5 h-5 text-red-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-white">Tap to select video</p>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">MP4, MOV, AVI up to 4GB</p>
+                    </div>
+                  </div>
+                )}
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={handleVideoFileChange}
+                />
               </div>
 
               {/* Title */}
@@ -260,7 +322,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
               {/* Thumbnail */}
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <ImagePlus className="w-3 h-3" /> Thumbnail URL
+                  <ImagePlus className="w-3 h-3" /> Thumbnail URL (optional)
                 </Label>
                 <Input
                   placeholder="https://... (leave blank for auto-thumbnail)"
@@ -313,7 +375,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 </div>
               </div>
 
-              {/* Submit */}
               <button type="submit" disabled={!videoTitle || createPost.isPending}
                 className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 style={{
@@ -329,18 +390,43 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
           {/* ── STEP: EDIT (Reel / Story) ── */}
           {step === "edit" && (
             <div className="space-y-5">
-              <div className="aspect-[9/16] rounded-2xl bg-white/5 relative overflow-hidden flex items-center justify-center border border-dashed border-white/15">
-                {imageUrl ? (
+              <div
+                className="aspect-[9/16] rounded-2xl bg-white/5 relative overflow-hidden flex items-center justify-center border border-dashed border-white/15 cursor-pointer"
+                onClick={() => photoInputRef.current?.click()}
+              >
+                {isReadingFile ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
+                    <p className="text-xs text-zinc-500">Loading preview...</p>
+                  </div>
+                ) : imageUrl ? (
                   <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="text-center space-y-2 relative">
+                  <div className="text-center space-y-2">
                     <ImagePlus className="w-10 h-10 text-zinc-600 mx-auto" />
-                    <p className="text-xs text-zinc-600">Tap to select media</p>
-                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer"
-                      onChange={() => setImageUrl("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800")} />
+                    <p className="text-xs text-zinc-500">Tap to select photo</p>
+                    <p className="text-[10px] text-zinc-600">JPG, PNG, WEBP</p>
                   </div>
                 )}
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoFileChange}
+                />
               </div>
+
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => { setImageUrl(""); setPreviewUrl(""); setSelectedFile(null); }}
+                  className="w-full text-[11px] text-zinc-500 hover:text-red-400 transition-colors"
+                >
+                  Remove photo
+                </button>
+              )}
+
               <div className="flex justify-between px-2">
                 {EDITING_TOOLS.map((tool) => (
                   <button key={tool.label} className="flex flex-col items-center gap-1 group">
@@ -351,7 +437,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   </button>
                 ))}
               </div>
-              {/* Story-specific: duration picker */}
+
               {uploadType === "story" && (
                 <div className="space-y-2 pt-3 border-t border-white/8">
                   <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Story Duration</span>
@@ -379,10 +465,45 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
           {/* ── STEP: DETAILS (Post / Live) ── */}
           {step === "details" && uploadType !== "video" && (
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="flex gap-3">
-                <div className="w-20 h-20 rounded-xl bg-white/8 overflow-hidden shrink-0 border border-white/10">
-                  {imageUrl && <img src={imageUrl} alt="thumb" className="w-full h-full object-cover" />}
+              {uploadType !== "live" && (
+                <div
+                  className="relative w-full h-36 rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group overflow-hidden"
+                  onClick={() => photoInputRef.current?.click()}
+                >
+                  {isReadingFile ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                      <p className="text-xs text-zinc-500">Loading preview...</p>
+                    </div>
+                  ) : imageUrl ? (
+                    <img src={imageUrl} alt="Preview" className="w-full h-full object-cover rounded-2xl" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <ImagePlus className="w-5 h-5 text-purple-400" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-white">Tap to select photo</p>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">JPG, PNG, WEBP</p>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoFileChange}
+                  />
                 </div>
+              )}
+
+              <div className="flex gap-3">
+                {imageUrl && uploadType !== "live" && (
+                  <div className="w-16 h-16 rounded-xl bg-white/8 overflow-hidden shrink-0 border border-white/10">
+                    <img src={imageUrl} alt="thumb" className="w-full h-full object-cover" />
+                  </div>
+                )}
                 <Textarea
                   placeholder={uploadType === "live" ? "What's your stream about?" : "Write a caption..."}
                   value={caption}
@@ -390,10 +511,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   className="flex-1 resize-none bg-white/5 border-white/10 rounded-xl placeholder:text-zinc-600 min-h-[80px]"
                 />
               </div>
-              {uploadType !== "live" && (
-                <Input placeholder="Image URL..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-                  className="bg-white/5 border-white/10 rounded-xl placeholder:text-zinc-600 text-sm" />
-              )}
+
               <Button type="submit" className="w-full h-11 rounded-xl font-bold bg-gradient-to-r from-primary to-accent" disabled={createPost.isPending}>
                 {createPost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : uploadType === "live" ? "🔴 Go Live" : "Share"}
               </Button>

@@ -48,9 +48,9 @@ const ACHIEVEMENTS = [
   { icon: Crown, label: "Royalty", color: "#f472b6" },
 ];
 
-function SettingRow({ icon: Icon, label, sub }: { icon: any; label: string; sub?: string }) {
+function SettingRow({ icon: Icon, label, sub, onClick }: { icon: any; label: string; sub?: string; onClick?: () => void }) {
   return (
-    <button className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 rounded-xl transition-colors text-left">
+    <button onClick={onClick} className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 rounded-xl transition-colors text-left active:bg-white/10">
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4" />
@@ -71,6 +71,11 @@ export default function Profile() {
   const [selectedPet, setSelectedPet] = useState<{ name: string; emoji: string } | null>(null);
   const { data: history } = useQuery<any[]>({ queryKey: ["/api/history"] });
   const myPosts = posts || [];
+  const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
+  const [accountPrivate, setAccountPrivate] = useState(false);
+  const [allowMessages, setAllowMessages] = useState(true);
+  const [allowComments, setAllowComments] = useState(true);
+  const [allowTags, setAllowTags] = useState(true);
 
   const xp = 7340;
   const xpMax = 10000;
@@ -119,64 +124,255 @@ export default function Profile() {
         <div className="absolute top-0 left-0 right-0 flex items-center justify-end px-4 pt-14 pb-2">
           <div className="flex items-center gap-1">
             {/* Settings */}
-            <Dialog>
+            <Dialog onOpenChange={(open) => { if (!open) setSettingsPanel(null); }}>
               <DialogTrigger asChild>
-                <Button size="icon" variant="ghost" className="w-8 h-8 rounded-full text-pink-400 hover:bg-pink-400/10">
+                <Button size="icon" variant="ghost" className="w-8 h-8 rounded-full text-pink-400 hover:bg-pink-400/10" data-testid="settings-btn">
                   <Settings className="w-4 h-4" />
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md bg-card border border-border/40 shadow-2xl p-0 overflow-hidden">
-                <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/40">
-                  <DialogTitle className="text-xl font-display">Settings</DialogTitle>
-                  <DialogDescription className="sr-only">Manage your account settings.</DialogDescription>
+                <DialogDescription className="sr-only">Manage your account settings.</DialogDescription>
+                <DialogHeader className="px-6 pt-5 pb-3 border-b border-border/40 flex-row items-center gap-3">
+                  {settingsPanel && (
+                    <button onClick={() => setSettingsPanel(null)} className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors shrink-0">
+                      <ChevronRight className="w-4 h-4 rotate-180" />
+                    </button>
+                  )}
+                  <DialogTitle className="text-xl font-display">
+                    {settingsPanel ?? "Settings"}
+                  </DialogTitle>
                 </DialogHeader>
+
                 <ScrollAreaUI className="max-h-[80vh]">
-                  <div className="py-3 space-y-1">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-3 pb-1">How you use LITLink</p>
-                    <SettingRow icon={BarChart3} label="Insights" />
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">For professionals</p>
-                    <SettingRow icon={UserCheck} label="Account type and tools" />
-                    <SettingRow icon={CreditCard} label="Ads payments" />
-                    <SettingRow icon={BadgeCheck} label="LITLink Verified" sub="Subscribed" />
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Who can see your content</p>
-                    <SettingRow icon={Lock} label="Account privacy" sub="Public" />
-                    <SettingRow icon={Star} label="Close Friends" sub="15 members" />
-                    <SettingRow icon={Users2} label="Crossposting" />
-                    <SettingRow icon={Ban} label="Blocked" sub="3 accounts" />
-                    <SettingRow icon={EyeOff} label="Hide story and live" />
-                    <SettingRow icon={UserPlus} label="Activity in Friends tab" />
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">How others can interact with you</p>
-                    <SettingRow icon={MessageSquare} label="Messages and story replies" />
-                    <SettingRow icon={AtSign} label="Tags and mentions" />
-                    <SettingRow icon={MessageCircle} label="Comments" />
-                    <SettingRow icon={Share2} label="Sharing and reuse" />
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Ads preferences</p>
-                    <div className="px-5 py-3 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label className="text-sm font-medium">Personalized Ads</Label>
-                          <p className="text-[11px] text-muted-foreground">Based on your interests</p>
+
+                  {/* ── MAIN LIST ── */}
+                  {!settingsPanel && (
+                    <div className="py-3 space-y-1">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-3 pb-1">How you use LITLink</p>
+                      <SettingRow icon={BarChart3} label="Insights" onClick={() => setSettingsPanel("Insights")} />
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">For professionals</p>
+                      <SettingRow icon={UserCheck} label="Account type and tools" onClick={() => setSettingsPanel("Account type and tools")} />
+                      <SettingRow icon={CreditCard} label="Ads payments" onClick={() => setSettingsPanel("Ads payments")} />
+                      <SettingRow icon={BadgeCheck} label="LITLink Verified" sub="Subscribed" onClick={() => setSettingsPanel("LITLink Verified")} />
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Who can see your content</p>
+                      <SettingRow icon={Lock} label="Account privacy" sub={accountPrivate ? "Private" : "Public"} onClick={() => setSettingsPanel("Account privacy")} />
+                      <SettingRow icon={Star} label="Close Friends" sub="15 members" onClick={() => setSettingsPanel("Close Friends")} />
+                      <SettingRow icon={Users2} label="Crossposting" onClick={() => setSettingsPanel("Crossposting")} />
+                      <SettingRow icon={Ban} label="Blocked" sub="3 accounts" onClick={() => setSettingsPanel("Blocked")} />
+                      <SettingRow icon={EyeOff} label="Hide story and live" onClick={() => setSettingsPanel("Hide story and live")} />
+                      <SettingRow icon={UserPlus} label="Activity in Friends tab" onClick={() => setSettingsPanel("Activity in Friends tab")} />
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">How others can interact with you</p>
+                      <SettingRow icon={MessageSquare} label="Messages and story replies" onClick={() => setSettingsPanel("Messages and story replies")} />
+                      <SettingRow icon={AtSign} label="Tags and mentions" onClick={() => setSettingsPanel("Tags and mentions")} />
+                      <SettingRow icon={MessageCircle} label="Comments" onClick={() => setSettingsPanel("Comments")} />
+                      <SettingRow icon={Share2} label="Sharing and reuse" onClick={() => setSettingsPanel("Sharing and reuse")} />
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Ads preferences</p>
+                      <div className="px-5 py-3 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label className="text-sm font-medium">Personalized Ads</Label>
+                            <p className="text-[11px] text-muted-foreground">Based on your interests</p>
+                          </div>
+                          <Switch defaultChecked />
                         </div>
-                        <Switch defaultChecked />
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Ad Frequency</Label>
+                          <RadioGroup defaultValue="medium" className="grid grid-cols-3 gap-2">
+                            {["Low", "Med", "High"].map((v) => (
+                              <div key={v} className="flex items-center gap-2 bg-muted/50 px-3 py-2.5 rounded-xl cursor-pointer">
+                                <RadioGroupItem value={v.toLowerCase()} id={v.toLowerCase()} />
+                                <Label htmlFor={v.toLowerCase()} className="cursor-pointer text-sm">{v}</Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Ad Frequency</Label>
-                        <RadioGroup defaultValue="medium" className="grid grid-cols-3 gap-2">
-                          {["Low", "Med", "High"].map((v) => (
-                            <div key={v} className="flex items-center gap-2 bg-muted/50 px-3 py-2.5 rounded-xl cursor-pointer">
-                              <RadioGroupItem value={v.toLowerCase()} id={v.toLowerCase()} />
-                              <Label htmlFor={v.toLowerCase()} className="cursor-pointer text-sm">{v}</Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
+                      <Separator className="my-3" />
+                      <button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
+                        <LogOut className="w-4 h-4" />
+                        <span className="text-sm font-semibold">Log out</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── SUB: INSIGHTS ── */}
+                  {settingsPanel === "Insights" && (
+                    <div className="p-5 space-y-4">
+                      {[
+                        { label: "Profile views this week", value: "1,248", change: "+18%" },
+                        { label: "Post impressions", value: "8,490", change: "+7%" },
+                        { label: "Follower growth", value: "+124", change: "this month" },
+                        { label: "Avg. engagement rate", value: "4.2%", change: "above average" },
+                      ].map((item) => (
+                        <div key={item.label} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
+                          <span className="text-sm text-muted-foreground">{item.label}</span>
+                          <div className="text-right">
+                            <div className="text-sm font-bold">{item.value}</div>
+                            <div className="text-[10px] text-green-400">{item.change}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── SUB: ACCOUNT PRIVACY ── */}
+                  {settingsPanel === "Account privacy" && (
+                    <div className="p-5 space-y-5">
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+                        <div>
+                          <div className="text-sm font-semibold">Private account</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">Only approved followers can see your content</div>
+                        </div>
+                        <Switch checked={accountPrivate} onCheckedChange={setAccountPrivate} />
+                      </div>
+                      <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400">
+                        {accountPrivate ? "🔒 Your account is private. New followers must be approved." : "🌐 Your account is public. Anyone can see your posts."}
                       </div>
                     </div>
-                    <Separator className="my-3" />
-                    <button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
-                      <LogOut className="w-4 h-4" />
-                      <span className="text-sm font-semibold">Log out</span>
-                    </button>
-                  </div>
+                  )}
+
+                  {/* ── SUB: MESSAGES ── */}
+                  {settingsPanel === "Messages and story replies" && (
+                    <div className="p-5 space-y-4">
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+                        <div>
+                          <div className="text-sm font-semibold">Allow messages</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">People can send you direct messages</div>
+                        </div>
+                        <Switch checked={allowMessages} onCheckedChange={setAllowMessages} />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Message requests from</p>
+                        {["Everyone", "Followers only", "No one"].map((opt) => (
+                          <button key={opt} className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
+                            <span className="text-sm">{opt}</span>
+                            {opt === "Everyone" && <div className="w-2 h-2 rounded-full bg-pink-400" />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── SUB: COMMENTS ── */}
+                  {settingsPanel === "Comments" && (
+                    <div className="p-5 space-y-4">
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+                        <div>
+                          <div className="text-sm font-semibold">Allow comments</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">People can comment on your posts</div>
+                        </div>
+                        <Switch checked={allowComments} onCheckedChange={setAllowComments} />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Who can comment</p>
+                        {["Everyone", "People you follow", "Your followers", "No one"].map((opt) => (
+                          <button key={opt} className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
+                            <span className="text-sm">{opt}</span>
+                            {opt === "Everyone" && <div className="w-2 h-2 rounded-full bg-pink-400" />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── SUB: TAGS ── */}
+                  {settingsPanel === "Tags and mentions" && (
+                    <div className="p-5 space-y-4">
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+                        <div>
+                          <div className="text-sm font-semibold">Allow tagging</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">People can tag you in posts and stories</div>
+                        </div>
+                        <Switch checked={allowTags} onCheckedChange={setAllowTags} />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Who can tag you</p>
+                        {["Everyone", "People you follow", "No one"].map((opt) => (
+                          <button key={opt} className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
+                            <span className="text-sm">{opt}</span>
+                            {opt === "Everyone" && <div className="w-2 h-2 rounded-full bg-pink-400" />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── SUB: BLOCKED ── */}
+                  {settingsPanel === "Blocked" && (
+                    <div className="p-5 space-y-3">
+                      <p className="text-[11px] text-muted-foreground">Blocked accounts can't see your content or interact with you.</p>
+                      {["@spammer99", "@troll_user", "@fake_account"].map((handle) => (
+                        <div key={handle} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs">👤</div>
+                            <span className="text-sm font-medium">{handle}</span>
+                          </div>
+                          <button className="text-[11px] text-blue-400 font-semibold px-3 py-1 rounded-full border border-blue-400/30 hover:bg-blue-400/10 transition-colors">
+                            Unblock
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── SUB: CLOSE FRIENDS ── */}
+                  {settingsPanel === "Close Friends" && (
+                    <div className="p-5 space-y-3">
+                      <p className="text-[11px] text-muted-foreground">Your close friends list is only visible to you.</p>
+                      {["Alice Wonder", "Bob Builder", "Carol Smith", "Dave Jones"].map((name) => (
+                        <div key={name} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center text-xs font-bold text-white">
+                              {name[0]}
+                            </div>
+                            <span className="text-sm font-medium">{name}</span>
+                          </div>
+                          <div className="w-2 h-2 rounded-full bg-green-400" />
+                        </div>
+                      ))}
+                      <button className="w-full h-10 rounded-xl border border-dashed border-white/20 text-[12px] text-muted-foreground hover:bg-white/5 transition-colors">
+                        + Add more friends
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── SUB: VERIFIED ── */}
+                  {settingsPanel === "LITLink Verified" && (
+                    <div className="p-5 space-y-4">
+                      <div className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 text-center">
+                        <BadgeCheck className="w-12 h-12 text-purple-400" />
+                        <div className="font-bold text-lg">LITLink Verified</div>
+                        <div className="text-[12px] text-muted-foreground">Your account is verified. Enjoy enhanced visibility and exclusive creator features.</div>
+                      </div>
+                      {[
+                        { label: "Blue checkmark", desc: "Shown on your profile and posts" },
+                        { label: "Priority support", desc: "Faster response from our team" },
+                        { label: "Exclusive tools", desc: "Advanced analytics and monetization" },
+                      ].map((item) => (
+                        <div key={item.label} className="flex items-start gap-3 p-3 rounded-xl bg-muted/30">
+                          <div className="w-2 h-2 rounded-full bg-purple-400 mt-1.5 shrink-0" />
+                          <div>
+                            <div className="text-sm font-medium">{item.label}</div>
+                            <div className="text-[11px] text-muted-foreground">{item.desc}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── SUB: GENERIC (Account type, Crossposting, Hide story, Activity, Sharing, Ads payments) ── */}
+                  {["Account type and tools", "Crossposting", "Hide story and live", "Activity in Friends tab", "Sharing and reuse", "Ads payments"].includes(settingsPanel ?? "") && (
+                    <div className="p-5 space-y-4">
+                      <div className="flex flex-col items-center gap-3 py-8 text-center text-muted-foreground">
+                        <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                          <Settings className="w-7 h-7 opacity-40" />
+                        </div>
+                        <div className="text-sm font-medium">More options coming soon</div>
+                        <div className="text-[11px] opacity-60 max-w-[200px]">This feature is being built. Check back in the next update.</div>
+                      </div>
+                    </div>
+                  )}
+
                 </ScrollAreaUI>
               </DialogContent>
             </Dialog>
