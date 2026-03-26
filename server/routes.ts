@@ -10,7 +10,7 @@ import { z } from "zod";
 import { users } from "@shared/models/auth";
 import { posts, comments, ads } from "@shared/schema";
 import { db } from "./db";
-import { sql } from "drizzle-orm";
+import { sql, eq, desc } from "drizzle-orm";
 import OpenAI from "openai";
 import multer from "multer";
 import path from "path";

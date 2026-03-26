@@ -8,6 +8,7 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import {
   Play, ThumbsUp, Share2, MoreVertical,
   MessageSquare, ChevronRight, Flame, Music,
@@ -16,6 +17,9 @@ import {
   Trash2, Flag, AlertTriangle, ShieldAlert, EyeOff, Ban, CheckCheck
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { LiveStreamViewer } from "@/components/live/LiveStreamViewer";
+import { PostViewerModal } from "@/components/post/PostViewerModal";
+import { playLike, playUnlike } from "@/lib/sounds";
 
 const CATEGORIES = [
   { label: "All", icon: null },
@@ -337,13 +341,20 @@ function PostActionMenu({
 export default function Home() {
   const { data: posts, isLoading } = usePosts();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [activeCategory, setActiveCategory] = useState("All");
   const [openCommentPostId, setOpenCommentPostId] = useState<number | null>(null);
   const [actionMenuPost, setActionMenuPost] = useState<any | null>(null);
+  const [livePost, setLivePost] = useState<any | null>(null);
+  const [viewingPost, setViewingPost] = useState<any | null>(null);
 
   const likeMutation = useMutation({
     mutationFn: (postId: number) => apiRequest("POST", `/api/posts/${postId}/like`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/posts"] }),
+    onSuccess: (data: any, postId: number) => {
+      const post = posts?.find(p => p.id === postId);
+      if (data?.added) playLike(); else playUnlike();
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+    },
   });
 
   const isVideoPost = (post: any) => post.type === "video" || post.type === "live" || post.type === "reel";
@@ -420,7 +431,12 @@ export default function Home() {
               const authorAvatar = story.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.user?.firstName}`;
               const isLive = story.type === "live";
               return (
-                <div key={story.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
+                <div
+                  key={story.id}
+                  className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group"
+                  onClick={() => isLive ? setLivePost(story) : setViewingPost(story)}
+                  data-testid={`story-item-${story.id}`}
+                >
                   <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
                     {/* Gradient ring around avatar for stories */}
                     <div className="absolute inset-0"
@@ -589,24 +605,32 @@ export default function Home() {
 
                   {/* Info row */}
                   <div className="flex gap-3 px-3 py-3">
-                    <div className="shrink-0">
+                    <button
+                      className="shrink-0"
+                      onClick={() => navigate(`/profile/${post.userId}`)}
+                      data-testid={`avatar-user-${post.userId}`}
+                    >
                       <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-800">
                         <img
                           src={post.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user?.firstName}`}
                           className="w-full h-full object-cover"
                         />
                       </div>
-                    </div>
+                    </button>
 
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-white leading-snug line-clamp-2 mb-1">
                         {post.caption || `${post.user?.firstName}'s ${post.type === "live" ? "Live Stream" : post.type === "reel" ? "Reel" : post.type === "story" ? "Story" : "Post"}`}
                       </p>
                       <div className="flex items-center gap-1 text-[11px] text-zinc-500">
-                        <span className="flex items-center gap-1">
+                        <button
+                          className="flex items-center gap-1 hover:text-white transition-colors"
+                          onClick={() => navigate(`/profile/${post.userId}`)}
+                          data-testid={`link-user-${post.userId}`}
+                        >
                           @{(post.user as any)?.username || post.user?.firstName?.toLowerCase()}
                           {post.user?.isCelebrity && <CheckCircle2 className="w-3 h-3 text-blue-400 fill-blue-400" />}
-                        </span>
+                        </button>
                         <span>·</span>
                         <span>{post.likesCount || 0} likes</span>
                         <span>·</span>
@@ -682,6 +706,20 @@ export default function Home() {
           post={actionMenuPost}
           isOwner={actionMenuPost.userId === user?.id}
           onClose={() => setActionMenuPost(null)}
+        />
+      )}
+
+      {/* Live Stream Viewer */}
+      {livePost && (
+        <LiveStreamViewer post={livePost} onClose={() => setLivePost(null)} />
+      )}
+
+      {/* Post Viewer Modal */}
+      {viewingPost && (
+        <PostViewerModal
+          post={viewingPost}
+          onClose={() => setViewingPost(null)}
+          allPosts={posts?.filter(p => p.type === viewingPost.type) ?? []}
         />
       )}
     </div>

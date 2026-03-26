@@ -19,6 +19,7 @@ import {
   BotMessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { playSend, playReceive } from "@/lib/sounds";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DirectMessage {
@@ -441,6 +442,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     if (!text.trim()) return;
     sendMsg.mutate({ content: text, type: "text", replyToId: replyTo?.id, expiresInSeconds: disappearing ? 30 : undefined });
     setText("");
+    playSend();
   };
 
   const handleVoice = async () => {

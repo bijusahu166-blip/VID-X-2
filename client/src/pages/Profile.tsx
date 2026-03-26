@@ -3,6 +3,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useParams, useLocation } from "wouter";
+import { PostViewerModal } from "@/components/post/PostViewerModal";
+import { playFollow, playNotification } from "@/lib/sounds";
 import { ArrowLeft } from "lucide-react";
 import {
   Settings, Grid, Bookmark, Users, PawPrint,
@@ -94,6 +96,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
 
   const [followLoading, setFollowLoading] = useState(false);
   const isFollowing = followStatus?.following ?? false;
+  const [viewingPost, setViewingPost] = useState<any | null>(null);
 
   const toggleFollow = async () => {
     setFollowLoading(true);
@@ -103,6 +106,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
       qc.invalidateQueries({ queryKey: ["/api/users", userId, "follow-status"] });
       qc.invalidateQueries({ queryKey: ["/api/users", userId] });
       qc.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      if (!isFollowing) playFollow();
       toast({ title: isFollowing ? "Unfollowed" : "Following! They've been notified." });
     } catch {
       toast({ title: "Failed to update follow", variant: "destructive" });
@@ -228,9 +232,14 @@ function OtherUserProfile({ userId }: { userId: string }) {
         ) : userPosts && userPosts.length > 0 ? (
           <div className="grid grid-cols-3 gap-0.5">
             {userPosts.map((post: any) => (
-              <div key={post.id} className="aspect-square bg-zinc-900 overflow-hidden relative">
+              <button
+                key={post.id}
+                className="aspect-square bg-zinc-900 overflow-hidden relative group text-left"
+                onClick={() => setViewingPost(post)}
+                data-testid={`post-thumb-${post.id}`}
+              >
                 {post.imageUrl && !post.imageUrl.startsWith("blob:") ? (
-                  <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                  <img src={post.imageUrl} alt="" className="w-full h-full object-cover group-active:opacity-80 transition-opacity" />
                 ) : (
                   <div
                     className="w-full h-full flex items-center justify-center p-2"
@@ -246,7 +255,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
                     </div>
                   </div>
                 )}
-              </div>
+              </button>
             ))}
           </div>
         ) : (
@@ -260,6 +269,14 @@ function OtherUserProfile({ userId }: { userId: string }) {
       </div>
 
       <BottomNav />
+
+      {viewingPost && (
+        <PostViewerModal
+          post={viewingPost}
+          onClose={() => setViewingPost(null)}
+          allPosts={userPosts ?? []}
+        />
+      )}
     </div>
   );
 }
@@ -294,6 +311,7 @@ export default function Profile() {
   const [editUsername, setEditUsername] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [viewingMyPost, setViewingMyPost] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openEditProfile = () => {
@@ -897,11 +915,28 @@ export default function Profile() {
             ) : (
               <div className="grid grid-cols-3 gap-0.5">
                 {myPosts.map((post) => (
-                  <div key={post.id} className="aspect-square bg-zinc-900 relative group cursor-pointer overflow-hidden">
-                    <img src={post.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <button
+                    key={post.id}
+                    className="aspect-square bg-zinc-900 relative group cursor-pointer overflow-hidden text-left w-full"
+                    onClick={() => setViewingMyPost(post)}
+                    data-testid={`my-post-thumb-${post.id}`}
+                  >
+                    {post.imageUrl && !String(post.imageUrl).startsWith("blob:") ? (
+                      <img src={post.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{ background: `linear-gradient(135deg, hsl(${(post.id * 47) % 360}, 40%, 14%), hsl(${(post.id * 47 + 120) % 360}, 50%, 20%))` }}
+                      />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="absolute inset-0 border border-pink-500/0 group-hover:border-pink-500/40 transition-colors" />
-                  </div>
+                    {(post.type === "video" || post.type === "reel") && (
+                      <div className="absolute top-1 right-1 w-4 h-4 rounded bg-black/60 flex items-center justify-center">
+                        <span className="text-[7px] text-white">▶</span>
+                      </div>
+                    )}
+                  </button>
                 ))}
               </div>
             )}
@@ -1108,6 +1143,14 @@ export default function Profile() {
       `}</style>
 
       <BottomNav />
+
+      {viewingMyPost && (
+        <PostViewerModal
+          post={viewingMyPost}
+          onClose={() => setViewingMyPost(null)}
+          allPosts={myPosts}
+        />
+      )}
     </div>
   );
 }
