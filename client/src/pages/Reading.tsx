@@ -30,6 +30,7 @@ interface Book {
   author: string | null;
   content: string;
   imageUrl: string | null;
+  pdfUrl: string | null;
   type: string;
 }
 
@@ -51,6 +52,9 @@ export default function Reading() {
   const [uploadCoverUrl, setUploadCoverUrl] = useState("");
   const [uploadCoverPreview, setUploadCoverPreview] = useState("");
   const [isReadingFile, setIsReadingFile] = useState(false);
+  const [uploadPdfUrl, setUploadPdfUrl] = useState("");
+  const [uploadPdfName, setUploadPdfName] = useState("");
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,16 +99,44 @@ export default function Reading() {
     setUploadContent("");
     setUploadCoverUrl("");
     setUploadCoverPreview("");
+    setUploadPdfUrl("");
+    setUploadPdfName("");
   };
 
-  const handleTextFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!uploadTitle) {
-      setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+      setUploadTitle(file.name.replace(/\.[^.]+$/, "").replace(/_/g, " "));
     }
 
+    // PDF: upload to server
+    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      setIsUploadingPdf(true);
+      setUploadPdfName(file.name);
+      try {
+        const formData = new FormData();
+        formData.append("pdf", file);
+        const res = await fetch("/api/upload/book-pdf", {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const data = await res.json();
+        setUploadPdfUrl(data.pdfUrl);
+        toast({ title: "PDF uploaded!", description: `${file.name} is ready.` });
+      } catch {
+        toast({ title: "PDF upload failed", description: "Please try again.", variant: "destructive" });
+        setUploadPdfName("");
+      } finally {
+        setIsUploadingPdf(false);
+      }
+      e.target.value = "";
+      return;
+    }
+
+    // Text file: read as text
     setIsReadingFile(true);
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -140,16 +172,17 @@ export default function Reading() {
       toast({ title: "Title is required", variant: "destructive" });
       return;
     }
-    if (!uploadContent.trim()) {
-      toast({ title: "Book content is required", description: "Upload a .txt file or paste the text.", variant: "destructive" });
+    if (!uploadPdfUrl && !uploadContent.trim()) {
+      toast({ title: "Book content is required", description: "Upload a PDF or .txt file, or paste text.", variant: "destructive" });
       return;
     }
     uploadMutation.mutate({
       title: uploadTitle.trim(),
       author: uploadAuthor.trim() || "Unknown Author",
-      content: uploadContent.trim(),
+      content: uploadContent.trim() || "",
       type: "book",
       imageUrl: uploadCoverUrl || `https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400`,
+      pdfUrl: uploadPdfUrl || null,
     });
   };
 
@@ -282,29 +315,31 @@ export default function Reading() {
                     </div>
                   </div>
 
-                  {/* File upload area */}
+                  {/* File upload area — PDF or TXT */}
                   <div>
-                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 block">Book Content *</label>
+                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 block">Book File (PDF or TXT)</label>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-zinc-700 hover:border-zinc-500 transition-colors text-left"
                     >
-                      {isReadingFile ? (
+                      {isReadingFile || isUploadingPdf ? (
                         <Loader2 className="w-5 h-5 text-red-400 animate-spin shrink-0" />
                       ) : (
                         <FileText className="w-5 h-5 text-zinc-500 shrink-0" />
                       )}
                       <div className="min-w-0">
-                        {isReadingFile ? (
+                        {isUploadingPdf ? (
+                          <p className="text-sm text-zinc-300">Uploading PDF…</p>
+                        ) : isReadingFile ? (
                           <p className="text-sm text-zinc-300">Reading file…</p>
+                        ) : uploadPdfUrl ? (
+                          <p className="text-sm text-green-400 font-semibold truncate">✓ PDF ready: {uploadPdfName}</p>
                         ) : uploadContent ? (
-                          <p className="text-sm text-green-400 font-semibold truncate">
-                            ✓ {uploadContent.length.toLocaleString()} characters loaded
-                          </p>
+                          <p className="text-sm text-green-400 font-semibold truncate">✓ {uploadContent.length.toLocaleString()} characters loaded</p>
                         ) : (
                           <>
-                            <p className="text-sm text-zinc-300">Upload a .txt file</p>
+                            <p className="text-sm text-zinc-300">Upload a PDF or .txt file</p>
                             <p className="text-[11px] text-zinc-600 mt-0.5">Tap to browse files</p>
                           </>
                         )}
@@ -313,30 +348,32 @@ export default function Reading() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".txt,.text,.md,.rtf,text/plain,text/*"
+                      accept=".pdf,.txt,.text,.md,.rtf,application/pdf,text/plain,text/*"
                       className="hidden"
-                      onChange={handleTextFileSelect}
+                      onChange={handleFileSelect}
                       data-testid="input-book-file"
                     />
                   </div>
 
-                  {/* Manual paste fallback */}
-                  <div>
-                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 block">Or paste text directly</label>
-                    <textarea
-                      value={uploadContent}
-                      onChange={(e) => setUploadContent(e.target.value)}
-                      placeholder="Paste your book or article text here…"
-                      data-testid="input-book-content"
-                      rows={5}
-                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-red-500 transition-colors resize-none"
-                    />
-                    <p className="text-[10px] text-zinc-600 mt-1 text-right">{uploadContent.length.toLocaleString()} chars</p>
-                  </div>
+                  {/* Manual paste fallback (only show for non-PDF) */}
+                  {!uploadPdfUrl && (
+                    <div>
+                      <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 block">Or paste text directly</label>
+                      <textarea
+                        value={uploadContent}
+                        onChange={(e) => setUploadContent(e.target.value)}
+                        placeholder="Paste your book or article text here…"
+                        data-testid="input-book-content"
+                        rows={5}
+                        className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-red-500 transition-colors resize-none"
+                      />
+                      <p className="text-[10px] text-zinc-600 mt-1 text-right">{uploadContent.length.toLocaleString()} chars</p>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
-                    disabled={uploadMutation.isPending || isReadingFile || !uploadTitle.trim() || !uploadContent.trim()}
+                    disabled={uploadMutation.isPending || isReadingFile || isUploadingPdf || !uploadTitle.trim() || (!uploadPdfUrl && !uploadContent.trim())}
                     data-testid="button-submit-book"
                     className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     style={{
@@ -410,58 +447,87 @@ export default function Reading() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
-              <div className="aspect-[4/3] rounded-2xl bg-muted overflow-hidden">
-                {selectedBook.imageUrl && (
-                  <img src={selectedBook.imageUrl} alt={selectedBook.title} className="w-full h-full object-cover" />
-                )}
-              </div>
+              {/* Cover — only show if no PDF */}
+              {!selectedBook.pdfUrl && (
+                <div className="aspect-[4/3] rounded-2xl bg-muted overflow-hidden">
+                  {selectedBook.imageUrl && (
+                    <img src={selectedBook.imageUrl} alt={selectedBook.title} className="w-full h-full object-cover" />
+                  )}
+                </div>
+              )}
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <h2 className="text-xl font-bold">{selectedBook.title}</h2>
-                <p className="text-muted-foreground">By {selectedBook.author}</p>
+                <p className="text-muted-foreground text-sm">By {selectedBook.author}</p>
               </div>
 
-              <div className="bg-muted/50 rounded-2xl p-6 text-lg leading-relaxed font-serif whitespace-pre-wrap">
-                {selectedBook.content}
-              </div>
+              {/* PDF Viewer */}
+              {selectedBook.pdfUrl ? (
+                <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-950" style={{ height: "70vh" }}>
+                  <iframe
+                    src={selectedBook.pdfUrl}
+                    title={selectedBook.title}
+                    className="w-full h-full"
+                    style={{ border: "none" }}
+                    data-testid={`pdf-viewer-${selectedBook.id}`}
+                  />
+                </div>
+              ) : (
+                <div className="bg-muted/50 rounded-2xl p-6 text-lg leading-relaxed font-serif whitespace-pre-wrap">
+                  {selectedBook.content || <span className="text-zinc-500 text-base italic">No content available.</span>}
+                </div>
+              )}
 
               <BannerAd placement="reading" />
 
               {/* Controls */}
               <Card className="border-border/50 bg-card/50 backdrop-blur">
                 <CardContent className="p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-2">
+                  {/* Text-to-speech controls — only for text books */}
+                  {!selectedBook.pdfUrl && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-2">
+                        <Button
+                          variant={voice === "female" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setVoice("female")}
+                          className="rounded-full gap-2"
+                        >
+                          <User className="w-4 h-4" /> Female
+                        </Button>
+                        <Button
+                          variant={voice === "male" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setVoice("male")}
+                          className="rounded-full gap-2"
+                        >
+                          <User className="w-4 h-4" /> Male
+                        </Button>
+                      </div>
                       <Button
-                        variant={voice === "female" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setVoice("female")}
-                        className="rounded-full gap-2"
+                        onClick={togglePlayback}
+                        size="icon"
+                        className="w-12 h-12 rounded-full bg-primary shadow-lg shadow-primary/20"
                       >
-                        <User className="w-4 h-4" /> Female
-                      </Button>
-                      <Button
-                        variant={voice === "male" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setVoice("male")}
-                        className="rounded-full gap-2"
-                      >
-                        <User className="w-4 h-4" /> Male
+                        {isReading ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
                       </Button>
                     </div>
-                    <Button
-                      onClick={togglePlayback}
-                      size="icon"
-                      className="w-12 h-12 rounded-full bg-primary shadow-lg shadow-primary/20"
-                    >
-                      {isReading ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-                    </Button>
-                  </div>
+                  )}
 
                   <div className="flex gap-2">
-                    <Button variant="secondary" className="flex-1 gap-2 rounded-xl h-11" onClick={() => toast({ title: "Downloading...", description: "Book saved to your library" })}>
-                      <Download className="w-4 h-4" /> Download
-                    </Button>
+                    {selectedBook.pdfUrl ? (
+                      <Button
+                        variant="secondary"
+                        className="flex-1 gap-2 rounded-xl h-11"
+                        onClick={() => window.open(selectedBook.pdfUrl!, "_blank")}
+                      >
+                        <Download className="w-4 h-4" /> Open PDF
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" className="flex-1 gap-2 rounded-xl h-11" onClick={() => toast({ title: "Downloading...", description: "Book saved to your library" })}>
+                        <Download className="w-4 h-4" /> Download
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       className="flex-1 gap-2 rounded-xl h-11 border-primary/20 hover:bg-primary/5"

@@ -67,8 +67,9 @@ export const books = pgTable("books", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   author: text("author"),
-  content: text("content").notNull(),
+  content: text("content").notNull().default(""),
   imageUrl: text("image_url"),
+  pdfUrl: text("pdf_url"),
   type: text("type").notNull(), // 'book' or 'news'
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

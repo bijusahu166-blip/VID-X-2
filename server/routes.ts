@@ -34,6 +34,24 @@ const videoUpload = multer({
   },
 });
 
+const bookUploadsDir = path.join(process.cwd(), "uploads", "books");
+if (!fs.existsSync(bookUploadsDir)) fs.mkdirSync(bookUploadsDir, { recursive: true });
+
+const bookUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, bookUploadsDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || ".pdf";
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === "application/pdf" || file.originalname.toLowerCase().endsWith(".pdf")) cb(null, true);
+    else cb(new Error("Only PDF files allowed"));
+  },
+});
+
 async function seed() {
   const existingUsers = await db.select().from(users).limit(1);
   if (existingUsers.length > 0) return;
@@ -311,8 +329,15 @@ export async function registerRoutes(
   });
 
   app.post("/api/books", isAuthenticated, async (req, res) => {
-    const book = await storage.createBook(req.body);
+    const book = await storage.createBook({ ...req.body, content: req.body.content || "" });
     res.status(201).json(book);
+  });
+
+  // PDF upload for books
+  app.post("/api/upload/book-pdf", isAuthenticated, bookUpload.single("pdf"), (req: any, res) => {
+    if (!req.file) return res.status(400).json({ message: "No PDF file uploaded" });
+    const fileUrl = `/uploads/books/${req.file.filename}`;
+    res.json({ pdfUrl: fileUrl });
   });
 
   // Ads
