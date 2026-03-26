@@ -1,10 +1,11 @@
 import { BottomNav } from "@/components/layout/BottomNav";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Heart, UserPlus, Radio, MessageCircle, Check, Phone, UserCheck, X } from "lucide-react";
+import { Bell, Heart, UserPlus, Radio, MessageCircle, Check, Phone, UserCheck, X, PhoneOff, Video } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { playFollow, playNotification } from "@/lib/sounds";
+import { VideoCallScreen } from "@/components/call/VideoCallScreen";
 
 interface Notification {
   id: number;
@@ -64,6 +65,8 @@ export default function Notifications() {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const [followedBack, setFollowedBack] = useState<Set<string>>(new Set());
+  const [activeCall, setActiveCall] = useState<{ callerName: string; callerAvatar?: string; audioOnly: boolean } | null>(null);
+  const [declinedCallIds, setDeclinedCallIds] = useState<Set<number>>(new Set());
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
@@ -220,6 +223,39 @@ export default function Notifications() {
                             </button>
                           </div>
                         )}
+
+                        {/* Call — accept / decline */}
+                        {notif.type === "call" && !declinedCallIds.has(notif.id) && (
+                          <div className="mt-3 flex gap-2" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => {
+                                const isAudio = notif.message.toLowerCase().includes("voice");
+                                setActiveCall({
+                                  callerName: notif.first_name ? `${notif.first_name} ${notif.last_name ?? ""}`.trim() : "Unknown",
+                                  callerAvatar: notif.profile_image_url ?? undefined,
+                                  audioOnly: isAudio,
+                                });
+                              }}
+                              className="flex items-center gap-1.5 text-[12px] font-bold bg-green-500 hover:bg-green-400 text-white px-4 py-1.5 rounded-full transition-colors"
+                              data-testid={`button-accept-call-${notif.id}`}
+                            >
+                              {notif.message.toLowerCase().includes("voice") ? <Phone className="w-3 h-3" /> : <Video className="w-3 h-3" />}
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => setDeclinedCallIds(prev => new Set([...prev, notif.id]))}
+                              className="flex items-center gap-1.5 text-[12px] font-bold bg-red-500/80 hover:bg-red-400 text-white px-4 py-1.5 rounded-full transition-colors"
+                              data-testid={`button-decline-call-${notif.id}`}
+                            >
+                              <PhoneOff className="w-3 h-3" /> Decline
+                            </button>
+                          </div>
+                        )}
+                        {notif.type === "call" && declinedCallIds.has(notif.id) && (
+                          <p className="mt-1.5 text-[11px] text-red-400/80 flex items-center gap-1">
+                            <PhoneOff className="w-3 h-3" /> Call declined
+                          </p>
+                        )}
                       </div>
 
                       {/* Unread indicator */}
@@ -236,6 +272,16 @@ export default function Notifications() {
       </div>
 
       <BottomNav />
+
+      {/* Active call screen */}
+      {activeCall && (
+        <VideoCallScreen
+          onClose={() => setActiveCall(null)}
+          callerName={activeCall.callerName}
+          callerAvatar={activeCall.callerAvatar}
+          audioOnly={activeCall.audioOnly}
+        />
+      )}
     </div>
   );
 }
