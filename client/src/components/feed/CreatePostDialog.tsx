@@ -616,83 +616,80 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
               {/* ── LIVE CAMERA MODE ── */}
               {cameraMode ? (
-                <div className="space-y-3">
-                  <div className="aspect-[9/16] rounded-2xl bg-zinc-900 relative overflow-hidden">
-                    {cameraError ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6">
-                        <Video className="w-12 h-12 text-zinc-600" />
-                        <p className="text-xs text-zinc-400 text-center leading-relaxed">{cameraError}</p>
-                        <button
-                          onClick={() => startCamera(isFrontCamera)}
-                          className="px-5 py-2 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-400 text-xs font-bold"
-                        >
-                          Try Again
-                        </button>
-                        <p className="text-[10px] text-zinc-600 text-center">Tip: Open the app URL directly in your browser for camera access</p>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Loading spinner until camera is ready */}
-                        {!cameraReady && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
-                            <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
-                            <p className="text-xs text-zinc-500">Starting camera…</p>
-                          </div>
-                        )}
-                        <video
-                          ref={cameraVideoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className="w-full h-full object-cover"
-                          onCanPlay={() => setCameraReady(true)}
-                          style={{
-                            transform: isFrontCamera ? "scaleX(-1)" : "none",
-                            filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined,
-                            opacity: cameraReady ? 1 : 0,
-                            transition: "opacity 0.3s ease",
-                          }}
-                        />
-                        {/* AR overlay */}
-                        {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
-                          <div className="absolute inset-0 pointer-events-none" style={{ background: selectedArEffect.overlay }} />
-                        )}
+                <div className="rounded-2xl bg-zinc-950 overflow-hidden relative" style={{ aspectRatio: "9/16", maxHeight: "68vh" }}>
+                  {cameraError ? (
+                    /* ── Error state ── */
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6">
+                      <Video className="w-12 h-12 text-zinc-600" />
+                      <p className="text-xs text-zinc-400 text-center leading-relaxed">{cameraError}</p>
+                      <button onClick={() => startCamera(isFrontCamera)}
+                        className="px-5 py-2 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-400 text-xs font-bold">
+                        Try Again
+                      </button>
+                      <p className="text-[10px] text-zinc-600 text-center">Open the app URL directly in your browser for camera access</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Loading spinner */}
+                      {!cameraReady && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-zinc-950">
+                          <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
+                          <p className="text-xs text-zinc-500">Starting camera…</p>
+                        </div>
+                      )}
+
+                      {/* Live video feed */}
+                      <video
+                        ref={cameraVideoRef}
+                        autoPlay playsInline muted
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onCanPlay={() => setCameraReady(true)}
+                        style={{
+                          transform: isFrontCamera ? "scaleX(-1)" : "none",
+                          filter: selectedArEffect.filter !== "none" ? selectedArEffect.filter : undefined,
+                          opacity: cameraReady ? 1 : 0,
+                          transition: "opacity 0.3s ease",
+                        }}
+                      />
+
+                      {/* AR colour overlay */}
+                      {selectedArEffect.overlay && selectedArEffect.filter !== "none" && (
+                        <div className="absolute inset-0 pointer-events-none z-10" style={{ background: selectedArEffect.overlay }} />
+                      )}
+
+                      {/* ── TOP controls ── */}
+                      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3 z-20">
                         {/* Active filter badge */}
-                        {selectedArEffect.id !== "none" && (
-                          <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/15">
+                        {selectedArEffect.id !== "none" ? (
+                          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/15">
                             <span className="text-sm">{selectedArEffect.emoji}</span>
                             <span className="text-[10px] text-white/90 font-bold">{selectedArEffect.name}</span>
                           </div>
-                        )}
+                        ) : <div />}
                         {/* Flip camera */}
-                        <button
-                          onClick={toggleCameraFace}
-                          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm border border-white/15 flex items-center justify-center hover:bg-white/20 transition-colors"
-                        >
+                        <button onClick={toggleCameraFace}
+                          className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm border border-white/15 flex items-center justify-center hover:bg-white/20 transition-colors">
                           <RotateCcw className="w-4 h-4 text-white" />
                         </button>
-                        {/* Capture button */}
-                        <div className="absolute bottom-4 left-0 right-0 flex justify-center">
-                          <button
-                            onClick={capturePhoto}
-                            className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center bg-white/20 backdrop-blur-sm hover:bg-white/40 active:scale-90 transition-all shadow-2xl"
-                          >
+                      </div>
+
+                      {/* ── BOTTOM overlay: filter strip + capture ── */}
+                      <div className="absolute bottom-0 left-0 right-0 z-20"
+                        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 60%, transparent 100%)" }}>
+                        {/* AR Filter strip — overlaid inside camera view */}
+                        <div className="px-3 pt-3 pb-1">
+                          <ARFilterStrip selected={selectedArEffect} onSelect={setSelectedArEffect} />
+                        </div>
+                        {/* Capture row */}
+                        <div className="flex items-center justify-center py-4">
+                          <button onClick={capturePhoto}
+                            className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center bg-white/20 backdrop-blur-sm hover:bg-white/40 active:scale-90 transition-all shadow-2xl">
                             <div className="w-10 h-10 rounded-full bg-white" />
                           </button>
                         </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* AR Filter picker — always visible in camera mode */}
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <img src={filterIconSrc} alt="Filter" className="w-4 h-4 rounded object-cover" />
-                      <span className="text-[11px] font-bold text-white">AR Filters</span>
-                      <span className="text-[9px] text-purple-400 font-semibold">{AR_EFFECTS.length} effects</span>
-                    </div>
-                    <ARFilterStrip selected={selectedArEffect} onSelect={setSelectedArEffect} />
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 /* ── UPLOAD MODE ── */
