@@ -144,7 +144,10 @@ function VoiceNoteBubble({ url, isSender }: { url: string; isSender: boolean }) 
   const toggle = () => {
     if (!audioRef.current) audioRef.current = new Audio(url);
     if (playing) { audioRef.current.pause(); setPlaying(false); }
-    else { audioRef.current.play(); setPlaying(true); audioRef.current.onended = () => setPlaying(false); }
+    else {
+      audioRef.current.onended = () => setPlaying(false);
+      audioRef.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    }
   };
 
   return (
@@ -214,9 +217,9 @@ function ChatList({ onOpenChat, onOpenGroup }: { onOpenChat: (chat: ChatContact)
 
   // Mark self as online
   useEffect(() => {
-    apiRequest("POST", "/api/status/online", {});
-    const interval = setInterval(() => apiRequest("POST", "/api/status/online", {}), 30000);
-    return () => { clearInterval(interval); apiRequest("POST", "/api/status/offline", {}); };
+    apiRequest("POST", "/api/status/online", {}).catch(() => {});
+    const interval = setInterval(() => apiRequest("POST", "/api/status/online", {}).catch(() => {}), 30000);
+    return () => { clearInterval(interval); apiRequest("POST", "/api/status/offline", {}).catch(() => {}); };
   }, []);
 
   const filtered = chats.filter(c =>
@@ -389,7 +392,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
 
   // Mark read
   useEffect(() => {
-    apiRequest("PATCH", `/api/direct-chats/${chat.id}/read`, {});
+    apiRequest("PATCH", `/api/direct-chats/${chat.id}/read`, {}).catch(() => {});
     qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
   }, [chat.id, messages.length]);
 
@@ -400,7 +403,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
 
   // Notify typing
   const notifyTyping = useCallback(() => {
-    apiRequest("POST", `/api/direct-chats/${chat.id}/typing`, {});
+    apiRequest("POST", `/api/direct-chats/${chat.id}/typing`, {}).catch(() => {});
   }, [chat.id]);
 
   // Smart replies when last message is from other
@@ -481,13 +484,15 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
 
   const handleTranslate = async (msg: DirectMessage) => {
     if (translatedTexts[msg.id]) { setTranslatedTexts(p => { const n = {...p}; delete n[msg.id]; return n; }); return; }
-    const res: any = await apiRequest("POST", "/api/translate", { text: msg.content, targetLang: "English" });
-    setTranslatedTexts(p => ({ ...p, [msg.id]: res.translated }));
+    try {
+      const res: any = await apiRequest("POST", "/api/translate", { text: msg.content, targetLang: "English" });
+      setTranslatedTexts(p => ({ ...p, [msg.id]: res.translated }));
+    } catch { /* translation failed silently */ }
   };
 
   const handleThemeChange = (key: string) => {
     setTheme(key);
-    apiRequest("PATCH", `/api/direct-chats/${chat.id}/theme`, { theme: key });
+    apiRequest("PATCH", `/api/direct-chats/${chat.id}/theme`, { theme: key }).catch(() => {});
     setShowThemePicker(false);
   };
 

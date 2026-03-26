@@ -42,7 +42,7 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) { video.play(); setIsPlaying(true); }
+    if (video.paused) { video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false)); }
     else { video.pause(); setIsPlaying(false); }
   };
 
