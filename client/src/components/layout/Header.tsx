@@ -21,8 +21,20 @@ export function Header() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border/40 safe-header">
-        <div className="flex items-center justify-between gap-4 h-14 px-4 max-w-sm mx-auto">
+      {/* Status-bar filler — same background as header, fills the area between
+          viewport top and the safe area inset so no content bleeds through */}
+      <div
+        className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur"
+        style={{ height: 'env(safe-area-inset-top, 0px)' }}
+        aria-hidden="true"
+      />
+
+      {/* Header — starts exactly below the status bar, always exactly h-14 tall */}
+      <header
+        className="fixed left-0 right-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border/40 h-14"
+        style={{ top: 'env(safe-area-inset-top, 0px)' }}
+      >
+        <div className="flex items-center justify-between gap-4 h-full px-4 max-w-sm mx-auto">
 
           {/* Left: Create Button */}
           <Button
