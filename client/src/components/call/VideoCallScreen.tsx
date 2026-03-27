@@ -97,6 +97,17 @@ export function VideoCallScreen({ onClose, callerName, callerAvatar, audioOnly =
     return () => clearInterval(interval);
   }, [callState]);
 
+  // Re-attach camera stream to video element whenever call state changes
+  // (video element moves between PiP and main view on state change, so srcObject must be re-set)
+  useEffect(() => {
+    const vid = localVideoRef.current;
+    const stream = localStreamRef.current;
+    if (vid && stream && isCameraOn && !cameraError) {
+      vid.srcObject = stream;
+      vid.play().catch(() => {});
+    }
+  }, [callState, isCameraOn, cameraError]);
+
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60).toString().padStart(2, "0");
     const sec = (s % 60).toString().padStart(2, "0");
@@ -153,161 +164,151 @@ export function VideoCallScreen({ onClose, callerName, callerAvatar, audioOnly =
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col overflow-hidden">
 
-      {/* ── REMOTE VIDEO AREA (simulated) ── */}
+      {/* ── MAIN VIDEO AREA ── */}
       <div className="absolute inset-0">
         {callState === "active" ? (
-          <div className="w-full h-full relative overflow-hidden">
-            {/* Simulated remote background */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background: "linear-gradient(135deg, #0d0d1a 0%, #1a0d2e 30%, #0d1a2e 60%, #0a0a14 100%)",
-              }}
-            />
-            {/* Animated depth particles */}
-            {[...Array(20)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute rounded-full opacity-20"
-                style={{
-                  width: Math.random() * 4 + 1,
-                  height: Math.random() * 4 + 1,
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                  background: i % 3 === 0 ? "#f472b6" : i % 3 === 1 ? "#818cf8" : "#34d399",
-                  animation: `pulse ${2 + Math.random() * 3}s ease-in-out infinite`,
-                  animationDelay: `${Math.random() * 2}s`,
-                }}
-              />
-            ))}
-            {/* Remote caller avatar */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white/20 animate-bounce" style={{ animationDuration: "3s" }}>
-                  {displayAvatar
-                    ? <img src={displayAvatar} className="w-full h-full object-cover" alt={displayName} />
-                    : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-pink-600 text-3xl font-black text-white">{displayName.charAt(0)}</div>
-                  }
+          /* ACTIVE: show YOUR camera full-screen (face-to-face) */
+          <div className="w-full h-full relative overflow-hidden bg-black">
+            {isCameraOn && !cameraError ? (
+              <>
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{
+                    transform: isFrontCamera ? "scaleX(-1)" : "none",
+                    filter: activeEffect.filter,
+                  }}
+                />
+                {activeEffect.overlay && (
+                  <div className="absolute inset-0 pointer-events-none" style={{ background: activeEffect.overlay }} />
+                )}
+                {activeEffect.animation === "glitch" && (
+                  <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                    <div className="absolute inset-0" style={{
+                      background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,0,100,0.05) 2px, rgba(255,0,100,0.05) 4px)",
+                      animation: "glitchScan 0.8s linear infinite",
+                    }} />
+                  </div>
+                )}
+                {/* "You" label */}
+                <div className="absolute bottom-36 left-4 z-10">
+                  <span className="text-white/60 text-xs font-semibold bg-black/40 px-2 py-0.5 rounded-full">You</span>
                 </div>
-                <div className="text-white font-bold text-xl">{displayName}</div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-green-400 text-sm font-medium">HD Connected</span>
-                </div>
+              </>
+            ) : (
+              /* Camera off or error — dark background with avatar */
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3"
+                style={{ background: "linear-gradient(135deg, #0d0d1a, #1a0828, #0d0d1a)" }}>
+                <VideoOff className="w-12 h-12 text-zinc-600" />
+                <span className="text-zinc-400 text-sm">{cameraError ? "Camera unavailable" : "Camera off"}</span>
+                {cameraError && (
+                  <button
+                    onClick={() => startCamera(isFrontCamera ? "user" : "environment")}
+                    className="text-xs bg-purple-600/60 hover:bg-purple-600 text-white px-4 py-2 rounded-full transition-colors"
+                  >
+                    Allow Camera Access
+                  </button>
+                )}
               </div>
-            </div>
+            )}
           </div>
         ) : (
+          /* CONNECTING / RINGING: caller avatar + animation */
           <div className="w-full h-full flex flex-col items-center justify-center gap-6"
             style={{ background: "linear-gradient(135deg, #0d0d1a, #1a0828, #0d0d1a)" }}>
             <div className="relative">
               <div
-                className="w-28 h-28 rounded-full flex items-center justify-center text-6xl"
-                style={{
-                  background: "linear-gradient(135deg, #7c3aed, #db2777)",
-                  boxShadow: "0 0 60px rgba(168,85,247,0.5)",
-                }}
+                className="w-28 h-28 rounded-full flex items-center justify-center text-6xl overflow-hidden"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #db2777)", boxShadow: "0 0 60px rgba(168,85,247,0.5)" }}
               >
                 {displayAvatar
-                  ? <img src={displayAvatar} className="w-full h-full object-cover rounded-full" alt={displayName} />
+                  ? <img src={displayAvatar} className="w-full h-full object-cover" alt={displayName} />
                   : <span className="text-4xl font-black text-white">{displayName.charAt(0)}</span>
                 }
               </div>
-              {/* Ripple rings */}
               {[1, 2, 3].map(i => (
-                <div
-                  key={i}
-                  className="absolute inset-0 rounded-full border-2 border-purple-500/30"
-                  style={{
-                    animation: `ping 1.5s ease-out ${i * 0.4}s infinite`,
-                    transform: `scale(${1 + i * 0.35})`,
-                  }}
-                />
+                <div key={i} className="absolute inset-0 rounded-full border-2 border-purple-500/30"
+                  style={{ animation: `ping 1.5s ease-out ${i * 0.4}s infinite`, transform: `scale(${1 + i * 0.35})` }} />
               ))}
             </div>
             <div className="text-center space-y-1">
               <p className="text-white text-2xl font-bold">{displayName}</p>
-              <p className="text-purple-300 text-sm">
-                {callState === "connecting" ? "Connecting..." : "Ringing..."}
-              </p>
+              <p className="text-purple-300 text-sm">{callState === "connecting" ? "Connecting..." : "Ringing..."}</p>
             </div>
             <div className="flex gap-1">
               {[0, 1, 2, 3, 4].map(i => (
-                <div
-                  key={i}
-                  className="w-1 rounded-full bg-purple-400"
-                  style={{
-                    height: 8 + (i % 3) * 8,
-                    animation: `bounce 1s ease-in-out ${i * 0.15}s infinite alternate`,
-                  }}
-                />
+                <div key={i} className="w-1 rounded-full bg-purple-400"
+                  style={{ height: 8 + (i % 3) * 8, animation: `bounce 1s ease-in-out ${i * 0.15}s infinite alternate` }} />
               ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* ── LOCAL VIDEO (self view, PiP) ── */}
-      <div
-        className={`absolute transition-all duration-300 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl cursor-pointer z-20 ${
-          isPiPExpanded ? "top-16 right-3 w-44 h-72" : "top-16 right-3 w-28 h-44"
-        }`}
-        onClick={() => setIsPiPExpanded(p => !p)}
-        style={{ boxShadow: "0 0 20px rgba(0,0,0,0.6)" }}
-      >
-        {cameraError || !isCameraOn ? (
-          <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center gap-2 p-2">
-            <VideoOff className="w-5 h-5 text-zinc-500" />
-            {cameraError && cameraPermission === "denied" ? (
-              <>
-                <span className="text-[8px] text-zinc-400 text-center leading-tight">Camera blocked</span>
-                <button
-                  onClick={() => startCamera(isFrontCamera ? "user" : "environment")}
-                  className="text-[8px] bg-purple-600/60 text-white px-2 py-0.5 rounded-full"
-                >
-                  Retry
-                </button>
-              </>
-            ) : (
-              <span className="text-[8px] text-zinc-500">{cameraError ? "No camera" : "Camera off"}</span>
-            )}
-          </div>
-        ) : (
-          <div className="relative w-full h-full">
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-              style={{
-                transform: isFrontCamera ? "scaleX(-1)" : "none",
-                filter: activeEffect.filter,
-              }}
-            />
-            {/* AR effect overlay */}
-            {activeEffect.overlay && (
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{ background: activeEffect.overlay }}
-              />
-            )}
-            {/* Glitch animation overlay */}
-            {activeEffect.animation === "glitch" && (
-              <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <div className="absolute inset-0" style={{
-                  background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,0,100,0.05) 2px, rgba(255,0,100,0.05) 4px)",
-                  animation: "glitchScan 0.8s linear infinite",
-                }} />
-              </div>
-            )}
-            {/* Expand indicator */}
-            <div className="absolute bottom-1 right-1">
-              <Maximize2 className="w-3 h-3 text-white/60" />
+      {/* ── PICTURE-IN-PICTURE ── */}
+      {callState === "active" ? (
+        /* Active: PiP shows the REMOTE caller avatar */
+        <div
+          className={`absolute transition-all duration-300 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl cursor-pointer z-20 ${
+            isPiPExpanded ? "top-16 right-3 w-44 h-56" : "top-16 right-3 w-28 h-36"
+          }`}
+          onClick={() => setIsPiPExpanded(p => !p)}
+          style={{ background: "linear-gradient(135deg, #1a0d2e, #0d1a2e)", boxShadow: "0 0 20px rgba(0,0,0,0.6)" }}
+        >
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/30">
+              {displayAvatar
+                ? <img src={displayAvatar} className="w-full h-full object-cover" alt={displayName} />
+                : <div className="w-full h-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-lg font-black text-white">{displayName.charAt(0)}</div>
+              }
+            </div>
+            <span className="text-white text-[10px] font-bold truncate max-w-[90%] px-1 text-center">{displayName}</span>
+            <div className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-green-400 text-[9px]">Connected</span>
             </div>
           </div>
-        )}
-      </div>
+          <div className="absolute bottom-1 right-1">
+            <Maximize2 className="w-3 h-3 text-white/40" />
+          </div>
+        </div>
+      ) : (
+        /* Connecting/Ringing: PiP shows YOUR camera preview */
+        <div
+          className={`absolute transition-all duration-300 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl cursor-pointer z-20 ${
+            isPiPExpanded ? "top-16 right-3 w-44 h-72" : "top-16 right-3 w-28 h-44"
+          }`}
+          onClick={() => setIsPiPExpanded(p => !p)}
+          style={{ boxShadow: "0 0 20px rgba(0,0,0,0.6)" }}
+        >
+          {cameraError || !isCameraOn ? (
+            <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center gap-2 p-2">
+              <VideoOff className="w-5 h-5 text-zinc-500" />
+              <span className="text-[8px] text-zinc-500">{cameraError ? "No camera" : "Camera off"}</span>
+            </div>
+          ) : (
+            <div className="relative w-full h-full">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                style={{ transform: isFrontCamera ? "scaleX(-1)" : "none", filter: activeEffect.filter }}
+              />
+              {activeEffect.overlay && (
+                <div className="absolute inset-0 pointer-events-none" style={{ background: activeEffect.overlay }} />
+              )}
+              <div className="absolute bottom-1 right-1">
+                <Maximize2 className="w-3 h-3 text-white/60" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── TOP BAR ── */}
       <div className="relative z-30 flex items-center justify-between px-4 pt-12 pb-3">
