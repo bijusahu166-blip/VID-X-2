@@ -645,40 +645,83 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         setUploadProgress(1);
 
         // ── Chunked upload ────────────────────────────────────────────────────
-        // Split the video into 4 MB slices so no single HTTP request exceeds
-        // the deployment proxy's body-size limit (which caused the 413 error).
-        const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB
+        // 1 MB chunks — small enough to pass through the Replit proxy without 413s.
+        // Uploads 4 chunks concurrently for speed. Each chunk retries up to 3 times
+        // before the entire upload is aborted.
+        const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB per chunk
+        const CONCURRENCY = 4;              // 4 parallel uploads
+        const MAX_RETRIES = 3;              // retries per chunk before giving up
         const totalChunks = Math.ceil(videoFile.size / CHUNK_SIZE);
         const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        let completedChunks = 0;
+        let aborted = false;
+        let abortReason = "";
 
-        for (let i = 0; i < totalChunks; i++) {
+        const uploadChunk = async (i: number): Promise<void> => {
+          if (aborted) return;
           const start = i * CHUNK_SIZE;
           const end = Math.min(start + CHUNK_SIZE, videoFile.size);
           const chunk = videoFile.slice(start, end);
 
-          const fd = new FormData();
-          // Text fields MUST come before the file so req.body is populated
-          // before multer's filename callback fires on the server side.
-          fd.append("uploadId", uploadId);
-          fd.append("chunkIndex", String(i));
-          fd.append("totalChunks", String(totalChunks));
-          fd.append("chunk", chunk, videoFile.name);
+          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            if (aborted) return;
+            try {
+              const fd = new FormData();
+              // Text fields MUST come before the file blob so req.body is populated
+              // before multer's filename callback fires on the server side.
+              fd.append("uploadId", uploadId);
+              fd.append("chunkIndex", String(i));
+              fd.append("totalChunks", String(totalChunks));
+              fd.append("chunk", chunk, videoFile.name);
 
-          const resp = await fetch("/api/upload/chunk", {
-            method: "POST",
-            body: fd,
-            credentials: "include",
-          });
+              const resp = await fetch("/api/upload/chunk", {
+                method: "POST",
+                body: fd,
+                credentials: "include",
+              });
 
-          if (!resp.ok) {
-            let msg = "Chunk upload failed";
-            try { msg = (await resp.json()).message || msg; } catch {}
-            toast({ title: "Upload failed", description: `${msg} (chunk ${i + 1}/${totalChunks})`, variant: "destructive" });
-            return;
+              if (resp.ok) {
+                completedChunks++;
+                // Progress: chunks account for 90%, finalize for the last 10%
+                setUploadProgress(Math.round((completedChunks / totalChunks) * 90));
+                return; // success — stop retrying
+              }
+
+              // Non-OK response
+              let msg = `HTTP ${resp.status}`;
+              try { msg = (await resp.json()).message || msg; } catch {}
+
+              if (attempt === MAX_RETRIES - 1) {
+                aborted = true;
+                abortReason = `${msg} (chunk ${i + 1}/${totalChunks})`;
+              } else {
+                // Brief pause before retry (100ms × attempt)
+                await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
+              }
+            } catch (networkErr: any) {
+              if (attempt === MAX_RETRIES - 1) {
+                aborted = true;
+                abortReason = `Network error on chunk ${i + 1}/${totalChunks}: ${networkErr?.message || "connection lost"}`;
+              } else {
+                await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+              }
+            }
           }
+        };
 
-          // Progress: chunks account for 90%, finalize for the last 10%
-          setUploadProgress(Math.round(((i + 1) / totalChunks) * 90));
+        // Upload chunks in batches of CONCURRENCY
+        for (let batch = 0; batch < totalChunks; batch += CONCURRENCY) {
+          if (aborted) break;
+          const batchIndices = Array.from(
+            { length: Math.min(CONCURRENCY, totalChunks - batch) },
+            (_, k) => batch + k
+          );
+          await Promise.all(batchIndices.map(uploadChunk));
+        }
+
+        if (aborted) {
+          toast({ title: "Upload failed", description: abortReason, variant: "destructive" });
+          return;
         }
 
         // Ask server to assemble all chunks into the final video file

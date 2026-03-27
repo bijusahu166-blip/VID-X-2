@@ -22,7 +22,7 @@ if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 const chunksDir = path.join(process.cwd(), "uploads", "chunks");
 if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
 
-// Multer for individual chunks — each chunk must be ≤6 MB so the proxy never 413s.
+// Multer for individual chunks — keep each chunk ≤2 MB so the Replit proxy never 413s.
 // NOTE: req.body fields may not be populated yet during multer's filename callback
 // when the file field appears first in the FormData stream, so we use a temp name
 // and rename the file inside the route handler once req.body is fully available.
@@ -33,7 +33,7 @@ const chunkUpload = multer({
       cb(null, `tmp-chunk-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     },
   }),
-  limits: { fileSize: 6 * 1024 * 1024 }, // 6 MB per chunk
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB per chunk (safe for Replit proxy)
 });
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp", ".flv", ".wmv", ".ts"]);
@@ -791,21 +791,28 @@ export async function registerRoutes(
     const finalFilename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
     const finalPath = path.join(uploadsDir, finalFilename);
     try {
-      const writeStream = fs.createWriteStream(finalPath);
       const n = Number(totalChunks);
+      // Verify all chunks exist before starting assembly
       for (let i = 0; i < n; i++) {
         const chunkPath = path.join(chunksDir, `${uploadId}-chunk-${String(i).padStart(6, "0")}`);
         if (!fs.existsSync(chunkPath)) {
-          writeStream.destroy();
-          fs.unlink(finalPath, () => {});
           return res.status(400).json({ message: `Missing chunk ${i}` });
         }
-        const data = fs.readFileSync(chunkPath);
-        writeStream.write(data);
-        fs.unlink(chunkPath, () => {}); // clean up chunk immediately
       }
-      writeStream.end();
+      // Stream-assemble chunks one by one to avoid loading large files into RAM
+      const writeStream = fs.createWriteStream(finalPath);
+      for (let i = 0; i < n; i++) {
+        const chunkPath = path.join(chunksDir, `${uploadId}-chunk-${String(i).padStart(6, "0")}`);
+        await new Promise<void>((resolve, reject) => {
+          const readStream = fs.createReadStream(chunkPath);
+          readStream.on("error", reject);
+          readStream.on("end", resolve);
+          readStream.pipe(writeStream, { end: false });
+        });
+        fs.unlink(chunkPath, () => {}); // clean up chunk immediately after piping
+      }
       await new Promise<void>((resolve, reject) => {
+        writeStream.end();
         writeStream.on("finish", resolve);
         writeStream.on("error", reject);
       });

@@ -123,7 +123,8 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests. Please slow down." },
-  skip: () => process.env.NODE_ENV === "development",
+  // Skip rate limiting in dev AND for chunk/finalize upload endpoints (they're already auth-gated)
+  skip: (req) => process.env.NODE_ENV === "development" || req.path.startsWith("/upload/"),
 });
 
 app.use("/api/auth", authLimiter);
