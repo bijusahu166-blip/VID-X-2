@@ -342,13 +342,15 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
   const broadcasterName = user
     ? `${(user as any).firstName || ""} ${(user as any).lastName || ""}`.trim() || "Host"
     : "Host";
+  // Stable fallback uid so it doesn't change on every render when user is null
+  const fallbackUidRef = useRef(`host_${Math.floor(Math.random() * 1e9)}`);
   const {
     messages: rtmMessages,
     sendMessage: rtmSend,
     connected: rtmConnected,
   } = useAgoraRTM({
     channelName: agoraChannelName,
-    uid: user?.id ? String(user.id) : `host_${Date.now()}`,
+    uid: user?.id ? String(user.id) : fallbackUidRef.current,
     displayName: broadcasterName,
     color: "#f97316",
     enabled: liveStarted && livePostId !== null,
