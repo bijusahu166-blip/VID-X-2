@@ -559,9 +559,25 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
     let videoFileUrl: string | undefined;
 
-    // Upload actual video file if present
-    const videoFile = selectedFile || reelVideoFile;
-    if (videoFile && (uploadType === "video" || uploadType === "reel" || uploadType === "story")) {
+    // Determine the correct file to upload:
+    // - Reels always use reelVideoFile (always a video)
+    // - Videos use selectedFile (always a video from handleVideoFileChange)
+    // - Stories use selectedFile ONLY if it is actually a video (not a photo)
+    // This prevents image/jpeg files from being sent to the video upload endpoint.
+    let videoFile: File | null = null;
+    if (uploadType === "reel") {
+      videoFile = reelVideoFile;
+    } else if (uploadType === "video") {
+      videoFile = selectedFile;
+    } else if (uploadType === "story" && selectedFile) {
+      const mime = selectedFile.type;
+      if (mime.startsWith("video/") || mime === "application/octet-stream") {
+        videoFile = selectedFile;
+      }
+      // If it's an image (e.g. image/jpeg), skip video upload — use imageUrl directly
+    }
+
+    if (videoFile) {
       try {
         setIsUploadingVideo(true);
         setUploadProgress(5);
@@ -599,8 +615,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         setIsUploadingVideo(false);
       }
 
-      // If video upload failed, stop here — don't create a broken post
-      if (!videoFileUrl) {
+      // For video and reel posts the video is required — stop if upload failed
+      if (!videoFileUrl && (uploadType === "video" || uploadType === "reel")) {
         toast({
           title: "Video required",
           description: "Your video couldn't be uploaded. Please try again.",
