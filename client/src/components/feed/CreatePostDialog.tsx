@@ -399,6 +399,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     stopCamera();
     setCameraMode(false);
     setDemoMode(false);
+    setReelMediaMode("photo");
   }, [selectedArEffect, isFrontCamera, stopCamera]);
 
   // Start/stop camera when cameraMode changes
@@ -525,9 +526,13 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       setStep("video-details");
     } else if (type === "live") {
       setStep("details");
-    } else if (type === "reel" || type === "story") {
-      // Go directly to camera mode for Reel and Story
-      setCameraMode(true);
+    } else if (type === "reel") {
+      setCameraMode(false);
+      setReelMediaMode("video");
+      setStep("edit");
+    } else if (type === "story") {
+      setCameraMode(false);
+      setReelMediaMode("photo");
       setStep("edit");
     } else if (type === "editing") {
       setStep("edit");
@@ -704,8 +709,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         } : {}),
       } as any);
       handleClose();
-    } catch (err: any) {
-      toast({ title: "Post failed", description: err?.message || "Something went wrong. Please try again.", variant: "destructive" });
+    } catch {
+      // error toast handled by useCreatePost.onError
     }
   };
 
@@ -1709,6 +1714,17 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   <button type="button" onClick={() => { setCameraMode(false); stopCamera(); }} className="w-full py-2 rounded-xl text-xs text-zinc-400 border border-white/10 hover:border-white/20">← Back to Upload</button>
                 </div>
               )}
+              {/* Reel/Story video preview in details step */}
+              {reelVideoUrl && (uploadType === "reel" || uploadType === "story") && !cameraMode && (
+                <div className="rounded-2xl overflow-hidden border border-red-500/30 bg-zinc-950">
+                  <video src={reelVideoUrl} className="w-full max-h-48 object-cover" controls playsInline loop muted />
+                  <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border-t border-red-500/20">
+                    <Film className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <span className="text-[11px] text-red-300 font-semibold">Video ready to upload</span>
+                  </div>
+                </div>
+              )}
+
               {uploadType !== "live" && !cameraMode && (
                 <div className="space-y-2">
                   <div
@@ -1827,8 +1843,19 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 />
               </div>
 
-              <Button type="submit" className="w-full h-11 rounded-xl font-bold bg-gradient-to-r from-primary to-accent" disabled={createPost.isPending}>
-                {createPost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : uploadType === "live" ? "🔴 Go Live" : "Share"}
+              <Button type="submit" className="w-full h-11 rounded-xl font-bold bg-gradient-to-r from-primary to-accent relative overflow-hidden" disabled={createPost.isPending || isUploadingVideo}>
+                {isUploadingVideo ? (
+                  <>
+                    <div className="absolute inset-y-0 left-0 bg-white/20 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                    <span className="relative z-10 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Uploading… {uploadProgress}%
+                    </span>
+                  </>
+                ) : createPost.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  uploadType === "live" ? "🔴 Go Live" : "Share"
+                )}
               </Button>
             </form>
           )}
