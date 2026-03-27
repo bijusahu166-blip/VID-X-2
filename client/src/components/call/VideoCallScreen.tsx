@@ -17,8 +17,8 @@ interface VideoCallScreenProps {
 }
 
 export function VideoCallScreen({ onClose, callerName, callerAvatar, audioOnly = false }: VideoCallScreenProps) {
-  const displayName = callerName || "Unknown";
-  const displayHandle = `@${(callerName || "user").toLowerCase().replace(/\s+/g, "_")}`;
+  const displayName = callerName?.trim() || "Contact";
+  const displayHandle = `@${(callerName || "contact").toLowerCase().replace(/\s+/g, "_")}`;
   const displayAvatar = callerAvatar || null;
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -30,6 +30,7 @@ export function VideoCallScreen({ onClose, callerName, callerAvatar, audioOnly =
   const [callState, setCallState] = useState<"connecting" | "ringing" | "active">("connecting");
   const [callDuration, setCallDuration] = useState(0);
   const [cameraError, setCameraError] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState<"pending" | "granted" | "denied">("pending");
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const [isPiPExpanded, setIsPiPExpanded] = useState(false);
   const [activeEffectTab, setActiveEffectTab] = useState("All");
@@ -47,36 +48,47 @@ export function VideoCallScreen({ onClose, callerName, callerAvatar, audioOnly =
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: videoEnabled ? {
-          facingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
-        } : false,
+      const constraints: MediaStreamConstraints = {
         audio: true,
-      });
+        video: videoEnabled ? { facingMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } : false,
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       localStreamRef.current = stream;
       if (localVideoRef.current && videoEnabled) {
         localVideoRef.current.srcObject = stream;
       }
       setCameraError(false);
-    } catch {
+      setCameraPermission("granted");
+      return true;
+    } catch (err: any) {
+      const isDenied = err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError";
+      setCameraPermission(isDenied ? "denied" : "denied");
       setCameraError(true);
+      return false;
     }
   }, []);
 
   useEffect(() => {
-    startCamera("user", !audioOnly);
-    // Simulate connecting → ringing → active
-    const t1 = setTimeout(() => setCallState("ringing"), 1200);
-    const t2 = setTimeout(() => setCallState("active"), 3500);
+    let t1: ReturnType<typeof setTimeout>;
+    let t2: ReturnType<typeof setTimeout>;
+
+    const init = async () => {
+      // Start camera (or audio only)
+      await startCamera("user", !audioOnly);
+      // Ringing after 1.5s, active after 3.5s regardless of camera result
+      t1 = setTimeout(() => setCallState("ringing"), 1500);
+      t2 = setTimeout(() => setCallState("active"), 3500);
+    };
+
+    init();
+
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       localStreamRef.current?.getTracks().forEach(t => t.stop());
     };
-  }, [startCamera]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Call timer
   useEffect(() => {
@@ -244,9 +256,21 @@ export function VideoCallScreen({ onClose, callerName, callerAvatar, audioOnly =
         style={{ boxShadow: "0 0 20px rgba(0,0,0,0.6)" }}
       >
         {cameraError || !isCameraOn ? (
-          <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center gap-2">
-            <VideoOff className="w-6 h-6 text-zinc-600" />
-            <span className="text-[9px] text-zinc-600">{cameraError ? "No camera" : "Camera off"}</span>
+          <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center gap-2 p-2">
+            <VideoOff className="w-5 h-5 text-zinc-500" />
+            {cameraError && cameraPermission === "denied" ? (
+              <>
+                <span className="text-[8px] text-zinc-400 text-center leading-tight">Camera blocked</span>
+                <button
+                  onClick={() => startCamera(isFrontCamera ? "user" : "environment")}
+                  className="text-[8px] bg-purple-600/60 text-white px-2 py-0.5 rounded-full"
+                >
+                  Retry
+                </button>
+              </>
+            ) : (
+              <span className="text-[8px] text-zinc-500">{cameraError ? "No camera" : "Camera off"}</span>
+            )}
           </div>
         ) : (
           <div className="relative w-full h-full">
