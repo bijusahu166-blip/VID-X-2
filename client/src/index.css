@@ -305,7 +305,5 @@ html, body {
 }
 
 /* ── Video Performance ───────────────────────────────────────────────────── */
-/* Browser sirf visible content load karega — off-screen videos skip render */
-video {
-  content-visibility: auto;
-}
+/* content-visibility:auto is intentionally NOT set on video — it breaks
+   HLS.js init and prevents media elements from loading in scroll containers */

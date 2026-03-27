@@ -26,19 +26,88 @@ if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
 const hlsBaseDir = path.join(process.cwd(), "uploads", "hls");
 if (!fs.existsSync(hlsBaseDir)) fs.mkdirSync(hlsBaseDir, { recursive: true });
 
-// Convert a raw video file to HLS segments using FFmpeg stream-copy (fast, no re-encode).
-// Returns the HLS manifest URL on success, null on failure.
+// Move moov atom to the beginning of an MP4 so browsers can stream it
+// without downloading the whole file first. Fast — no re-encoding.
+async function faststartMp4(inputPath: string): Promise<boolean> {
+  const tmpPath = inputPath + "_fs.mp4";
+  return new Promise((resolve) => {
+    const ff = spawn("ffmpeg", [
+      "-y",
+      "-i", inputPath,
+      "-c", "copy",
+      "-movflags", "+faststart",
+      "-f", "mp4",
+      tmpPath,
+    ]);
+    const timer = setTimeout(() => { ff.kill(); resolve(false); }, 120_000);
+    ff.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0 && fs.existsSync(tmpPath)) {
+        try {
+          fs.renameSync(tmpPath, inputPath);
+          return resolve(true);
+        } catch { /* fall through */ }
+      }
+      try { fs.unlinkSync(tmpPath); } catch {}
+      resolve(false);
+    });
+    ff.on("error", () => { clearTimeout(timer); resolve(false); });
+  });
+}
+
+// Probe the video duration in seconds (returns null on failure)
+function probeDuration(inputPath: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const ff = spawn("ffprobe", [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      inputPath,
+    ]);
+    let out = "";
+    ff.stdout.on("data", (d: Buffer) => { out += d.toString(); });
+    ff.on("close", () => {
+      const n = parseFloat(out.trim());
+      resolve(isNaN(n) ? null : n);
+    });
+    ff.on("error", () => resolve(null));
+  });
+}
+
+// Convert video to HLS with H.264/AAC transcoding for maximum browser
+// compatibility. Returns the manifest URL or null on failure.
 async function convertToHls(inputPath: string, uploadId: string): Promise<string | null> {
+  // Skip HLS for very long videos (> 20 min) — transcoding would take too long
+  const duration = await probeDuration(inputPath);
+  if (duration === null) {
+    console.warn("[hls] Could not probe duration for", uploadId, "— skipping HLS");
+    return null;
+  }
+  if (duration > 1200) {
+    console.warn(`[hls] Video too long (${Math.round(duration)}s) for ${uploadId} — skipping HLS, using faststart MP4`);
+    return null;
+  }
+
   const hlsDir = path.join(hlsBaseDir, uploadId);
   fs.mkdirSync(hlsDir, { recursive: true });
   const manifestPath = path.join(hlsDir, "index.m3u8");
   const segmentPattern = path.join(hlsDir, "seg%04d.ts");
 
+  // Timeout: 5 min per minute of video, min 3 min, max 10 min
+  const timeoutMs = Math.min(Math.max(duration * 5000, 180_000), 600_000);
+
   return new Promise((resolve) => {
     const ff = spawn("ffmpeg", [
+      "-y",
       "-i", inputPath,
-      "-codec:v", "copy",
-      "-codec:a", "copy",
+      // Transcode to H.264 + AAC — works with any input codec/container
+      "-c:v", "libx264",
+      "-preset", "ultrafast",
+      "-crf", "23",
+      "-c:a", "aac",
+      "-b:a", "128k",
+      "-ar", "44100",
+      // HLS output
       "-start_number", "0",
       "-hls_time", "6",
       "-hls_list_size", "0",
@@ -52,17 +121,19 @@ async function convertToHls(inputPath: string, uploadId: string): Promise<string
 
     const timer = setTimeout(() => {
       ff.kill();
-      console.warn("[hls] FFmpeg timed out for", uploadId);
+      console.warn(`[hls] FFmpeg timed out after ${timeoutMs / 1000}s for`, uploadId);
       resolve(null);
-    }, 90_000);
+    }, timeoutMs);
 
     ff.on("close", (code) => {
       clearTimeout(timer);
       if (code === 0 && fs.existsSync(manifestPath)) {
-        console.log(`[hls] converted ${uploadId} → ${hlsDir}`);
+        console.log(`[hls] converted ${uploadId} (${Math.round(duration)}s) → ${hlsDir}`);
         resolve(`/uploads/hls/${uploadId}/index.m3u8`);
       } else {
-        console.warn("[hls] FFmpeg failed (exit", code, ") for", uploadId, stderr.slice(-300));
+        console.warn("[hls] FFmpeg failed (exit", code, ") for", uploadId, "\n", stderr.slice(-500));
+        // Clean up partial HLS output
+        try { fs.rmSync(hlsDir, { recursive: true, force: true }); } catch {}
         resolve(null);
       }
     });
@@ -871,7 +942,14 @@ export async function registerRoutes(
       const stats = fs.statSync(finalPath);
       console.log(`[finalize] ${finalFilename} assembled (${Math.round(stats.size / 1024 / 1024)} MB)`);
 
-      // Convert to HLS — stream-copy is fast (seconds, not minutes)
+      // Move moov atom to front so browsers can start playing without downloading the whole file
+      const ext = path.extname(finalFilename).toLowerCase();
+      if (ext === ".mp4" || ext === ".m4v" || ext === ".mov") {
+        const ok = await faststartMp4(finalPath);
+        console.log(`[finalize] faststart ${finalFilename}: ${ok ? "ok" : "skipped"}`);
+      }
+
+      // Convert to HLS — transcode to H.264/AAC for universal browser support
       const hlsUrl = await convertToHls(finalPath, String(uploadId));
 
       res.json({
