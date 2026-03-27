@@ -1,13 +1,15 @@
-import { Plus, Bell, MessageCircle } from "lucide-react";
+import { Plus, Bell, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { CreatePostDialog } from "@/components/feed/CreatePostDialog";
+import { RandomCallScreen } from "@/components/call/RandomCallScreen";
 import { useQuery } from "@tanstack/react-query";
 import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
 
 export function Header() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isRandomCallOpen, setIsRandomCallOpen] = useState(false);
   const [, navigate] = useLocation();
 
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -40,19 +42,21 @@ export function Header() {
             <h1 className="font-display bg-clip-text bg-gradient-to-r from-primary to-accent text-[22px] leading-none font-black text-[transparent]">VID-X</h1>
           </div>
 
-          {/* Right: Video Call + Notifications */}
+          {/* Right: icons */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Messages shortcut */}
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => navigate("/messages")}
-              className="rounded-full w-9 h-9 hover:bg-secondary transition-colors"
-              data-testid="button-messages"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span className="sr-only">Messages</span>
-            </Button>
+            {/* Random Video Call button */}
+            <div className="spin-border-green">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setIsRandomCallOpen(true)}
+                className="rounded-full w-9 h-9 text-green-400 hover:text-green-300 hover:bg-green-500/10 transition-colors relative z-10"
+                data-testid="button-random-video-call"
+              >
+                <Video className="w-4 h-4" />
+                <span className="sr-only">Random Video Call</span>
+              </Button>
+            </div>
 
             {/* Notifications bell — navigates to /notifications */}
             <Button
@@ -75,6 +79,7 @@ export function Header() {
       </header>
 
       <CreatePostDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
+      {isRandomCallOpen && <RandomCallScreen onClose={() => setIsRandomCallOpen(false)} />}
     </>
   );
 }
