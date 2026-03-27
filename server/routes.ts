@@ -16,6 +16,34 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
+import { v2 as cloudinary } from "cloudinary";
+
+// Configure Cloudinary from secrets
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true,
+});
+
+// Upload a local file to Cloudinary and return the optimised secure_url.
+// Applies f_auto + q_auto so Cloudinary picks the best format/quality per device.
+async function uploadToCloudinary(localPath: string, folder = "litlink-videos"): Promise<string> {
+  const result = await cloudinary.uploader.upload(localPath, {
+    resource_type: "video",
+    folder,
+    use_filename: true,
+    unique_filename: true,
+    overwrite: false,
+    chunk_size: 6_000_000, // 6 MB chunks for resilient upload
+  });
+  // Insert f_auto,q_auto into the URL right after /upload/
+  const optimisedUrl = result.secure_url.replace(
+    "/upload/",
+    "/upload/f_auto,q_auto/"
+  );
+  return optimisedUrl;
+}
 
 const uploadsDir = path.join(process.cwd(), "uploads", "videos");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -855,7 +883,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/upload/video", isAuthenticated, (req: any, res) => {
-    videoUpload.single("video")(req, res, (err: any) => {
+    videoUpload.single("video")(req, res, async (err: any) => {
       if (err) {
         console.error("[video upload error]", err.message || err);
         if (err.code === "LIMIT_FILE_SIZE") {
@@ -867,9 +895,17 @@ export async function registerRoutes(
         console.error("[video upload] No file received in request");
         return res.status(400).json({ message: "No video file received. Please select a video file." });
       }
-      const fileUrl = `/uploads/videos/${req.file.filename}`;
-      console.log(`[video upload] saved: ${req.file.filename} (${Math.round(req.file.size / 1024)}KB)`);
-      res.json({ url: fileUrl, filename: req.file.filename, size: req.file.size });
+      try {
+        console.log(`[video upload] uploading to Cloudinary: ${req.file.filename} (${Math.round(req.file.size / 1024)}KB)`);
+        const cloudUrl = await uploadToCloudinary(req.file.path);
+        fs.unlink(req.file.path, () => {});
+        console.log(`[video upload] Cloudinary done: ${cloudUrl}`);
+        res.json({ url: cloudUrl, filename: req.file.filename, size: req.file.size });
+      } catch (uploadErr: any) {
+        console.error("[video upload] Cloudinary error:", uploadErr.message || uploadErr);
+        fs.unlink(req.file.path, () => {});
+        res.status(500).json({ message: "Failed to upload video to cloud storage" });
+      }
     });
   });
 
@@ -904,14 +940,14 @@ export async function registerRoutes(
     });
   });
 
-  // Assemble all chunks into the final video file once every chunk has arrived.
+  // Assemble all chunks into the final video file, upload to Cloudinary, and return the URL.
   app.post("/api/upload/finalize", isAuthenticated, async (req: any, res) => {
     const { uploadId, totalChunks, originalName } = req.body;
     if (!uploadId || !totalChunks || !originalName) {
       return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
     }
-    const ext = path.extname(String(originalName)).toLowerCase() || ".mp4";
-    const finalFilename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    const fileExt = path.extname(String(originalName)).toLowerCase() || ".mp4";
+    const finalFilename = `${Date.now()}-${Math.random().toString(36).slice(2)}${fileExt}`;
     const finalPath = path.join(uploadsDir, finalFilename);
     try {
       const n = Number(totalChunks);
@@ -940,28 +976,23 @@ export async function registerRoutes(
         writeStream.on("error", reject);
       });
       const stats = fs.statSync(finalPath);
-      console.log(`[finalize] ${finalFilename} assembled (${Math.round(stats.size / 1024 / 1024)} MB)`);
+      console.log(`[finalize] ${finalFilename} assembled (${Math.round(stats.size / 1024 / 1024)} MB) — uploading to Cloudinary`);
 
-      // Move moov atom to front so browsers can start playing without downloading the whole file
-      const ext = path.extname(finalFilename).toLowerCase();
-      if (ext === ".mp4" || ext === ".m4v" || ext === ".mov") {
-        const ok = await faststartMp4(finalPath);
-        console.log(`[finalize] faststart ${finalFilename}: ${ok ? "ok" : "skipped"}`);
-      }
-
-      // Convert to HLS — transcode to H.264/AAC for universal browser support
-      const hlsUrl = await convertToHls(finalPath, String(uploadId));
+      // Upload assembled file to Cloudinary (f_auto + q_auto baked into URL)
+      const cloudUrl = await uploadToCloudinary(finalPath);
+      // Delete local assembled file now that it's safely in the cloud
+      fs.unlink(finalPath, () => {});
+      console.log(`[finalize] Cloudinary upload done: ${cloudUrl}`);
 
       res.json({
-        url: `/uploads/videos/${finalFilename}`,
-        hlsUrl: hlsUrl ?? undefined,
+        url: cloudUrl,
         filename: finalFilename,
         size: stats.size,
       });
     } catch (err: any) {
       console.error("[finalize error]", err.message || err);
       fs.unlink(finalPath, () => {});
-      res.status(500).json({ message: "Failed to assemble video" });
+      res.status(500).json({ message: "Failed to assemble or upload video" });
     }
   });
 

@@ -742,8 +742,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
         const finalData = await finalResp.json();
         setUploadProgress(100);
-        // Prefer the HLS stream URL if FFmpeg converted it — falls back to raw MP4
-        videoFileUrl = finalData.hlsUrl ?? finalData.url;
+        // Use the Cloudinary URL (already optimised with f_auto,q_auto)
+        videoFileUrl = finalData.url;
       } catch (err: any) {
         toast({ title: "Upload failed", description: err?.message || "Something went wrong", variant: "destructive" });
         return;
