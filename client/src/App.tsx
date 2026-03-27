@@ -5,6 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
+import { CallProvider, useCall } from "@/contexts/CallContext";
+import { VideoCallScreen } from "@/components/call/VideoCallScreen";
+import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
 
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
@@ -15,6 +18,16 @@ import Reels from "@/pages/Reels";
 import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
 import Notifications from "@/pages/Notifications";
+
+function GlobalCallOverlay() {
+  const { callState } = useCall();
+  return (
+    <>
+      {(callState === "outgoing" || callState === "active") && <VideoCallScreen />}
+      {callState === "incoming" && <IncomingCallScreen />}
+    </>
+  );
+}
 
 function Router() {
   const { user, isLoading } = useAuth();
@@ -32,22 +45,24 @@ function Router() {
   }
 
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/search" component={Search} />
-      <Route path="/reading" component={Reading} />
-      <Route path="/reels" component={Reels} />
-      <Route path="/messages" component={Messages} />
-      <Route path="/notifications" component={Notifications} />
-      <Route path="/profile" component={Profile} />
-      <Route path="/profile/:id" component={Profile} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/search" component={Search} />
+        <Route path="/reading" component={Reading} />
+        <Route path="/reels" component={Reels} />
+        <Route path="/messages" component={Messages} />
+        <Route path="/notifications" component={Notifications} />
+        <Route path="/profile" component={Profile} />
+        <Route path="/profile/:id" component={Profile} />
+        <Route component={NotFound} />
+      </Switch>
+      <GlobalCallOverlay />
+    </>
   );
 }
 
 function App() {
-  // Force permanent dark mode
   if (typeof document !== "undefined") {
     document.documentElement.classList.add("dark");
   }
@@ -55,8 +70,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Router />
+        <CallProvider>
+          <Toaster />
+          <Router />
+        </CallProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { AIChatDrawer } from "@/components/chat/AIChatDrawer";
-import { VideoCallScreen } from "@/components/call/VideoCallScreen";
+import { useCall } from "@/contexts/CallContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -355,9 +355,8 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   const { toast } = useToast();
   const bottomRef = useRef<HTMLDivElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  const { startCall } = useCall();
   const [text, setText] = useState("");
-  const [showVideoCall, setShowVideoCall] = useState(false);
-  const [callAudioOnly, setCallAudioOnly] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [showTranslate, setShowTranslate] = useState<number | null>(null);
@@ -506,15 +505,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
-  if (showVideoCall) return (
-    <VideoCallScreen
-      onClose={() => { setShowVideoCall(false); setCallAudioOnly(false); }}
-      callerName={other ? `${other.firstName} ${other.lastName}` : undefined}
-      callerAvatar={other?.profileImageUrl || undefined}
-      audioOnly={callAudioOnly}
-    />
-  );
-
   return (
     <div className={cn("flex flex-col h-full", T.bg)}>
       {/* ── Header ── */}
@@ -532,10 +522,10 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
           <p className="text-xs text-zinc-400">{chat.isOnline ? "Online" : chat.lastSeen ? `Last seen ${formatTime(chat.lastSeen)}` : "Offline"}</p>
         </div>
         <div className="flex items-center gap-1">
-          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { setCallAudioOnly(false); setShowVideoCall(true); if (other?.id) fetch(`/api/users/${other.id}/call-notify`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ audioOnly: false }) }); }} data-testid="button-video-call">
+          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { if (other?.id) startCall(other.id, `${other.firstName} ${other.lastName}`, other.profileImageUrl || undefined, false); }} data-testid="button-video-call">
             <Video className="w-4 h-4" />
           </button>
-          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { setCallAudioOnly(true); setShowVideoCall(true); if (other?.id) fetch(`/api/users/${other.id}/call-notify`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ audioOnly: true }) }); }} data-testid="button-voice-call">
+          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { if (other?.id) startCall(other.id, `${other.firstName} ${other.lastName}`, other.profileImageUrl || undefined, true); }} data-testid="button-voice-call">
             <Phone className="w-4 h-4" />
           </button>
           <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => setShowThemePicker(p => !p)} data-testid="button-theme">

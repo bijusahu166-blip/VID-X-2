@@ -2,9 +2,41 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 
 const app = express();
 const httpServer = createServer(app);
+
+// ── WebRTC Signaling via WebSocket ──────────────────────────────────────────
+const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+const wsClients = new Map<string, WebSocket>();
+
+wss.on("connection", (ws) => {
+  let userId: string | null = null;
+
+  ws.on("message", (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+
+      if (msg.type === "register") {
+        userId = String(msg.userId);
+        wsClients.set(userId, ws);
+        ws.send(JSON.stringify({ type: "registered" }));
+        return;
+      }
+
+      if (msg.to) {
+        const target = wsClients.get(String(msg.to));
+        if (target && target.readyState === WebSocket.OPEN) {
+          target.send(JSON.stringify({ ...msg, from: userId }));
+        }
+      }
+    } catch { /* ignore malformed messages */ }
+  });
+
+  ws.on("close", () => { if (userId) wsClients.delete(userId); });
+  ws.on("error", () => { if (userId) wsClients.delete(userId); });
+});
 
 declare module "http" {
   interface IncomingMessage {
