@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Volume2, VolumeX, Play, Pause, RotateCcw, Music } from "lucide-react";
+import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2 } from "lucide-react";
 
 interface VideoPlayerProps {
   src: string;
@@ -24,11 +24,14 @@ export function VideoPlayer({
   showControls = true,
   onVisible,
 }: VideoPlayerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const lastTap = useRef(0);
   const [muted, setMuted] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [tapped, setTapped] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // IntersectionObserver: auto-play when ≥50% visible, pause otherwise
   useEffect(() => {
@@ -66,6 +69,24 @@ export function VideoPlayer({
     return () => video.removeEventListener("timeupdate", onTime);
   }, []);
 
+  // Track fullscreen state
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const container = containerRef.current;
+    if (!container) return;
+    if (!document.fullscreenElement) {
+      container.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
     const video = videoRef.current;
@@ -78,6 +99,13 @@ export function VideoPlayer({
     e.stopPropagation();
     const video = videoRef.current;
     if (!video) return;
+    // Double-tap to fullscreen
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      toggleFullscreen(e);
+      return;
+    }
+    lastTap.current = now;
     if (playing) {
       video.pause();
       setPlaying(false);
@@ -85,7 +113,6 @@ export function VideoPlayer({
       video.play().catch(() => {});
       setPlaying(true);
     }
-    // Show tap feedback
     setTapped(true);
     setTimeout(() => setTapped(false), 600);
   };
@@ -100,7 +127,7 @@ export function VideoPlayer({
   };
 
   return (
-    <div className={`relative overflow-hidden bg-black ${className}`} data-testid="video-player">
+    <div ref={containerRef} className={`relative overflow-hidden bg-black ${className}`} data-testid="video-player">
       <video
         ref={videoRef}
         src={src}
@@ -129,6 +156,19 @@ export function VideoPlayer({
 
       {showControls && (
         <>
+          {/* Fullscreen button */}
+          <button
+            onClick={toggleFullscreen}
+            className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-black/50 backdrop-blur flex items-center justify-center z-20 border border-white/10"
+            data-testid="button-fullscreen"
+            title="Fullscreen (double-tap to toggle)"
+          >
+            {isFullscreen
+              ? <Minimize2 className="w-4 h-4 text-white" />
+              : <Maximize2 className="w-4 h-4 text-white" />
+            }
+          </button>
+
           {/* Mute/Unmute button */}
           <button
             onClick={toggleMute}

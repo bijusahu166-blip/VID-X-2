@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, ChevronLeft, ChevronRight, Heart, Share2 } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Heart, Share2, Maximize2, Minimize2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { playLike } from "@/lib/sounds";
@@ -31,10 +31,12 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
   const [liked, setLiked] = useState(false);
   const [, navigate] = useLocation();
 
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTime = useRef(Date.now());
   const accumulated = useRef(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const story = stories[idx];
   const hasPrev = idx > 0;
@@ -55,6 +57,23 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
     if (hrs < 24) return `${hrs}h`;
     return `${Math.floor(hrs / 24)}d`;
   }
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
 
   const goNext = useCallback(() => {
     if (hasNext) {
@@ -177,6 +196,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
   return (
     <AnimatePresence>
       <motion.div
+        ref={containerRef}
         key="story-viewer"
         className="fixed inset-0 z-[110] bg-black flex flex-col select-none"
         initial={{ opacity: 0, scale: 0.96 }}
@@ -207,6 +227,14 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
               <p className="text-white text-sm font-bold leading-tight drop-shadow truncate">{authorName}</p>
               <p className="text-white/70 text-[10px] leading-tight">{timeAgo}</p>
             </div>
+          </button>
+          <button
+            onClick={toggleFullscreen}
+            className="w-8 h-8 rounded-full bg-black/40 backdrop-blur flex items-center justify-center shrink-0"
+            data-testid="button-fullscreen-story"
+            title="Fullscreen"
+          >
+            {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
           </button>
           <button
             onClick={e => { e.stopPropagation(); onClose(); }}

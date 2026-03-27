@@ -1,6 +1,6 @@
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
-import { Heart, MessageCircle, Share2, Play, Pause, VolumeX, Volume2, Radio } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, VolumeX, Volume2, Radio, Maximize2, Minimize2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -20,11 +20,14 @@ interface ReelPost {
 }
 
 function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const lastTap = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [liked, setLiked] = useState(reel.hasLiked ?? false);
   const [likeCount, setLikeCount] = useState(reel.likesCount ?? 0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -39,7 +42,30 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
     }
   }, [isActive]);
 
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const card = cardRef.current;
+    if (!card) return;
+    if (!document.fullscreenElement) {
+      card.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
   const togglePlay = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      toggleFullscreen();
+      return;
+    }
+    lastTap.current = now;
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) { video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false)); }
@@ -65,7 +91,7 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
   const hasVideo = Boolean(reel.videoUrl);
 
   return (
-    <div className="snap-start h-full w-full relative bg-black flex items-center justify-center overflow-hidden">
+    <div ref={cardRef} className="snap-start h-full w-full relative bg-black flex items-center justify-center overflow-hidden">
       {hasVideo ? (
         <video
           ref={videoRef}
@@ -106,14 +132,24 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
         </div>
       )}
 
-      {/* Mute button (top right) */}
-      <button
-        onClick={() => setIsMuted(m => !m)}
-        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
-        data-testid={`button-mute-${reel.id}`}
-      >
-        {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
-      </button>
+      {/* Top-right controls: mute + fullscreen */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2 items-center">
+        <button
+          onClick={() => setIsMuted(m => !m)}
+          className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
+          data-testid={`button-mute-${reel.id}`}
+        >
+          {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
+        </button>
+        <button
+          onClick={toggleFullscreen}
+          className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
+          data-testid={`button-fullscreen-${reel.id}`}
+          title="Fullscreen (or double-tap)"
+        >
+          {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
+        </button>
+      </div>
 
       {/* Right action bar */}
       <div className="absolute right-4 bottom-28 flex flex-col gap-5 items-center">
