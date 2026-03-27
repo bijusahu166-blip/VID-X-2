@@ -10,8 +10,23 @@ const app = express();
 const httpServer = createServer(app);
 
 // ── WebRTC Signaling + Real-time Events via WebSocket ─────────────────────
-const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+// Use noServer:true so that upgrade requests for OTHER paths (e.g. Vite's
+// /vite-hmr) are not aborted with 400 by the ws library.  We install our own
+// 'upgrade' listener that only handles the /ws path; everything else is left
+// for subsequent listeners (Vite HMR) to process.
+const wss = new WebSocketServer({ noServer: true });
 const randomCallQueue: string[] = []; // userIds waiting for a random match
+
+httpServer.on("upgrade", (req, socket, head) => {
+  const pathname = (req.url || "").split("?")[0];
+  if (pathname === "/ws") {
+    wss.handleUpgrade(req, socket as any, head, (ws) => {
+      wss.emit("connection", ws, req);
+    });
+    // All other paths (e.g. /vite-hmr for Vite HMR) are intentionally left
+    // unhandled here so subsequent 'upgrade' listeners can process them.
+  }
+});
 
 wss.on("connection", (ws) => {
   let userId: string | null = null;

@@ -15,6 +15,11 @@ export default defineConfig({
         // filter them out so Replit's crash reporter isn't triggered by a missing
         // avatar or a blocked HLS segment.
         if (err.message === "(unknown runtime error)") return false;
+        // Suppress Vite HMR WebSocket connection failures.
+        // In the Replit preview iframe the HMR WebSocket fails because the port
+        // is not exposed — this is expected and not an application crash.
+        if (err.message?.includes("WebSocket closed without opened")) return false;
+        if (err.message?.includes("failed to connect to websocket")) return false;
         // Also suppress NotAllowedError thrown by video.play() when autoplay is
         // blocked — the player already handles this gracefully.
         if (err.name === "NotAllowedError") return false;

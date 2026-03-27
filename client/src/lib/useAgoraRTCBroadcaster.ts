@@ -70,7 +70,7 @@ export function useAgoraRTCBroadcaster({ channelName, enabled, mediaStream }: Us
         clientRef.current = null;
         setPublished(false);
       };
-      cleanup();
+      cleanup().catch(() => {});
     };
   }, [channelName, enabled, mediaStream]);
 
