@@ -4,13 +4,13 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { wsClients } from "./realtime";
 
 const app = express();
 const httpServer = createServer(app);
 
-// ── WebRTC Signaling via WebSocket ──────────────────────────────────────────
+// ── WebRTC Signaling + Real-time Events via WebSocket ─────────────────────
 const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
-const wsClients = new Map<string, WebSocket>();
 const randomCallQueue: string[] = []; // userIds waiting for a random match
 
 wss.on("connection", (ws) => {

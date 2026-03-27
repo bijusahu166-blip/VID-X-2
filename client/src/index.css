@@ -271,11 +271,11 @@
   --bottom-nav-h: calc(88px + env(safe-area-inset-bottom, 0px));
 
   /*
-   * --top-bar-h: the black decorative bar at the very top (at least 1.5cm).
-   * On devices with a notch, we honour the larger safe area instead.
+   * --top-bar-h: solid black bar at the very top (z-index 9999), 0.5cm tall.
+   * On devices with a notch/dynamic-island the safe-area-inset-top wins.
    * --header-total: full vertical space consumed by top-bar + h-14 header.
    */
-  --top-bar-h: max(env(safe-area-inset-top, 0px), 1.5cm);
+  --top-bar-h: max(env(safe-area-inset-top, 0px), 0.5cm);
   --header-total: calc(3.5rem + var(--top-bar-h));
 }
 

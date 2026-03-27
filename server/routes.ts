@@ -13,6 +13,7 @@ import { db } from "./db";
 import { sql, eq, desc } from "drizzle-orm";
 import OpenAI from "openai";
 import multer from "multer";
+import { broadcast } from "./realtime";
 import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
@@ -1023,6 +1024,10 @@ export async function registerRoutes(
         INSERT INTO notifications (user_id, from_user_id, type, message)
         VALUES (${followingId}, ${followerId}, 'follow', ${`${follower?.firstName ?? "Someone"} started following you`})
       `);
+      // Broadcast real-time follower count update to all connected clients
+      const fcRow = await db.execute(sql`SELECT COUNT(*) AS cnt FROM follows WHERE following_id = ${followingId}`);
+      const newFollowers = parseInt(((fcRow as any).rows ?? fcRow as any)[0]?.cnt ?? "0");
+      broadcast({ type: "follower_update", userId: followingId, followersCount: newFollowers });
       res.json({ following: true });
     } catch (err) {
       res.status(500).json({ message: "Failed to follow" });
@@ -1052,6 +1057,10 @@ export async function registerRoutes(
     const followerId = req.session.userId;
     const followingId = req.params.id;
     await db.execute(sql`DELETE FROM follows WHERE follower_id = ${followerId} AND following_id = ${followingId}`);
+    // Broadcast real-time follower count update to all connected clients
+    const fcRow = await db.execute(sql`SELECT COUNT(*) AS cnt FROM follows WHERE following_id = ${followingId}`);
+    const newFollowers = parseInt(((fcRow as any).rows ?? fcRow as any)[0]?.cnt ?? "0");
+    broadcast({ type: "follower_update", userId: followingId, followersCount: newFollowers });
     res.json({ following: false });
   });
 
@@ -1186,6 +1195,8 @@ export async function registerRoutes(
     await db.execute(sql`UPDATE posts SET viewer_count = viewer_count + 1 WHERE id = ${postId}`);
     const row = await db.execute(sql`SELECT viewer_count FROM posts WHERE id = ${postId}`);
     const viewerCount = parseInt(((row as any).rows?.[0] ?? (row as any)[0])?.viewer_count ?? "0");
+    // Broadcast real-time view update so all connected clients see the new count
+    broadcast({ type: "view_update", postId, viewerCount });
     res.json({ viewerCount });
   });
 

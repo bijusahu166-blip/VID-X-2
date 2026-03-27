@@ -21,11 +21,10 @@ export function Header() {
 
   return (
     <>
-      {/* Black top bar — 0.5 cm tall (or device safe-area if larger).
-          Gives a premium status-bar feel and pushes the header down. */}
+      {/* Black top bar — 0.5 cm tall (or device safe-area if larger). z-index 9999 */}
       <div
-        className="fixed top-0 left-0 right-0 z-50 bg-black"
-        style={{ height: 'var(--top-bar-h)' }}
+        className="fixed top-0 left-0 right-0 bg-black"
+        style={{ height: 'var(--top-bar-h)', zIndex: 9999 }}
         aria-hidden="true"
       />
 

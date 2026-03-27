@@ -157,6 +157,16 @@ export function CallProvider({ children }: { children: ReactNode }) {
       }
     } else if (msg.type === "call-reject" || msg.type === "call-end") {
       cleanupRef.current();
+    } else if (msg.type === "follower_update") {
+      // Real-time follower count — dispatch a CustomEvent so Profile pages can update immediately
+      window.dispatchEvent(new CustomEvent("litlink:follower_update", {
+        detail: { userId: msg.userId, followersCount: msg.followersCount },
+      }));
+    } else if (msg.type === "view_update") {
+      // Real-time view count — dispatch so Reels/video components can update the counter
+      window.dispatchEvent(new CustomEvent("litlink:view_update", {
+        detail: { postId: msg.postId, viewerCount: msg.viewerCount },
+      }));
     }
   }, []);
 

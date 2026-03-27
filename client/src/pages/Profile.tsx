@@ -110,6 +110,19 @@ function OtherUserProfile({ userId }: { userId: string }) {
   const isFollowing = followStatus?.following ?? false;
   const [viewingPost, setViewingPost] = useState<any | null>(null);
 
+  // Real-time follower count — update the cache instantly when the WS event fires
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { userId: updatedId, followersCount } = (e as CustomEvent).detail;
+      if (String(updatedId) !== String(userId)) return;
+      qc.setQueryData(["/api/users", userId], (old: any) =>
+        old ? { ...old, followersCount } : old
+      );
+    };
+    window.addEventListener("litlink:follower_update", handler);
+    return () => window.removeEventListener("litlink:follower_update", handler);
+  }, [userId, qc]);
+
   const toggleFollow = async () => {
     setFollowLoading(true);
     try {
@@ -316,6 +329,20 @@ export default function Profile() {
   const myPosts = posts?.filter(p => p.userId === user?.id) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
+
+  // Real-time follower count on own profile — update instantly via WS event
+  useEffect(() => {
+    if (!user?.id) return;
+    const handler = (e: Event) => {
+      const { userId: updatedId, followersCount } = (e as CustomEvent).detail;
+      if (String(updatedId) !== String(user.id)) return;
+      qc.setQueryData(["/api/users", user.id], (old: any) =>
+        old ? { ...old, followersCount } : old
+      );
+    };
+    window.addEventListener("litlink:follower_update", handler);
+    return () => window.removeEventListener("litlink:follower_update", handler);
+  }, [user?.id, qc]);
   const { dataSaver, quality, setDataSaver, setQuality } = useVideoSettings();
   const [allowMessages, setAllowMessages] = useState(true);
   const [allowComments, setAllowComments] = useState(true);
