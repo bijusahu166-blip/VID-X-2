@@ -220,12 +220,10 @@ export function RandomCallScreen({ onClose }: RandomCallScreenProps) {
             </div>
             <div className="text-center space-y-2">
               <p className="text-white text-2xl font-bold">
-                {phase === "matching" ? "Connecting..." : "Searching..."}
+                Searching...
               </p>
               <p className="text-purple-300 text-sm">
-                {phase === "matching"
-                  ? "Found a match! Setting up video..."
-                  : "Waiting for someone to connect"}
+                Waiting for someone to connect
               </p>
               {phase === "waiting" && queueSize > 1 && (
                 <div className="flex items-center justify-center gap-1.5 mt-1">
