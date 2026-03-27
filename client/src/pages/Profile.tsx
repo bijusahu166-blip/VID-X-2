@@ -13,8 +13,9 @@ import {
   RefreshCw, UserX, Ghost, Activity,
   MessageSquare, AtSign, MessageCircle, Share2,
   LogOut, Menu, Zap, Trophy, Flame, Shield, Sword, Target,
-  Crown, Cpu, BadgeCheck, BarChart3, Lock
+  Crown, Cpu, BadgeCheck, BarChart3, Lock, Video, WifiOff, Gauge
 } from "lucide-react";
+import { useVideoSettings, VideoQuality } from "@/contexts/VideoSettingsContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePosts } from "@/hooks/use-posts";
 import { useState, useRef } from "react";
@@ -311,6 +312,7 @@ export default function Profile() {
   const myPosts = posts?.filter(p => p.userId === user?.id) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
+  const { dataSaver, quality, setDataSaver, setQuality } = useVideoSettings();
   const [allowMessages, setAllowMessages] = useState(true);
   const [allowComments, setAllowComments] = useState(true);
   const [allowTags, setAllowTags] = useState(true);
@@ -459,6 +461,7 @@ export default function Profile() {
                         <div className="grid grid-cols-3 gap-2">
                           {[
                             { icon: TrendingUp, label: "InsightX", emoji: "📊", color: "#a78bfa", panel: "InsightX" },
+                            { icon: Video,      label: "Video",    emoji: "🎬", color: "#34d399", panel: "VideoQuality", sub: dataSaver ? "Data Saver ON" : quality === "auto" ? "Auto" : quality.charAt(0).toUpperCase() + quality.slice(1) },
                           ].map((s) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
                               className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
@@ -466,6 +469,7 @@ export default function Profile() {
                                 <s.icon className="w-6 h-6" style={{ color: s.color }} />
                               </div>
                               <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
+                              {"sub" in s && s.sub && <span className="text-[8px] text-emerald-400 font-semibold -mt-1 text-center leading-tight">{s.sub}</span>}
                             </button>
                           ))}
                         </div>
@@ -562,6 +566,88 @@ export default function Profile() {
                         <LogOut className="w-4 h-4" />
                         <span className="text-sm font-semibold">Log out</span>
                       </button>
+                    </div>
+                  )}
+
+                  {/* ── SUB: VIDEO QUALITY ── */}
+                  {settingsPanel === "VideoQuality" && (
+                    <div className="p-5 space-y-6">
+                      {/* Data Saver toggle */}
+                      <div className="rounded-2xl border border-border/40 bg-muted/20 p-4 space-y-3">
+                        <div className="flex items-center gap-3 mb-1">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                            <WifiOff className="w-4 h-4 text-emerald-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold">Data Saver</p>
+                            <p className="text-[11px] text-muted-foreground">Reduces data usage on videos</p>
+                          </div>
+                          <Switch
+                            checked={dataSaver}
+                            onCheckedChange={setDataSaver}
+                            className="ml-auto"
+                            data-testid="switch-data-saver"
+                          />
+                        </div>
+                        {dataSaver && (
+                          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+                            <p className="text-[11px] text-emerald-300 font-medium">✓ Videos will not auto-play. Tap to load each video.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Video Quality selector */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Gauge className="w-4 h-4 text-muted-foreground" />
+                          <p className="text-sm font-bold">Playback Quality</p>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground -mt-1">Controls how videos are buffered and loaded.</p>
+                        <div className="space-y-2">
+                          {(["auto", "high", "medium", "low"] as VideoQuality[]).map((q) => {
+                            const labels: Record<VideoQuality, { name: string; desc: string; badge: string; color: string }> = {
+                              auto:   { name: "Auto",   desc: "Browser picks the best quality",  badge: "AUTO", color: "#a78bfa" },
+                              high:   { name: "High",   desc: "Best quality, uses more data",    badge: "HD",   color: "#34d399" },
+                              medium: { name: "Medium", desc: "Balanced quality and data usage", badge: "SD",   color: "#60a5fa" },
+                              low:    { name: "Low",    desc: "Saves data, tap to load videos",  badge: "LQ",   color: "#fb923c" },
+                            };
+                            const info = labels[q];
+                            const selected = quality === q && !dataSaver;
+                            return (
+                              <button
+                                key={q}
+                                onClick={() => setQuality(q)}
+                                disabled={dataSaver}
+                                data-testid={`quality-option-${q}`}
+                                className={`flex items-center gap-3 w-full px-4 py-3 rounded-2xl border transition-all ${
+                                  selected
+                                    ? "border-primary/50 bg-primary/10"
+                                    : "border-border/40 bg-muted/20 hover:bg-muted/40"
+                                } ${dataSaver ? "opacity-40 cursor-not-allowed" : ""}`}
+                              >
+                                <div
+                                  className="px-2 py-0.5 rounded-md text-[10px] font-bold w-10 text-center"
+                                  style={{ background: `${info.color}22`, color: info.color, border: `1px solid ${info.color}44` }}
+                                >
+                                  {info.badge}
+                                </div>
+                                <div className="text-left flex-1">
+                                  <p className="text-sm font-semibold">{info.name}</p>
+                                  <p className="text-[11px] text-muted-foreground">{info.desc}</p>
+                                </div>
+                                {selected && (
+                                  <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {dataSaver && (
+                          <p className="text-[11px] text-muted-foreground text-center pt-1">Disable Data Saver to change quality</p>
+                        )}
+                      </div>
                     </div>
                   )}
 

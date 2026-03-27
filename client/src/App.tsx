@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { CallProvider, useCall } from "@/contexts/CallContext";
+import { VideoSettingsProvider } from "@/contexts/VideoSettingsContext";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
 import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
 
@@ -70,10 +71,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <CallProvider>
-          <Toaster />
-          <Router />
-        </CallProvider>
+        <VideoSettingsProvider>
+          <CallProvider>
+            <Toaster />
+            <Router />
+          </CallProvider>
+        </VideoSettingsProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

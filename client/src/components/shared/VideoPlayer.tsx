@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2 } from "lucide-react";
+import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2, Wifi, WifiOff } from "lucide-react";
+import { useVideoSettings } from "@/contexts/VideoSettingsContext";
 
 interface VideoPlayerProps {
   src: string;
@@ -32,11 +33,24 @@ export function VideoPlayer({
   const [progress, setProgress] = useState(0);
   const [tapped, setTapped] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [loaded, setLoaded] = useState(false); // for data-saver tap-to-load
 
-  // IntersectionObserver: auto-play when ≥50% visible, pause otherwise
+  const { dataSaver, quality } = useVideoSettings();
+
+  // Determine preload strategy from quality + data saver
+  const preloadAttr = dataSaver || quality === "low" ? "none" : quality === "high" ? "auto" : "metadata";
+
+  // IntersectionObserver: auto-play when ≥50% visible (skipped in data-saver / low mode)
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    if (dataSaver || quality === "low") {
+      // In data-saver mode, don't auto-play — wait for user tap
+      video.pause();
+      setPlaying(false);
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -56,7 +70,7 @@ export function VideoPlayer({
 
     observer.observe(video);
     return () => observer.disconnect();
-  }, [src]);
+  }, [src, dataSaver, quality]);
 
   // Track progress
   useEffect(() => {
@@ -75,6 +89,12 @@ export function VideoPlayer({
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
+
+  // Reset loaded state when src changes
+  useEffect(() => {
+    setLoaded(false);
+    setPlaying(false);
+  }, [src]);
 
   const toggleFullscreen = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -99,6 +119,17 @@ export function VideoPlayer({
     e.stopPropagation();
     const video = videoRef.current;
     if (!video) return;
+
+    // In data-saver mode: first tap loads the video
+    if ((dataSaver || quality === "low") && !loaded) {
+      setLoaded(true);
+      video.load();
+      video.play().catch(() => {});
+      setPlaying(true);
+      onVisible?.();
+      return;
+    }
+
     // Double-tap to fullscreen
     const now = Date.now();
     if (now - lastTap.current < 300) {
@@ -126,6 +157,11 @@ export function VideoPlayer({
     setPlaying(true);
   };
 
+  const qualityLabel =
+    dataSaver ? "DS" : quality === "high" ? "HD" : quality === "medium" ? "SD" : quality === "low" ? "LQ" : null;
+
+  const showDataSaverOverlay = (dataSaver || quality === "low") && !loaded;
+
   return (
     <div ref={containerRef} className={`relative overflow-hidden bg-black ${className}`} data-testid="video-player">
       <video
@@ -135,17 +171,34 @@ export function VideoPlayer({
         loop={loop}
         muted={muted}
         playsInline
-        preload="metadata"
+        preload={preloadAttr}
         className="w-full h-full object-cover"
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         data-testid="video-element"
       />
 
+      {/* Data Saver tap-to-load overlay */}
+      {showDataSaverOverlay && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm cursor-pointer z-10"
+          onClick={togglePlay}
+        >
+          <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3">
+            <Play className="w-7 h-7 text-white ml-1" />
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40">
+            <WifiOff className="w-3 h-3 text-emerald-400" />
+            <span className="text-[11px] text-emerald-300 font-semibold">
+              {dataSaver ? "Data Saver — Tap to load" : "Low quality — Tap to load"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Tap to play/pause overlay */}
       <div className="absolute inset-0" onClick={togglePlay}>
-        {/* Play/Pause icon flash */}
-        {tapped && (
+        {tapped && !showDataSaverOverlay && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center animate-ping">
               {playing ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 text-white" />}
@@ -156,6 +209,13 @@ export function VideoPlayer({
 
       {showControls && (
         <>
+          {/* Quality badge */}
+          {qualityLabel && (
+            <div className="absolute top-2.5 left-2.5 z-20 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur border border-white/10">
+              <span className="text-[10px] font-bold text-white/80 tracking-wider">{qualityLabel}</span>
+            </div>
+          )}
+
           {/* Fullscreen button */}
           <button
             onClick={toggleFullscreen}
@@ -178,7 +238,7 @@ export function VideoPlayer({
             {muted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
           </button>
 
-          {/* Replay button (only shows when near end) */}
+          {/* Replay button */}
           {progress > 0.95 && !loop && (
             <button
               onClick={replay}
