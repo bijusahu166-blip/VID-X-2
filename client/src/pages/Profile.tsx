@@ -180,7 +180,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
         </div>
       </div>
 
-      <div className="px-4 pt-14">
+      <div className="px-4" style={{ paddingTop: "var(--header-total)" }}>
         {/* Name + action buttons */}
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -427,7 +427,7 @@ export default function Profile() {
         />
 
         {/* Top HUD bar */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-end px-4 pt-14 pb-2">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-end px-4 pb-2" style={{ paddingTop: "var(--header-total)" }}>
           <div className="flex items-center gap-1">
             {/* Settings */}
             <Dialog onOpenChange={(open) => { if (!open) setSettingsPanel(null); }}>
@@ -840,8 +840,8 @@ export default function Profile() {
         </div>
 
         {/* Rank badge top-center */}
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border"
-          style={{ borderColor: rankColor, color: rankColor, background: `${rankColor}18`, boxShadow: `0 0 12px ${rankColor}40` }}>
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border"
+          style={{ top: "var(--header-total)", borderColor: rankColor, color: rankColor, background: `${rankColor}18`, boxShadow: `0 0 12px ${rankColor}40` }}>
           <Crown className="w-3 h-3" />
           {rank}
         </div>

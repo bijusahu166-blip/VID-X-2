@@ -21,18 +21,18 @@ export function Header() {
 
   return (
     <>
-      {/* Status-bar filler — same background as header, fills the area between
-          viewport top and the safe area inset so no content bleeds through */}
+      {/* Black top bar — 0.5 cm tall (or device safe-area if larger).
+          Gives a premium status-bar feel and pushes the header down. */}
       <div
-        className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur"
-        style={{ height: 'env(safe-area-inset-top, 0px)' }}
+        className="fixed top-0 left-0 right-0 z-50 bg-black"
+        style={{ height: 'var(--top-bar-h)' }}
         aria-hidden="true"
       />
 
-      {/* Header — starts exactly below the status bar, always exactly h-14 tall */}
+      {/* Header — sits immediately below the black top bar, always h-14 */}
       <header
         className="fixed left-0 right-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border/40 h-14"
-        style={{ top: 'env(safe-area-inset-top, 0px)' }}
+        style={{ top: 'var(--top-bar-h)' }}
       >
         <div className="flex items-center justify-between gap-4 h-full px-4 max-w-sm mx-auto">
 

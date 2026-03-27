@@ -82,11 +82,11 @@ export default function Search() {
   const isSearching = searchQuery.length >= 1;
 
   return (
-    <div className="min-h-screen bg-black pb-28 pt-14">
+    <div className="min-h-screen bg-black pb-28" style={{ paddingTop: "var(--header-total)" }}>
       <Header />
 
       {/* Search bar */}
-      <div className="px-4 pt-4 pb-3 sticky top-14 z-40 bg-black/95 backdrop-blur border-b border-white/5">
+      <div className="px-4 pt-4 pb-3 sticky z-40 bg-black/95 backdrop-blur border-b border-white/5" style={{ top: "var(--header-total)" }}>
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input

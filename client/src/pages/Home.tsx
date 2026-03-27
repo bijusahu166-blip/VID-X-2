@@ -373,10 +373,10 @@ export default function Home() {
     <div className="min-h-screen bg-black pb-28">
       <Header />
 
-      <main className="pt-14">
+      <main style={{ paddingTop: "var(--header-total)" }}>
 
         {/* ── CATEGORY CHIPS ── */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide px-3 py-2.5 sticky top-14 z-40 bg-black/95 backdrop-blur border-b border-white/5">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide px-3 py-2.5 sticky z-40 bg-black/95 backdrop-blur border-b border-white/5" style={{ top: "var(--header-total)" }}>
           {CATEGORIES.map(({ label, icon: Icon }) => (
             <button
               key={label}

@@ -330,8 +330,8 @@ export default function Reels() {
       <Header />
       <div
         ref={containerRef}
-        className="flex-1 relative snap-y snap-mandatory overflow-y-scroll no-scrollbar pt-14"
-        style={{ scrollSnapType: "y mandatory" }}
+        className="flex-1 relative snap-y snap-mandatory overflow-y-scroll no-scrollbar"
+        style={{ scrollSnapType: "y mandatory", paddingTop: "var(--header-total)" }}
       >
         {isLoading && (
           <div className="snap-start h-full flex items-center justify-center">
