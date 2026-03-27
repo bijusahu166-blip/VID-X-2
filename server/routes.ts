@@ -517,7 +517,7 @@ export async function registerRoutes(
 
   // Get a single user by ID (for OtherUserProfile)
   app.get("/api/users/:id", isAuthenticated, async (req, res) => {
-    const user = await authStorage.getUser(req.params.id);
+    const user = await authStorage.getUser(String(req.params.id));
     if (!user) return res.status(404).json({ message: "User not found" });
     const { password: _, ...safeUser } = user as any;
 

@@ -752,7 +752,7 @@ export default function Home() {
       {/* Story Viewer */}
       {viewingStoryIdx !== null && (
         <StoryViewer
-          stories={posts?.filter(p => p.type === "story") ?? []}
+          stories={(posts?.filter(p => p.type === "story") ?? []) as any}
           initialIndex={viewingStoryIdx}
           onClose={() => setViewingStoryIdx(null)}
         />

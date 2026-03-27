@@ -37,7 +37,7 @@ async function deriveKey(userId1: string, userId2: string): Promise<CryptoKey> {
 }
 
 function toBase64(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+  return btoa(String.fromCharCode(...Array.from(new Uint8Array(buf))));
 }
 
 function fromBase64(b64: string): Uint8Array {

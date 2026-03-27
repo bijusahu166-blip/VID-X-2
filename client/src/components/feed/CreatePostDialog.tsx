@@ -1791,7 +1791,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 </div>
               )}
 
-              {uploadType !== "live" && !cameraMode && (
+              {!cameraMode && (
                 <div className="space-y-2">
                   <div
                     className="relative w-full h-40 rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group overflow-hidden"
@@ -1891,7 +1891,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
               )}
 
               <div className="flex gap-3">
-                {imageUrl && uploadType !== "live" && (
+                {imageUrl && (
                   <div className="w-16 h-16 rounded-xl bg-white/8 overflow-hidden shrink-0 border border-white/10">
                     <img
                       src={imageUrl}
@@ -1902,7 +1902,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   </div>
                 )}
                 <Textarea
-                  placeholder={uploadType === "live" ? "What's your stream about?" : "Write a caption..."}
+                  placeholder="Write a caption..."
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   className="flex-1 resize-none bg-white/5 border-white/10 rounded-xl placeholder:text-zinc-600 min-h-[80px]"
@@ -1920,7 +1920,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 ) : createPost.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  uploadType === "live" ? "🔴 Go Live" : "Share"
+                  "Share"
                 )}
               </Button>
             </form>

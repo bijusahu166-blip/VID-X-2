@@ -615,7 +615,7 @@ export default function Reading() {
                 </button>
               </div>
             </motion.div>
-          ) : (
+          ) : selectedBook ? (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -732,7 +732,7 @@ export default function Reading() {
                 </CardContent>
               </Card>
             </motion.div>
-          )}
+          ) : null}
         </AnimatePresence>
       </main>
 

@@ -84,7 +84,7 @@ export default function Notifications() {
   const followBack = async (userId: string) => {
     try {
       await fetch(`/api/users/${userId}/follow`, { method: "POST", credentials: "include" });
-      setFollowedBack(prev => new Set([...prev, userId]));
+      setFollowedBack(prev => new Set(Array.from(prev).concat(userId)));
       playFollow();
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
     } catch { /* ignore network errors */ }
@@ -245,7 +245,7 @@ export default function Notifications() {
                               Accept
                             </button>
                             <button
-                              onClick={() => setDeclinedCallIds(prev => new Set([...prev, notif.id]))}
+                              onClick={() => setDeclinedCallIds(prev => new Set(Array.from(prev).concat(notif.id)))}
                               className="flex items-center gap-1.5 text-[12px] font-bold bg-red-500/80 hover:bg-red-400 text-white px-4 py-1.5 rounded-full transition-colors"
                               data-testid={`button-decline-call-${notif.id}`}
                             >
@@ -277,12 +277,7 @@ export default function Notifications() {
 
       {/* Active call screen */}
       {activeCall && (
-        <VideoCallScreen
-          onClose={() => setActiveCall(null)}
-          callerName={activeCall.callerName}
-          callerAvatar={activeCall.callerAvatar}
-          audioOnly={activeCall.audioOnly}
-        />
+        <VideoCallScreen />
       )}
     </div>
   );
