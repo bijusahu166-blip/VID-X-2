@@ -173,13 +173,30 @@ export function PostCard({ post }: PostCardProps) {
           </div>
         </CardHeader>
 
-        <div className="relative aspect-square bg-muted" onDoubleClick={handleLike}>
-          <img
-            src={post.imageUrl}
-            alt="Post content"
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
+        {/* ── Media ── */}
+        <div
+          className={`relative bg-black ${(post.type === "video" || post.type === "reel") && post.videoUrl ? "aspect-[9/16]" : "aspect-square"}`}
+          onDoubleClick={handleLike}
+        >
+          {(post.type === "video" || post.type === "reel") && post.videoUrl ? (
+            // Video / Reel — show actual playable video
+            <video
+              src={post.videoUrl}
+              controls
+              playsInline
+              poster={post.imageUrl?.startsWith("data:") || post.imageUrl?.startsWith("http") ? post.imageUrl : undefined}
+              className="w-full h-full object-contain bg-black"
+              preload="metadata"
+            />
+          ) : (
+            <img
+              src={post.imageUrl}
+              alt="Post content"
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          )}
+          {/* Double-tap heart */}
           <AnimatePresence>
             {showHeart && (
               <motion.div
@@ -193,6 +210,12 @@ export function PostCard({ post }: PostCardProps) {
               </motion.div>
             )}
           </AnimatePresence>
+          {/* Video badge */}
+          {(post.type === "video" || post.type === "reel") && (
+            <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full">
+              {post.type === "reel" ? "REEL" : "VIDEO"}
+            </div>
+          )}
         </div>
 
         <CardContent className="p-4 pb-2 bg-[#594f4f5c]">
