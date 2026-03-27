@@ -9,6 +9,7 @@ import { CallProvider, useCall } from "@/contexts/CallContext";
 import { VideoSettingsProvider } from "@/contexts/VideoSettingsContext";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
 import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
+import { useEffect, useRef } from "react";
 
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
@@ -19,6 +20,36 @@ import Reels from "@/pages/Reels";
 import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
 import Notifications from "@/pages/Notifications";
+
+// Polls the server version every 30s. When the server restarts (new code deployed),
+// the version changes and the browser hard-reloads to pick up the latest bundle.
+function useServerVersionWatcher() {
+  const knownVersion = useRef<string | null>(null);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval>;
+
+    const check = async () => {
+      try {
+        const res = await fetch("/api/version", { cache: "no-store" });
+        if (!res.ok) return;
+        const { v } = await res.json();
+        if (knownVersion.current === null) {
+          knownVersion.current = v;
+        } else if (knownVersion.current !== v) {
+          // Server restarted — force a full reload to get latest JS
+          window.location.reload();
+        }
+      } catch {
+        // Ignore network errors (server may be restarting)
+      }
+    };
+
+    check(); // Initial check
+    timer = setInterval(check, 30_000); // Re-check every 30s
+    return () => clearInterval(timer);
+  }, []);
+}
 
 function GlobalCallOverlay() {
   const { callState } = useCall();
@@ -32,6 +63,7 @@ function GlobalCallOverlay() {
 
 function Router() {
   const { user, isLoading } = useAuth();
+  useServerVersionWatcher();
 
   if (isLoading) {
     return (

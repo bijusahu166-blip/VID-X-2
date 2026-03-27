@@ -351,6 +351,12 @@ export async function registerRoutes(
     });
   });
 
+  // ── Server version (startup timestamp) — client polls this to detect restarts ──
+  const SERVER_START_TIME = Date.now().toString();
+  app.get("/api/version", (_req, res) => {
+    res.set("Cache-Control", "no-store").json({ v: SERVER_START_TIME });
+  });
+
   // Check if email exists (for forgot password flow)
   app.get("/api/users/check-email", async (req, res) => {
     const email = ((req.query.email as string) || "").toLowerCase().trim();
