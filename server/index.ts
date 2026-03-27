@@ -10,14 +10,21 @@ const httpServer = createServer(app);
 // ── WebRTC Signaling via WebSocket ──────────────────────────────────────────
 const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 const wsClients = new Map<string, WebSocket>();
+const randomCallQueue: string[] = []; // userIds waiting for a random match
 
 wss.on("connection", (ws) => {
   let userId: string | null = null;
+
+  const removeFromQueue = (uid: string) => {
+    const idx = randomCallQueue.indexOf(uid);
+    if (idx !== -1) randomCallQueue.splice(idx, 1);
+  };
 
   ws.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
 
+      // ── Register user ──
       if (msg.type === "register") {
         userId = String(msg.userId);
         wsClients.set(userId, ws);
@@ -25,6 +32,38 @@ wss.on("connection", (ws) => {
         return;
       }
 
+      // ── Random call matchmaking ──
+      if (msg.type === "random-call-join") {
+        if (!userId) return;
+        // Try to find a waiting partner
+        let matched = false;
+        while (randomCallQueue.length > 0) {
+          const partnerId = randomCallQueue.shift()!;
+          if (partnerId === userId) continue; // skip self
+          const partnerWs = wsClients.get(partnerId);
+          if (partnerWs && partnerWs.readyState === WebSocket.OPEN) {
+            // Pair them: queued user = callee, current user = caller
+            partnerWs.send(JSON.stringify({ type: "random-call-matched", role: "callee", partnerId: userId }));
+            ws.send(JSON.stringify({ type: "random-call-matched", role: "caller", partnerId }));
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          // No one waiting — add to queue
+          if (!randomCallQueue.includes(userId)) randomCallQueue.push(userId);
+          ws.send(JSON.stringify({ type: "random-call-waiting", queueSize: randomCallQueue.length }));
+        }
+        return;
+      }
+
+      // ── Leave random call queue ──
+      if (msg.type === "random-call-leave") {
+        if (userId) removeFromQueue(userId);
+        return;
+      }
+
+      // ── Forward signaling messages to target user ──
       if (msg.to) {
         const target = wsClients.get(String(msg.to));
         if (target && target.readyState === WebSocket.OPEN) {
@@ -34,8 +73,18 @@ wss.on("connection", (ws) => {
     } catch { /* ignore malformed messages */ }
   });
 
-  ws.on("close", () => { if (userId) wsClients.delete(userId); });
-  ws.on("error", () => { if (userId) wsClients.delete(userId); });
+  ws.on("close", () => {
+    if (userId) {
+      wsClients.delete(userId);
+      removeFromQueue(userId);
+    }
+  });
+  ws.on("error", () => {
+    if (userId) {
+      wsClients.delete(userId);
+      removeFromQueue(userId);
+    }
+  });
 });
 
 declare module "http" {
