@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { playSend, playReceive } from "@/lib/sounds";
+import { encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DirectMessage {
@@ -409,7 +410,8 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   useEffect(() => {
     const last = messages[messages.length - 1];
     if (!last || last.senderId === currentUserId || last.type !== "text") { setSmartReplies([]); return; }
-    apiRequest("POST", "/api/smart-reply", { lastMessage: last.content })
+    const smartContent = decryptedContents[last.id] || last.content;
+    apiRequest("POST", "/api/smart-reply", { lastMessage: smartContent })
       .then((r: any) => setSmartReplies(r.suggestions || [])).catch(() => {});
   }, [messages.length, currentUserId]);
 
@@ -440,9 +442,31 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] }),
   });
 
-  const handleSend = () => {
+  // ── E2EE: Decrypt incoming messages ────────────────────────────────────────
+  const [decryptedContents, setDecryptedContents] = useState<Record<number, string>>({});
+  const partnerId = other?.id ?? "";
+
+  useEffect(() => {
+    if (!messages.length || !currentUserId || !partnerId) return;
+    const decryptAll = async () => {
+      const results: Record<number, string> = {};
+      await Promise.all(messages.map(async (msg) => {
+        if (msg.type !== "text" || !msg.content) return;
+        if (isEncrypted(msg.content)) {
+          const sId = msg.senderId;
+          const rId = sId === currentUserId ? partnerId : currentUserId;
+          results[msg.id] = await decryptMessage(msg.content, sId, rId);
+        }
+      }));
+      setDecryptedContents(prev => ({ ...prev, ...results }));
+    };
+    decryptAll();
+  }, [messages, currentUserId, partnerId]);
+
+  const handleSend = async () => {
     if (!text.trim()) return;
-    sendMsg.mutate({ content: text, type: "text", replyToId: replyTo?.id, expiresInSeconds: disappearing ? 30 : undefined });
+    const encrypted = await encryptMessage(text, currentUserId, partnerId);
+    sendMsg.mutate({ content: encrypted, type: "text", replyToId: replyTo?.id, expiresInSeconds: disappearing ? 30 : undefined });
     setText("");
     playSend();
   };
@@ -603,9 +627,20 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
                   ) : (
                     <div className={cn("px-3 py-2 rounded-2xl", isSender ? T.sent : T.recv,
                       replyRef ? "rounded-tl-sm" : "")}>
-                      {msg.type === "text" && (
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{translatedTexts[msg.id] || msg.content}</p>
-                      )}
+                      {msg.type === "text" && (() => {
+                        const displayContent = translatedTexts[msg.id] || decryptedContents[msg.id] || (isEncrypted(msg.content || "") ? "🔒 Decrypting..." : (msg.content || ""));
+                        return (
+                          <div>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{displayContent}</p>
+                            {isEncrypted(msg.content || "") && (
+                              <div className="flex items-center gap-1 mt-0.5 opacity-50">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>
+                                <span className="text-[9px] font-medium">E2EE</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {msg.type === "image" && msg.mediaUrl && (
                         <img src={msg.mediaUrl} className="rounded-xl max-w-full max-h-60 object-cover" />
                       )}

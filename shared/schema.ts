@@ -102,6 +102,13 @@ export const reports = pgTable("reports", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const blocks = pgTable("blocks", {
+  id: serial("id").primaryKey(),
+  blockerId: text("blocker_id").notNull(),
+  blockedId: text("blocked_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const history = pgTable("history", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),

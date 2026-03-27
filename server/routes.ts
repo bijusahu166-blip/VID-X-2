@@ -343,6 +343,11 @@ export async function registerRoutes(
   });
 
   // User search
+  app.get("/api/users/blocked", isAuthenticated, async (req: any, res) => {
+    const ids = await storage.getBlockedUsers(req.session.userId);
+    res.json({ blockedIds: ids });
+  });
+
   app.get("/api/users/search", isAuthenticated, async (req, res) => {
     const q = ((req.query.q as string) || "").toLowerCase().trim();
     const allUsers = await db.select().from(users);
@@ -775,6 +780,30 @@ export async function registerRoutes(
     await db.execute(sql`DELETE FROM follows WHERE follower_id = ${followerId} AND following_id = ${followingId}`);
     res.json({ following: false });
   });
+
+  // ── Block / Unblock ────────────────────────────────────────────────────────
+  app.post("/api/users/:id/block", isAuthenticated, async (req: any, res) => {
+    const blockerId = req.session.userId;
+    const blockedId = req.params.id;
+    if (blockerId === blockedId) return res.status(400).json({ message: "Cannot block yourself" });
+    await storage.blockUser(blockerId, blockedId);
+    // Also unfollow in both directions
+    await db.execute(sql`DELETE FROM follows WHERE (follower_id = ${blockerId} AND following_id = ${blockedId}) OR (follower_id = ${blockedId} AND following_id = ${blockerId})`);
+    res.json({ blocked: true });
+  });
+
+  app.delete("/api/users/:id/block", isAuthenticated, async (req: any, res) => {
+    const blockerId = req.session.userId;
+    await storage.unblockUser(blockerId, req.params.id);
+    res.json({ blocked: false });
+  });
+
+  app.get("/api/users/:id/block-status", isAuthenticated, async (req: any, res) => {
+    const blocked = await storage.isBlocked(req.session.userId, req.params.id);
+    const blockedByThem = await storage.isBlocked(req.params.id, req.session.userId);
+    res.json({ blocked, blockedByThem });
+  });
+
 
   app.get("/api/users/:id/follow-status", isAuthenticated, async (req: any, res) => {
     const followerId = req.session.userId;

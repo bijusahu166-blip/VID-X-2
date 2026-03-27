@@ -1,5 +1,5 @@
 import { 
-  posts, comments, likes, books, ads, history, reports,
+  posts, comments, likes, books, ads, history, reports, blocks,
   type Post, type InsertPost, type InsertComment, type InsertLike, 
   type Comment, type Like, type Book, type InsertBook, type Ad, type InsertAd,
   type History, type InsertHistory
@@ -40,6 +40,12 @@ export interface IStorage {
   // History
   createHistory(entry: InsertHistory): Promise<History>;
   getHistory(userId: string): Promise<History[]>;
+
+  // Blocks
+  blockUser(blockerId: string, blockedId: string): Promise<void>;
+  unblockUser(blockerId: string, blockedId: string): Promise<void>;
+  isBlocked(blockerId: string, blockedId: string): Promise<boolean>;
+  getBlockedUsers(userId: string): Promise<string[]>;
 
   // Direct Chats
   getOrCreateDirectChat(user1Id: string, user2Id: string): Promise<DirectChat>;
@@ -94,6 +100,24 @@ export class DatabaseStorage implements IStorage {
 
   async reportPost(postId: number, reporterId: string, reason: string): Promise<void> {
     await db.insert(reports).values({ postId, reporterId, reason });
+  }
+
+  async blockUser(blockerId: string, blockedId: string): Promise<void> {
+    await db.execute(sql`INSERT INTO blocks (blocker_id, blocked_id) VALUES (${blockerId}, ${blockedId}) ON CONFLICT DO NOTHING`);
+  }
+
+  async unblockUser(blockerId: string, blockedId: string): Promise<void> {
+    await db.execute(sql`DELETE FROM blocks WHERE blocker_id = ${blockerId} AND blocked_id = ${blockedId}`);
+  }
+
+  async isBlocked(blockerId: string, blockedId: string): Promise<boolean> {
+    const result = await db.execute(sql`SELECT 1 FROM blocks WHERE blocker_id = ${blockerId} AND blocked_id = ${blockedId} LIMIT 1`);
+    return (result.rows?.length ?? 0) > 0;
+  }
+
+  async getBlockedUsers(userId: string): Promise<string[]> {
+    const result = await db.execute(sql`SELECT blocked_id FROM blocks WHERE blocker_id = ${userId}`);
+    return (result.rows ?? []).map((r: any) => r.blocked_id);
   }
 
   async createComment(postId: number, userId: string, content: string): Promise<Comment> {
