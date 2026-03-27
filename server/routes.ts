@@ -342,6 +342,11 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // ── Public config (App IDs for client SDKs) ─────────────────────────────
+  app.get("/api/config", (_req, res) => {
+    res.json({ agoraAppId: process.env.AGORA_APP_ID || "" });
+  });
+
   // Check if email exists (for forgot password flow)
   app.get("/api/users/check-email", async (req, res) => {
     const email = ((req.query.email as string) || "").toLowerCase().trim();

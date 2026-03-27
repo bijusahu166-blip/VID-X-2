@@ -6,6 +6,9 @@ import { Label } from "@/components/ui/label";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useCreatePost } from "@/hooks/use-posts";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { useAgoraRTCBroadcaster } from "@/lib/useAgoraRTCBroadcaster";
+import { useAgoraRTM } from "@/lib/useAgoraRTM";
 import {
   ImagePlus, Loader2, Video, Radio,
   Music, Scissors, Type, Smile, Sparkles,
@@ -288,6 +291,9 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [storyText, setStoryText] = useState<string>("");
   const [storyTextColor, setStoryTextColor] = useState<string>("#ffffff");
   const [showStoryText, setShowStoryText] = useState(false);
+  // Auth
+  const { user } = useAuth();
+
   // Live stream
   const [liveStarted, setLiveStarted] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<typeof LIVE_ACHIEVEMENTS[number] | null>(null);
@@ -300,7 +306,36 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const [liveTitle, setLiveTitle] = useState("");
   const [liveReactions, setLiveReactions] = useState<Array<{id:number;emoji:string}>>([]);
   const [livePostId, setLivePostId] = useState<number | null>(null);
+  const [liveMediaStream, setLiveMediaStream] = useState<MediaStream | null>(null);
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Agora RTC: publish broadcaster's camera/mic to the live channel ──────
+  const agoraChannelName = livePostId ? `live_${livePostId}` : "";
+  const { setMuted: agoraSetMuted, setCameraEnabled: agoraSetCamera } = useAgoraRTCBroadcaster({
+    channelName: agoraChannelName,
+    enabled: liveStarted && livePostId !== null && liveMediaStream !== null,
+    mediaStream: liveMediaStream,
+  });
+
+  // ── Agora RTM: real-time chat for all viewers ─────────────────────────────
+  const broadcasterName = user
+    ? `${(user as any).firstName || ""} ${(user as any).lastName || ""}`.trim() || "Host"
+    : "Host";
+  const {
+    messages: rtmMessages,
+    sendMessage: rtmSend,
+    connected: rtmConnected,
+  } = useAgoraRTM({
+    channelName: agoraChannelName,
+    uid: user?.id ? String(user.id) : `host_${Date.now()}`,
+    displayName: broadcasterName,
+    color: "#f97316",
+    enabled: liveStarted && livePostId !== null,
+  });
+
+  // Sync Agora mute state with UI toggle
+  useEffect(() => { agoraSetMuted(liveMuted); }, [liveMuted, agoraSetMuted]);
+  useEffect(() => { agoraSetCamera(!liveCameraOff); }, [liveCameraOff, agoraSetCamera]);
   // Video upload state
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -470,7 +505,20 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
   // Live stream — real API calls
   const startLiveStream = useCallback(async () => {
+    // Start camera (video only) for preview
     startCamera(isFrontCamera);
+
+    // Capture audio-only track for Agora publishing (separate from the preview stream)
+    let combinedStream: MediaStream | null = null;
+    try {
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const videoTracks = cameraStreamRef.current?.getVideoTracks() ?? [];
+      combinedStream = new MediaStream([...videoTracks, ...audioStream.getAudioTracks()]);
+    } catch {
+      combinedStream = cameraStreamRef.current ?? null;
+    }
+    setLiveMediaStream(combinedStream);
+
     try {
       const thumb = imageUrl || `https://api.dicebear.com/7.x/shapes/svg?seed=${Date.now()}`;
       const res = await fetch("/api/live/start", {
@@ -484,7 +532,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         setLivePostId(data.post.id);
         setLiveStarted(true);
         setLiveViewers(0);
-        setLiveChat([{ name: "System", msg: "🔴 You are now live! Your followers have been notified.", color: "#ef4444" }]);
         // Poll real viewer count from DB every 10 seconds
         const postId = data.post.id;
         liveIntervalRef.current = setInterval(() => {
@@ -497,7 +544,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     } catch {
       setLiveStarted(true);
       setLiveViewers(0);
-      setLiveChat([{ name: "System", msg: "🔴 You are now live!", color: "#ef4444" }]);
     }
   }, [isFrontCamera, startCamera, liveTitle, imageUrl]);
 
@@ -510,6 +556,10 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     }
     setLiveStarted(false);
     setLivePostId(null);
+    setLiveMediaStream(prev => {
+      prev?.getTracks().forEach(t => t.stop());
+      return null;
+    });
     stopCamera();
     setLiveViewers(0);
     setLiveChat([]);
@@ -1619,11 +1669,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                     ))}
                   </div>
 
-                  {/* Chat messages */}
+                  {/* Chat messages — from Agora RTM */}
                   <div className="absolute bottom-20 left-0 right-0 z-20 px-3 space-y-1 max-h-32 overflow-hidden">
-                    {liveChat.slice(-5).map((msg, i) => (
+                    {rtmMessages.slice(-5).map((msg, i) => (
                       <div key={i} className="flex items-baseline gap-1.5">
-                        <span className="text-[10px] font-bold shrink-0" style={{ color: msg.color }}>{msg.name}</span>
+                        <span className="text-[10px] font-bold shrink-0" style={{ color: msg.color }}>{msg.user}</span>
                         <span className="text-[10px] text-white/80">{msg.msg}</span>
                       </div>
                     ))}
@@ -1646,14 +1696,15 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                       <input
                         value={liveChatInput}
                         onChange={(e) => setLiveChatInput(e.target.value)}
-                        onKeyDown={(e) => {
+                        onKeyDown={async (e) => {
                           if (e.key === "Enter" && liveChatInput.trim()) {
-                            setLiveChat(prev => [...prev.slice(-19), { name: "you", msg: liveChatInput.trim(), color: "#60a5fa" }]);
+                            await rtmSend(liveChatInput.trim());
                             setLiveChatInput("");
                           }
                         }}
-                        placeholder="Say something..."
-                        className="flex-1 bg-black/60 border border-white/20 rounded-full px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 outline-none"
+                        placeholder={rtmConnected ? "Say something to viewers…" : "Connecting chat…"}
+                        disabled={!rtmConnected}
+                        className="flex-1 bg-black/60 border border-white/20 rounded-full px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 outline-none disabled:opacity-50"
                       />
                       <button onClick={() => setLiveMuted(m => !m)}
                         className={`w-9 h-9 rounded-full border flex items-center justify-center ${liveMuted ? "bg-red-600 border-red-400" : "bg-black/60 border-white/15"}`}>
