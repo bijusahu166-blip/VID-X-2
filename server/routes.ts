@@ -15,12 +15,64 @@ import OpenAI from "openai";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { spawn } from "child_process";
 
 const uploadsDir = path.join(process.cwd(), "uploads", "videos");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const chunksDir = path.join(process.cwd(), "uploads", "chunks");
 if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
+
+const hlsBaseDir = path.join(process.cwd(), "uploads", "hls");
+if (!fs.existsSync(hlsBaseDir)) fs.mkdirSync(hlsBaseDir, { recursive: true });
+
+// Convert a raw video file to HLS segments using FFmpeg stream-copy (fast, no re-encode).
+// Returns the HLS manifest URL on success, null on failure.
+async function convertToHls(inputPath: string, uploadId: string): Promise<string | null> {
+  const hlsDir = path.join(hlsBaseDir, uploadId);
+  fs.mkdirSync(hlsDir, { recursive: true });
+  const manifestPath = path.join(hlsDir, "index.m3u8");
+  const segmentPattern = path.join(hlsDir, "seg%04d.ts");
+
+  return new Promise((resolve) => {
+    const ff = spawn("ffmpeg", [
+      "-i", inputPath,
+      "-codec:v", "copy",
+      "-codec:a", "copy",
+      "-start_number", "0",
+      "-hls_time", "6",
+      "-hls_list_size", "0",
+      "-hls_segment_filename", segmentPattern,
+      "-f", "hls",
+      manifestPath,
+    ]);
+
+    let stderr = "";
+    ff.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+    const timer = setTimeout(() => {
+      ff.kill();
+      console.warn("[hls] FFmpeg timed out for", uploadId);
+      resolve(null);
+    }, 90_000);
+
+    ff.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0 && fs.existsSync(manifestPath)) {
+        console.log(`[hls] converted ${uploadId} → ${hlsDir}`);
+        resolve(`/uploads/hls/${uploadId}/index.m3u8`);
+      } else {
+        console.warn("[hls] FFmpeg failed (exit", code, ") for", uploadId, stderr.slice(-300));
+        resolve(null);
+      }
+    });
+    ff.on("error", (err) => {
+      clearTimeout(timer);
+      console.warn("[hls] FFmpeg spawn error:", err.message);
+      resolve(null);
+    });
+  });
+}
 
 // Multer for individual chunks — keep each chunk ≤2 MB so the Replit proxy never 413s.
 // NOTE: req.body fields may not be populated yet during multer's filename callback
@@ -818,7 +870,16 @@ export async function registerRoutes(
       });
       const stats = fs.statSync(finalPath);
       console.log(`[finalize] ${finalFilename} assembled (${Math.round(stats.size / 1024 / 1024)} MB)`);
-      res.json({ url: `/uploads/videos/${finalFilename}`, filename: finalFilename, size: stats.size });
+
+      // Convert to HLS — stream-copy is fast (seconds, not minutes)
+      const hlsUrl = await convertToHls(finalPath, String(uploadId));
+
+      res.json({
+        url: `/uploads/videos/${finalFilename}`,
+        hlsUrl: hlsUrl ?? undefined,
+        filename: finalFilename,
+        size: stats.size,
+      });
     } catch (err: any) {
       console.error("[finalize error]", err.message || err);
       fs.unlink(finalPath, () => {});

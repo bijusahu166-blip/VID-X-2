@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2, WifiOff, Loader2 } from "lucide-react";
 import { useVideoSettings } from "@/contexts/VideoSettingsContext";
+import Hls from "hls.js";
 
 // ── Global single-video coordinator ─────────────────────────────────────────
 // Only ONE video across the entire page is allowed to play at a time.
@@ -49,6 +50,7 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const lastTap = useRef(0);
   const playRequestRef = useRef(0);
   const [muted, setMuted] = useState(true);
@@ -60,6 +62,68 @@ export function VideoPlayer({
   const [loaded, setLoaded] = useState(false);
 
   const { dataSaver, quality } = useVideoSettings();
+
+  // ── HLS.js setup ────────────────────────────────────────────────────────────
+  // Attach an HLS.js instance whenever the src is an .m3u8 manifest.
+  // Tears down the old instance first to avoid duplicate attachment.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Tear down any existing HLS instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    const isHls = src.includes(".m3u8");
+    if (!isHls) {
+      // Plain MP4 — let the <video> element handle it via src= attribute
+      video.src = src;
+      video.load();
+      return;
+    }
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        // Start with a small buffer so first-frame appears quickly
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        startLevel: -1, // auto
+      });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_evt, data) => {
+        if (data.fatal) {
+          console.warn("[hls.js] fatal error", data.type, data.details);
+          hls.destroy();
+          hlsRef.current = null;
+          // Fallback: try loading as plain src
+          video.src = src;
+          video.load();
+        }
+      });
+      hlsRef.current = hls;
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Native HLS — iOS Safari
+      video.src = src;
+      video.load();
+    } else {
+      // No HLS support — load raw anyway (will likely fail gracefully)
+      video.src = src;
+      video.load();
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [src]);
+  // ────────────────────────────────────────────────────────────────────────────
 
   // preload="none" unless actively playing — prevents background bandwidth drain
   const preloadAttr = "none";
@@ -99,6 +163,7 @@ export function VideoPlayer({
     if (dataSaver || quality === "low") {
       ++playRequestRef.current;
       try { video.pause(); } catch {}
+      if (hlsRef.current) hlsRef.current.stopLoad();
       setPlaying(false);
       setBuffering(false);
       return;
@@ -108,11 +173,15 @@ export function VideoPlayer({
       (entries) => {
         const entry = entries[0];
         if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          // Resume HLS loading if it was stopped (e.g. when scrolled away)
+          if (hlsRef.current) hlsRef.current.startLoad(-1);
           playWhenReady(video);
           onVisible?.();
         } else {
           ++playRequestRef.current;
           try { video.pause(); } catch {}
+          // Pause HLS buffering when scrolled away to save bandwidth
+          if (hlsRef.current) hlsRef.current.stopLoad();
           setPlaying(false);
           setBuffering(false);
         }
@@ -245,7 +314,6 @@ export function VideoPlayer({
     <div ref={containerRef} className={`relative overflow-hidden bg-black ${className}`} data-testid="video-player">
       <video
         ref={videoRef}
-        src={src}
         poster={poster}
         loop={loop}
         muted={muted}
