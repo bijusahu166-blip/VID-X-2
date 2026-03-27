@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Heart, MessageCircle, Send, Bookmark, CheckCircle2, MoreVertical, Flag, UserX, X, ChevronDown } from "lucide-react";
+import { Heart, MessageCircle, Send, Bookmark, CheckCircle2, MoreVertical, Flag, UserX, X, ChevronDown, Link2, Share2, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useLikePost, useAddComment } from "@/hooks/use-posts";
@@ -34,9 +34,11 @@ export function PostCard({ post }: PostCardProps) {
   const [showHeart, setShowHeart] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showReportSheet, setShowReportSheet] = useState(false);
+  const [showShareSheet, setShowShareSheet] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [customReason, setCustomReason] = useState("");
   const [reported, setReported] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -97,6 +99,40 @@ export function PostCard({ post }: PostCardProps) {
     },
   });
 
+  // ── Share post ───────────────────────────────────────────────────────────────
+  const postUrl = `${window.location.origin}/post/${post.id}`;
+
+  const handleNativeShare = async () => {
+    const shareData = {
+      title: `${post.user?.firstName}'s post on LITLink`,
+      text: post.caption || "Check out this post on LITLink!",
+      url: postUrl,
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setShowShareSheet(false);
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          handleCopyLink();
+        }
+      }
+    } else {
+      handleCopyLink();
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(postUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+      toast({ description: "Link copied to clipboard!" });
+    } catch {
+      toast({ description: "Could not copy link", variant: "destructive" });
+    }
+  };
+
   if (reported) {
     return (
       <Card className="border border-border/40 rounded-none sm:rounded-3xl mb-4 overflow-hidden bg-card">
@@ -149,6 +185,15 @@ export function PostCard({ post }: PostCardProps) {
                   transition={{ duration: 0.12 }}
                   className="absolute right-0 top-8 z-50 min-w-[170px] rounded-2xl border border-border/60 bg-card shadow-xl overflow-hidden"
                 >
+                  <button
+                    onClick={() => { setShowMenu(false); setShowShareSheet(true); }}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-muted transition-colors"
+                    data-testid="button-share-post-menu"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share post
+                  </button>
+                  <div className="h-px bg-border/40 mx-3" />
                   <button
                     onClick={() => { setShowMenu(false); setShowReportSheet(true); }}
                     className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-muted transition-colors text-amber-500"
@@ -227,7 +272,7 @@ export function PostCard({ post }: PostCardProps) {
               <Button variant="ghost" size="icon">
                 <MessageCircle className="w-6 h-6" />
               </Button>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" onClick={() => setShowShareSheet(true)} data-testid="button-share-post">
                 <Send className="w-6 h-6" />
               </Button>
             </div>
@@ -312,6 +357,93 @@ export function PostCard({ post }: PostCardProps) {
                 >
                   {reportMutation.isPending ? "Submitting..." : "Submit Report"}
                 </Button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Share Bottom Sheet ── */}
+      <AnimatePresence>
+        {showShareSheet && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowShareSheet(false)}
+            />
+            <motion.div
+              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl border-t border-border/60 pb-10"
+            >
+              <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mt-3 mb-2" />
+              <div className="flex items-center justify-between px-5 pt-2 pb-4">
+                <h3 className="text-base font-bold">Share post</h3>
+                <button onClick={() => setShowShareSheet(false)} className="p-1 rounded-full hover:bg-muted">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Post preview strip */}
+              <div className="mx-5 mb-5 flex items-center gap-3 p-3 rounded-2xl bg-muted/40 border border-border/40">
+                <img
+                  src={post.imageUrl}
+                  alt="Post"
+                  className="w-12 h-12 rounded-xl object-cover flex-shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{post.user?.firstName} {post.user?.lastName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{post.caption || "No caption"}</p>
+                </div>
+              </div>
+
+              {/* Share actions */}
+              <div className="px-5 space-y-2">
+                {/* Native share — opens system share sheet (WhatsApp, IG, etc.) */}
+                <button
+                  onClick={handleNativeShare}
+                  className="flex items-center gap-4 w-full px-4 py-3.5 rounded-2xl bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30 hover:from-primary/30 hover:to-accent/30 transition-all"
+                  data-testid="button-native-share"
+                >
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
+                    <Share2 className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold">Share to…</p>
+                    <p className="text-xs text-muted-foreground">WhatsApp, Instagram &amp; more</p>
+                  </div>
+                </button>
+
+                {/* Copy link */}
+                <button
+                  onClick={handleCopyLink}
+                  className="flex items-center gap-4 w-full px-4 py-3.5 rounded-2xl bg-muted/40 border border-border/40 hover:bg-muted transition-all"
+                  data-testid="button-copy-link"
+                >
+                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                    <Link2 className={cn("w-4 h-4", linkCopied ? "text-green-500" : "")} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold">{linkCopied ? "Copied!" : "Copy link"}</p>
+                    <p className="text-xs text-muted-foreground">Share the post URL</p>
+                  </div>
+                </button>
+
+                {/* Share via DM */}
+                <button
+                  onClick={() => { setShowShareSheet(false); window.location.href = "/messages"; }}
+                  className="flex items-center gap-4 w-full px-4 py-3.5 rounded-2xl bg-muted/40 border border-border/40 hover:bg-muted transition-all"
+                  data-testid="button-share-dm"
+                >
+                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold">Send as message</p>
+                    <p className="text-xs text-muted-foreground">Share directly in a DM</p>
+                  </div>
+                </button>
               </div>
             </motion.div>
           </>
