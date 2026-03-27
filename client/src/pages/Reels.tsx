@@ -1,9 +1,10 @@
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
-import { Heart, MessageCircle, Share2, Play, VolumeX, Volume2, Radio, Maximize2, Minimize2 } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, VolumeX, Volume2, Radio, Maximize2, Minimize2, Loader2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useVideoSettings } from "@/contexts/VideoSettingsContext";
 
 interface ReelPost {
   id: number;
@@ -23,23 +24,82 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastTap = useRef(0);
+  const playRequestRef = useRef(0); // tracks the latest play request to avoid race conditions
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [liked, setLiked] = useState(reel.hasLiked ?? false);
   const [likeCount, setLikeCount] = useState(reel.likesCount ?? 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const { dataSaver, quality } = useVideoSettings();
+
+  // Smart play: wait for canplay if not enough data buffered yet
+  const playWhenReady = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const reqId = ++playRequestRef.current;
+
+    const doPlay = () => {
+      if (playRequestRef.current !== reqId) return; // stale request
+      video.play()
+        .then(() => { setIsPlaying(true); setIsBuffering(false); })
+        .catch(() => { setIsPlaying(false); setIsBuffering(false); });
+    };
+
+    if (video.readyState >= 3) {
+      // HAVE_FUTURE_DATA or better — can play immediately without lag
+      doPlay();
+    } else {
+      setIsBuffering(true);
+      const onCanPlay = () => {
+        video.removeEventListener("canplay", onCanPlay);
+        doPlay();
+      };
+      video.addEventListener("canplay", onCanPlay);
+      // Kick off loading if preload="none" was set
+      if (video.preload === "none" || video.networkState === 0) {
+        video.load();
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (isActive) {
-      video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+
+    if (isActive && !dataSaver) {
+      playWhenReady();
     } else {
+      ++playRequestRef.current; // cancel any pending play
       video.pause();
       setIsPlaying(false);
+      setIsBuffering(false);
     }
+
+    return () => {
+      ++playRequestRef.current; // cancel on unmount
+    };
+  }, [isActive, dataSaver, playWhenReady]);
+
+  // Buffering events
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onWaiting = () => { if (isActive) setIsBuffering(true); };
+    const onPlaying = () => setIsBuffering(false);
+    const onSeeking = () => { if (isActive) setIsBuffering(true); };
+    const onSeeked  = () => setIsBuffering(false);
+    video.addEventListener("waiting", onWaiting);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("seeking", onSeeking);
+    video.addEventListener("seeked", onSeeked);
+    return () => {
+      video.removeEventListener("waiting", onWaiting);
+      video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("seeking", onSeeking);
+      video.removeEventListener("seeked", onSeeked);
+    };
   }, [isActive]);
 
   useEffect(() => {
@@ -68,8 +128,13 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
     lastTap.current = now;
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) { video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false)); }
-    else { video.pause(); setIsPlaying(false); }
+    if (video.paused) {
+      playWhenReady();
+    } else {
+      ++playRequestRef.current;
+      video.pause();
+      setIsPlaying(false);
+    }
   };
 
   const likeMutation = useMutation({
@@ -90,6 +155,11 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
 
   const hasVideo = Boolean(reel.videoUrl);
 
+  // Preload strategy: only preload active reel, keep all others as "none"
+  const preloadAttr = isActive
+    ? (quality === "high" ? "auto" : "metadata")
+    : "none";
+
   return (
     <div ref={cardRef} className="snap-start h-full w-full relative bg-black flex items-center justify-center overflow-hidden">
       {hasVideo ? (
@@ -100,6 +170,7 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
           loop
           muted={isMuted}
           playsInline
+          preload={preloadAttr}
           onClick={togglePlay}
           data-testid={`video-reel-${reel.id}`}
         />
@@ -115,12 +186,31 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
       {/* Gradient overlays */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
 
-      {/* Play/Pause overlay */}
-      {!isPlaying && (
+      {/* Buffering spinner — shows while video is loading/buffering */}
+      {isBuffering && hasVideo && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center">
+            <Loader2 className="w-7 h-7 text-white animate-spin" />
+          </div>
+        </div>
+      )}
+
+      {/* Play icon when paused (and not buffering) */}
+      {!isPlaying && !isBuffering && hasVideo && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center">
             <Play className="w-8 h-8 text-white fill-white ml-1" />
           </div>
+        </div>
+      )}
+
+      {/* Data Saver overlay */}
+      {dataSaver && hasVideo && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-10" onClick={togglePlay}>
+          <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3">
+            <Play className="w-8 h-8 text-white fill-white ml-1" />
+          </div>
+          <p className="text-xs text-emerald-300 font-semibold">Data Saver — Tap to play</p>
         </div>
       )}
 
@@ -243,7 +333,7 @@ export default function Reels() {
       >
         {isLoading && (
           <div className="snap-start h-full flex items-center justify-center">
-            <div className="text-zinc-400 text-sm">Loading reels...</div>
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
           </div>
         )}
 

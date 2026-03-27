@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2, Wifi, WifiOff } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2, WifiOff, Loader2 } from "lucide-react";
 import { useVideoSettings } from "@/contexts/VideoSettingsContext";
 
 interface VideoPlayerProps {
@@ -28,27 +28,57 @@ export function VideoPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastTap = useRef(0);
+  const playRequestRef = useRef(0);
   const [muted, setMuted] = useState(true);
   const [playing, setPlaying] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const [progress, setProgress] = useState(0);
   const [tapped, setTapped] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [loaded, setLoaded] = useState(false); // for data-saver tap-to-load
+  const [loaded, setLoaded] = useState(false); // data-saver: user tapped to load
 
   const { dataSaver, quality } = useVideoSettings();
 
-  // Determine preload strategy from quality + data saver
-  const preloadAttr = dataSaver || quality === "low" ? "none" : quality === "high" ? "auto" : "metadata";
+  const preloadAttr = dataSaver || quality === "low"
+    ? "none"
+    : quality === "high" ? "auto" : "metadata";
 
-  // IntersectionObserver: auto-play when ≥50% visible (skipped in data-saver / low mode)
+  // Smart play: wait for canplay if not enough data buffered
+  const playWhenReady = useCallback((video: HTMLVideoElement) => {
+    const reqId = ++playRequestRef.current;
+
+    const doPlay = () => {
+      if (playRequestRef.current !== reqId) return;
+      video.play()
+        .then(() => { setPlaying(true); setBuffering(false); })
+        .catch(() => { setPlaying(false); setBuffering(false); });
+    };
+
+    if (video.readyState >= 3) {
+      doPlay();
+    } else {
+      setBuffering(true);
+      const onCanPlay = () => {
+        video.removeEventListener("canplay", onCanPlay);
+        doPlay();
+      };
+      video.addEventListener("canplay", onCanPlay);
+      if (video.preload === "none" || video.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+        video.load();
+      }
+    }
+  }, []);
+
+  // IntersectionObserver: auto-play when ≥50% visible, pause otherwise
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (dataSaver || quality === "low") {
-      // In data-saver mode, don't auto-play — wait for user tap
+      ++playRequestRef.current;
       video.pause();
       setPlaying(false);
+      setBuffering(false);
       return;
     }
 
@@ -56,12 +86,13 @@ export function VideoPlayer({
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-            video.play().catch(() => {});
-            setPlaying(true);
+            playWhenReady(video);
             onVisible?.();
           } else {
+            ++playRequestRef.current;
             video.pause();
             setPlaying(false);
+            setBuffering(false);
           }
         });
       },
@@ -69,8 +100,31 @@ export function VideoPlayer({
     );
 
     observer.observe(video);
-    return () => observer.disconnect();
-  }, [src, dataSaver, quality]);
+    return () => {
+      observer.disconnect();
+      ++playRequestRef.current;
+    };
+  }, [src, dataSaver, quality, playWhenReady, onVisible]);
+
+  // Buffering/waiting events
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onWaiting = () => setBuffering(true);
+    const onPlaying = () => { setPlaying(true); setBuffering(false); };
+    const onSeeking = () => setBuffering(true);
+    const onSeeked  = () => setBuffering(false);
+    video.addEventListener("waiting",  onWaiting);
+    video.addEventListener("playing",  onPlaying);
+    video.addEventListener("seeking",  onSeeking);
+    video.addEventListener("seeked",   onSeeked);
+    return () => {
+      video.removeEventListener("waiting",  onWaiting);
+      video.removeEventListener("playing",  onPlaying);
+      video.removeEventListener("seeking",  onSeeking);
+      video.removeEventListener("seeked",   onSeeked);
+    };
+  }, []);
 
   // Track progress
   useEffect(() => {
@@ -83,17 +137,20 @@ export function VideoPlayer({
     return () => video.removeEventListener("timeupdate", onTime);
   }, []);
 
-  // Track fullscreen state
+  // Fullscreen state
   useEffect(() => {
     const onChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
-  // Reset loaded state when src changes
+  // Reset on src change
   useEffect(() => {
     setLoaded(false);
     setPlaying(false);
+    setBuffering(false);
+    setProgress(0);
+    ++playRequestRef.current;
   }, [src]);
 
   const toggleFullscreen = (e: React.MouseEvent) => {
@@ -120,29 +177,28 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
-    // In data-saver mode: first tap loads the video
+    // Data-saver: first tap loads the video
     if ((dataSaver || quality === "low") && !loaded) {
       setLoaded(true);
-      video.load();
-      video.play().catch(() => {});
-      setPlaying(true);
       onVisible?.();
+      playWhenReady(video);
       return;
     }
 
-    // Double-tap to fullscreen
+    // Double-tap → fullscreen
     const now = Date.now();
     if (now - lastTap.current < 300) {
       toggleFullscreen(e);
       return;
     }
     lastTap.current = now;
-    if (playing) {
+
+    if (playing && !buffering) {
+      ++playRequestRef.current;
       video.pause();
       setPlaying(false);
-    } else {
-      video.play().catch(() => {});
-      setPlaying(true);
+    } else if (!playing) {
+      playWhenReady(video);
     }
     setTapped(true);
     setTimeout(() => setTapped(false), 600);
@@ -153,8 +209,7 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
     video.currentTime = 0;
-    video.play().catch(() => {});
-    setPlaying(true);
+    playWhenReady(video);
   };
 
   const qualityLabel =
@@ -173,10 +228,19 @@ export function VideoPlayer({
         playsInline
         preload={preloadAttr}
         className="w-full h-full object-cover"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => { setPlaying(true); setBuffering(false); }}
         onPause={() => setPlaying(false)}
         data-testid="video-element"
       />
+
+      {/* Buffering spinner — shown while waiting for data */}
+      {buffering && !showDataSaverOverlay && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 text-white animate-spin" />
+          </div>
+        </div>
+      )}
 
       {/* Data Saver tap-to-load overlay */}
       {showDataSaverOverlay && (
@@ -196,9 +260,9 @@ export function VideoPlayer({
         </div>
       )}
 
-      {/* Tap to play/pause overlay */}
+      {/* Tap-to-play/pause overlay */}
       <div className="absolute inset-0" onClick={togglePlay}>
-        {tapped && !showDataSaverOverlay && (
+        {tapped && !showDataSaverOverlay && !buffering && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center animate-ping">
               {playing ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 text-white" />}
@@ -221,15 +285,11 @@ export function VideoPlayer({
             onClick={toggleFullscreen}
             className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-black/50 backdrop-blur flex items-center justify-center z-20 border border-white/10"
             data-testid="button-fullscreen"
-            title="Fullscreen (double-tap to toggle)"
           >
-            {isFullscreen
-              ? <Minimize2 className="w-4 h-4 text-white" />
-              : <Maximize2 className="w-4 h-4 text-white" />
-            }
+            {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
           </button>
 
-          {/* Mute/Unmute button */}
+          {/* Mute/Unmute */}
           <button
             onClick={toggleMute}
             className="absolute bottom-14 right-2.5 w-8 h-8 rounded-full bg-black/50 backdrop-blur flex items-center justify-center z-20 border border-white/10"
@@ -252,7 +312,7 @@ export function VideoPlayer({
           {/* Progress bar */}
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/10 z-20">
             <div
-              className="h-full bg-white/70 transition-all duration-300"
+              className="h-full bg-white/70 transition-all duration-200"
               style={{ width: `${progress * 100}%` }}
             />
           </div>
