@@ -2,6 +2,28 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2, WifiOff, Loader2 } from "lucide-react";
 import { useVideoSettings } from "@/contexts/VideoSettingsContext";
 
+// ── Global single-video coordinator ─────────────────────────────────────────
+// Only ONE video across the entire page is allowed to play at a time.
+// Any VideoPlayer that wants to play first calls claimPlayback().
+// claimPlayback() pauses the currently-playing video and returns a token;
+// the caller keeps playing only while that token is still "active".
+let activeVideoEl: HTMLVideoElement | null = null;
+let activeToken = 0;
+
+function claimPlayback(video: HTMLVideoElement): number {
+  if (activeVideoEl && activeVideoEl !== video) {
+    try { activeVideoEl.pause(); } catch {}
+  }
+  activeVideoEl = video;
+  activeToken = Date.now() + Math.random(); // unique token per claim
+  return activeToken;
+}
+
+function isTokenActive(token: number): boolean {
+  return token === activeToken;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface VideoPlayerProps {
   src: string;
   poster?: string;
@@ -35,20 +57,21 @@ export function VideoPlayer({
   const [progress, setProgress] = useState(0);
   const [tapped, setTapped] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [loaded, setLoaded] = useState(false); // data-saver: user tapped to load
+  const [loaded, setLoaded] = useState(false);
 
   const { dataSaver, quality } = useVideoSettings();
 
-  const preloadAttr = dataSaver || quality === "low"
-    ? "none"
-    : quality === "high" ? "auto" : "metadata";
+  // preload="none" unless actively playing — prevents background bandwidth drain
+  const preloadAttr = "none";
 
-  // Smart play: wait for canplay if not enough data buffered
+  // Smart play: claim global slot → wait for canplay → play
   const playWhenReady = useCallback((video: HTMLVideoElement) => {
+    const token = claimPlayback(video);          // evict any other playing video
     const reqId = ++playRequestRef.current;
 
     const doPlay = () => {
       if (playRequestRef.current !== reqId) return;
+      if (!isTokenActive(token)) return; // another video claimed the slot
       video.play()
         .then(() => { setPlaying(true); setBuffering(false); })
         .catch(() => { setPlaying(false); setBuffering(false); });
@@ -58,25 +81,24 @@ export function VideoPlayer({
       doPlay();
     } else {
       setBuffering(true);
+      // Trigger load if preload="none" — only NOW that we need to play
+      if (video.networkState === HTMLMediaElement.NETWORK_EMPTY) video.load();
       const onCanPlay = () => {
         video.removeEventListener("canplay", onCanPlay);
         doPlay();
       };
       video.addEventListener("canplay", onCanPlay);
-      if (video.preload === "none" || video.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
-        video.load();
-      }
     }
   }, []);
 
-  // IntersectionObserver: auto-play when ≥50% visible, pause otherwise
+  // IntersectionObserver: auto-play when ≥50% visible
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (dataSaver || quality === "low") {
       ++playRequestRef.current;
-      video.pause();
+      try { video.pause(); } catch {}
       setPlaying(false);
       setBuffering(false);
       return;
@@ -84,19 +106,18 @@ export function VideoPlayer({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-            playWhenReady(video);
-            onVisible?.();
-          } else {
-            ++playRequestRef.current;
-            video.pause();
-            setPlaying(false);
-            setBuffering(false);
-          }
-        });
+        const entry = entries[0];
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          playWhenReady(video);
+          onVisible?.();
+        } else {
+          ++playRequestRef.current;
+          try { video.pause(); } catch {}
+          setPlaying(false);
+          setBuffering(false);
+        }
       },
-      { threshold: 0.5 }
+      { threshold: [0, 0.5] }
     );
 
     observer.observe(video);
@@ -114,15 +135,18 @@ export function VideoPlayer({
     const onPlaying = () => { setPlaying(true); setBuffering(false); };
     const onSeeking = () => setBuffering(true);
     const onSeeked  = () => setBuffering(false);
+    const onPause   = () => setPlaying(false);
     video.addEventListener("waiting",  onWaiting);
     video.addEventListener("playing",  onPlaying);
     video.addEventListener("seeking",  onSeeking);
     video.addEventListener("seeked",   onSeeked);
+    video.addEventListener("pause",    onPause);
     return () => {
       video.removeEventListener("waiting",  onWaiting);
       video.removeEventListener("playing",  onPlaying);
       video.removeEventListener("seeking",  onSeeking);
       video.removeEventListener("seeked",   onSeeked);
+      video.removeEventListener("pause",    onPause);
     };
   }, []);
 
@@ -195,7 +219,7 @@ export function VideoPlayer({
 
     if (playing && !buffering) {
       ++playRequestRef.current;
-      video.pause();
+      try { video.pause(); } catch {}
       setPlaying(false);
     } else if (!playing) {
       playWhenReady(video);
@@ -228,12 +252,10 @@ export function VideoPlayer({
         playsInline
         preload={preloadAttr}
         className="w-full h-full object-cover"
-        onPlay={() => { setPlaying(true); setBuffering(false); }}
-        onPause={() => setPlaying(false)}
         data-testid="video-element"
       />
 
-      {/* Buffering spinner — shown while waiting for data */}
+      {/* Buffering spinner */}
       {buffering && !showDataSaverOverlay && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
           <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
