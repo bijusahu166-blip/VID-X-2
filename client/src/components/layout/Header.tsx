@@ -21,8 +21,8 @@ export function Header() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border/40 h-14">
-        <div className="flex items-center justify-between gap-4 h-full px-4 max-w-sm mx-auto">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border/40 safe-header">
+        <div className="flex items-center justify-between gap-4 h-14 px-4 max-w-sm mx-auto">
 
           {/* Left: Create Button */}
           <Button
