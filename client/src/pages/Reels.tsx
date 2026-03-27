@@ -222,24 +222,26 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
         </div>
       )}
 
-      {/* Top-right controls: mute + fullscreen */}
-      <div className="absolute top-4 right-4 flex flex-col gap-2 items-center">
-        <button
-          onClick={() => setIsMuted(m => !m)}
-          className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
-          data-testid={`button-mute-${reel.id}`}
-        >
-          {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
-        </button>
-        <button
-          onClick={toggleFullscreen}
-          className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
-          data-testid={`button-fullscreen-${reel.id}`}
-          title="Fullscreen (or double-tap)"
-        >
-          {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
-        </button>
-      </div>
+      {/* Fullscreen — top-right corner */}
+      <button
+        onClick={toggleFullscreen}
+        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center z-20 border border-white/10"
+        data-testid={`button-fullscreen-${reel.id}`}
+        title="Fullscreen (or double-tap)"
+      >
+        {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
+      </button>
+
+      {/* Sound control — vertically centered right side for easy thumb reach */}
+      <button
+        onClick={() => setIsMuted(m => !m)}
+        className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/60 backdrop-blur flex items-center justify-center z-20 border border-white/15 shadow-lg"
+        data-testid={`button-mute-${reel.id}`}
+      >
+        {isMuted
+          ? <VolumeX className="w-5 h-5 text-white" />
+          : <Volume2 className="w-5 h-5 text-white" />}
+      </button>
 
       {/* Right action bar — bottom offset uses --bottom-nav-h so it never overlaps the nav */}
       <div className="absolute right-4 flex flex-col gap-5 items-center" style={{ bottom: 'var(--bottom-nav-h)' }}>
