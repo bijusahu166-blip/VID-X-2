@@ -3,14 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Heart, MessageCircle, Send, Bookmark, CheckCircle2, MoreVertical, Flag, UserX, X, ChevronDown, Link2, Share2, MessageSquare } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useLikePost, useAddComment } from "@/hooks/use-posts";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const REPORT_REASONS = [
@@ -42,6 +41,22 @@ export function PostCard({ post }: PostCardProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
+  // Optimistic like state — instantly responsive without waiting for server
+  const [liked, setLiked] = useState<boolean>(!!post.hasLiked);
+  const [likeCount, setLikeCount] = useState<number>(post.likesCount || 0);
+
+  // Sync if parent data changes (e.g. after refetch)
+  useEffect(() => { setLiked(!!post.hasLiked); }, [post.hasLiked]);
+  useEffect(() => { setLikeCount(post.likesCount || 0); }, [post.likesCount]);
+
+  // Comment section state
+  const [showComments, setShowComments] = useState(false);
+  const { data: commentsList, isLoading: commentsLoading } = useQuery<any[]>({
+    queryKey: ["/api/posts", post.id, "comments"],
+    queryFn: () => fetch(`/api/posts/${post.id}/comments`, { credentials: "include" }).then(r => r.json()),
+    enabled: showComments,
+  });
+
   // Close menu on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -54,9 +69,26 @@ export function PostCard({ post }: PostCardProps) {
   }, []);
 
   const handleLike = () => {
-    likeMutation.mutate(post.id);
+    // Optimistic update — flip immediately
+    const newLiked = !liked;
+    setLiked(newLiked);
+    setLikeCount(c => newLiked ? c + 1 : Math.max(0, c - 1));
     setShowHeart(true);
     setTimeout(() => setShowHeart(false), 800);
+
+    likeMutation.mutate(post.id, {
+      onError: () => {
+        // Roll back on failure
+        setLiked(!newLiked);
+        setLikeCount(c => newLiked ? Math.max(0, c - 1) : c + 1);
+        toast({ title: "Could not like post", variant: "destructive" });
+      },
+      onSuccess: (data: any) => {
+        // Sync exact count from server
+        if (typeof data?.likesCount === "number") setLikeCount(data.likesCount);
+        if (typeof data?.added === "boolean") setLiked(data.added);
+      },
+    });
   };
 
   const historyMutation = useMutation({
@@ -74,8 +106,14 @@ export function PostCard({ post }: PostCardProps) {
   const handleComment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!comment.trim()) return;
-    commentMutation.mutate({ postId: post.id, content: comment });
+    const text = comment;
     setComment("");
+    setShowComments(true);
+    commentMutation.mutate({ postId: post.id, content: text }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/posts", post.id, "comments"] });
+      },
+    });
   };
 
   // ── Report post ─────────────────────────────────────────────────────────────
@@ -266,11 +304,18 @@ export function PostCard({ post }: PostCardProps) {
         <CardContent className="p-4 pb-2 bg-[#594f4f5c]">
           <div className="flex justify-between items-center mb-4">
             <div className="flex space-x-4">
-              <Button variant="ghost" size="icon" className="hover:text-destructive hover:bg-destructive/10 -ml-2" onClick={handleLike}>
-                <Heart className={cn("w-6 h-6 transition-all", post.hasLiked ? "fill-destructive text-destructive" : "")} />
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("hover:text-destructive hover:bg-destructive/10 -ml-2", liked && "text-destructive")}
+                onClick={handleLike}
+                disabled={likeMutation.isPending}
+                data-testid={`button-like-${post.id}`}
+              >
+                <Heart className={cn("w-6 h-6 transition-all duration-150", liked ? "fill-destructive text-destructive scale-110" : "")} />
               </Button>
-              <Button variant="ghost" size="icon">
-                <MessageCircle className="w-6 h-6" />
+              <Button variant="ghost" size="icon" onClick={() => setShowComments(v => !v)} data-testid={`button-comment-${post.id}`}>
+                <MessageCircle className={cn("w-6 h-6", showComments && "text-primary")} />
               </Button>
               <Button variant="ghost" size="icon" onClick={() => setShowShareSheet(true)} data-testid="button-share-post">
                 <Send className="w-6 h-6" />
@@ -281,16 +326,62 @@ export function PostCard({ post }: PostCardProps) {
             </Button>
           </div>
           <div className="space-y-2">
-            <p className="font-semibold text-sm">{post.likesCount || 0} likes</p>
+            <p className="font-semibold text-sm">{likeCount} {likeCount === 1 ? "like" : "likes"}</p>
             <p className="text-sm">
               <span className="font-semibold mr-2">{post.user?.firstName}:</span>
               {post.caption}
             </p>
             {post.commentsCount > 0 && (
-              <button className="text-sm text-muted-foreground hover:text-foreground">
-                View all {post.commentsCount} comments
+              <button
+                className="text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => setShowComments(v => !v)}
+                data-testid={`button-view-comments-${post.id}`}
+              >
+                {showComments ? "Hide comments" : `View all ${post.commentsCount} comment${post.commentsCount !== 1 ? "s" : ""}`}
               </button>
             )}
+            {/* Comment list */}
+            <AnimatePresence>
+              {showComments && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  {commentsLoading ? (
+                    <div className="space-y-2 mt-1">
+                      {[1, 2].map(i => (
+                        <div key={i} className="flex gap-2 items-center animate-pulse">
+                          <div className="w-6 h-6 rounded-full bg-muted shrink-0" />
+                          <div className="h-3 bg-muted rounded w-3/4" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : commentsList && commentsList.length > 0 ? (
+                    <div className="space-y-2 mt-1">
+                      {commentsList.map((c: any) => (
+                        <div key={c.id} className="flex gap-2 items-start" data-testid={`comment-${c.id}`}>
+                          <div className="w-6 h-6 rounded-full overflow-hidden bg-muted shrink-0 mt-0.5">
+                            {c.user?.profileImageUrl
+                              ? <img src={c.user.profileImageUrl} className="w-full h-full object-cover" alt="" />
+                              : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-500 to-orange-500 text-white text-[9px] font-bold">{c.user?.firstName?.[0] ?? "?"}</div>
+                            }
+                          </div>
+                          <p className="text-sm leading-snug">
+                            <span className="font-semibold mr-1">{c.user?.firstName ?? "User"}</span>
+                            {c.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">No comments yet.</p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </CardContent>
 
