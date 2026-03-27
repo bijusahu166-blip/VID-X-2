@@ -878,7 +878,7 @@ export default function Messages() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-20 pt-14">
+    <div className="min-h-screen bg-background flex flex-col pb-28 pt-14">
       <Header />
       <div className="flex-1 max-w-md mx-auto w-full flex flex-col">
         <ChatList

@@ -239,7 +239,7 @@ export default function Reading() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 pt-14">
+    <div className="min-h-screen bg-background pb-28 pt-14">
       <Header />
 
       <main className="p-4 max-w-md mx-auto space-y-4">

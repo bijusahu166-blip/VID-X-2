@@ -120,7 +120,7 @@ export default function Notifications() {
         </div>
       </div>
 
-      <div className="flex-1 pb-24">
+      <div className="flex-1 pb-28">
         {isLoading && (
           <div className="flex flex-col gap-3 p-4">
             {Array(5).fill(0).map((_, i) => (

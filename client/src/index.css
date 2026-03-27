@@ -261,6 +261,14 @@
   --sar: env(safe-area-inset-right, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
+
+  /*
+   * --bottom-nav-h: total vertical space consumed by the fixed bottom nav.
+   * 88px  = 8(min-safe-area) + pt-1(4) + py-2*2(16) + item(44) + a bit of buffer
+   * + env(safe-area-inset-bottom) for home-indicator / Android gesture bar
+   * Reel overlays and page padding-bottom should use this so nothing overlaps.
+   */
+  --bottom-nav-h: calc(88px + env(safe-area-inset-bottom, 0px));
 }
 
 html, body {
@@ -276,7 +284,14 @@ html, body {
   padding-top: env(safe-area-inset-top, 0px) !important;
 }
 
-/* Fixed bottom nav — needs bottom padding to clear the home indicator */
+/* Fixed bottom nav — needs bottom padding to clear the home indicator.
+   The extra 4px ensures no pixel-perfect clipping on any device. */
 .safe-bottom-nav {
-  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 4px) !important;
+  background: transparent;
+}
+
+/* Page content that scrolls behind the bottom nav — keep last item visible */
+.page-bottom-pad {
+  padding-bottom: var(--bottom-nav-h);
 }

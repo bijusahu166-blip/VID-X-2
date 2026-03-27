@@ -82,7 +82,7 @@ export default function Search() {
   const isSearching = searchQuery.length >= 1;
 
   return (
-    <div className="min-h-screen bg-black pb-20 pt-14">
+    <div className="min-h-screen bg-black pb-28 pt-14">
       <Header />
 
       {/* Search bar */}

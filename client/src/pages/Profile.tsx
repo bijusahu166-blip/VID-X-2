@@ -158,7 +158,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
   const postCount = userPosts?.length ?? 0;
 
   return (
-    <div className="min-h-screen bg-black pb-20">
+    <div className="min-h-screen bg-black pb-28">
       {/* Back header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 sticky top-0 z-40 bg-black/95 backdrop-blur">
         <button onClick={() => window.history.back()} className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center" data-testid="button-back-profile">

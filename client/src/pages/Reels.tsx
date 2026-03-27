@@ -241,8 +241,8 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
         </button>
       </div>
 
-      {/* Right action bar */}
-      <div className="absolute right-4 bottom-28 flex flex-col gap-5 items-center">
+      {/* Right action bar — bottom offset uses --bottom-nav-h so it never overlaps the nav */}
+      <div className="absolute right-4 flex flex-col gap-5 items-center" style={{ bottom: 'var(--bottom-nav-h)' }}>
         {/* Avatar */}
         <div className="relative">
           <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white">
@@ -286,8 +286,8 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
         </button>
       </div>
 
-      {/* Bottom info */}
-      <div className="absolute left-4 bottom-28 max-w-[65%]">
+      {/* Bottom info — same bottom offset as action bar */}
+      <div className="absolute left-4 max-w-[65%]" style={{ bottom: 'var(--bottom-nav-h)' }}>
         <div className="flex items-center gap-2 mb-2">
           <span className="font-bold text-white text-sm">@{reel.user?.username ?? reel.user?.firstName ?? "user"}</span>
         </div>

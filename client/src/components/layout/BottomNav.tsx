@@ -14,42 +14,50 @@ export function BottomNav() {
   const unreadCount = unreadData?.count ?? 0;
 
   const navItems = [
-    { icon: Home, label: "Home", href: "/" },
-    { icon: Search, label: "Explore", href: "/search" },
-    { icon: PlaySquare, label: "Reels", href: "/reels" },
-    { icon: Bell, label: "Alerts", href: "/notifications", badge: unreadCount },
-    { icon: MessageCircle, label: "DMs", href: "/messages" },
-    { icon: User, label: "Profile", href: "/profile" },
+    { icon: Home,          label: "Home",    href: "/" },
+    { icon: Search,        label: "Explore", href: "/search" },
+    { icon: PlaySquare,    label: "Reels",   href: "/reels" },
+    { icon: Bell,          label: "Alerts",  href: "/notifications", badge: unreadCount },
+    { icon: MessageCircle, label: "DMs",     href: "/messages" },
+    { icon: User,          label: "Profile", href: "/profile" },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 safe-bottom-nav">
-      <div className="flex justify-center pb-3 pt-1 px-4">
-        <div className="flex items-center justify-between gap-1 bg-black rounded-2xl px-3 py-2 shadow-2xl w-full max-w-sm">
+    /*
+     * The nav is fixed at bottom:0. We add padding-bottom via inline style so
+     * the pill always floats above the home indicator / Android gesture bar.
+     * env(safe-area-inset-bottom) adapts per device; 8px is the minimum gap.
+     */
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}
+    >
+      {/* Outer wrapper adds lateral padding + a small top gap */}
+      <div className="flex justify-center px-4 pt-1">
+        {/* Floating pill */}
+        <div className="flex items-end justify-between gap-1 bg-black rounded-2xl px-2 pt-2 pb-2 shadow-2xl w-full max-w-sm">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.href !== "#" && item.href === location;
 
             return (
-              <Link key={item.href} href={item.href}>
-                <div className="nav-spin-border">
-                  <div
-                    data-testid={`link-${item.label.toLowerCase()}`}
-                    className={cn(
-                      "relative flex flex-col items-center justify-center w-11 h-11 rounded-xl transition-all duration-200",
-                      isActive
-                        ? "bg-primary/20 text-primary"
-                        : "text-zinc-400 hover:text-white hover:bg-white/10"
-                    )}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {item.badge != null && item.badge > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 leading-none">
-                        {item.badge > 99 ? "99+" : item.badge}
-                      </span>
-                    )}
-                    <span className="text-[9px] mt-0.5 font-medium">{item.label}</span>
-                  </div>
+              <Link key={item.href} href={item.href} className="flex-1">
+                <div
+                  data-testid={`link-${item.label.toLowerCase()}`}
+                  className={cn(
+                    "relative flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 rounded-xl transition-all duration-200 w-full",
+                    isActive
+                      ? "bg-primary/20 text-primary"
+                      : "text-zinc-400 hover:text-white hover:bg-white/10"
+                  )}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  {item.badge != null && item.badge > 0 && (
+                    <span className="absolute top-0.5 right-0.5 min-w-[15px] h-[15px] bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center px-0.5 leading-none">
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
+                  <span className="text-[9px] font-medium leading-none">{item.label}</span>
                 </div>
               </Link>
             );
