@@ -657,10 +657,12 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
           const chunk = videoFile.slice(start, end);
 
           const fd = new FormData();
-          fd.append("chunk", chunk, videoFile.name);
+          // Text fields MUST come before the file so req.body is populated
+          // before multer's filename callback fires on the server side.
           fd.append("uploadId", uploadId);
           fd.append("chunkIndex", String(i));
           fd.append("totalChunks", String(totalChunks));
+          fd.append("chunk", chunk, videoFile.name);
 
           const resp = await fetch("/api/upload/chunk", {
             method: "POST",

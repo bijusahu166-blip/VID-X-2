@@ -22,13 +22,15 @@ if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 const chunksDir = path.join(process.cwd(), "uploads", "chunks");
 if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
 
-// Multer for individual chunks — each chunk must be ≤6 MB so the proxy never 413s
+// Multer for individual chunks — each chunk must be ≤6 MB so the proxy never 413s.
+// NOTE: req.body fields may not be populated yet during multer's filename callback
+// when the file field appears first in the FormData stream, so we use a temp name
+// and rename the file inside the route handler once req.body is fully available.
 const chunkUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, chunksDir),
-    filename: (req: any, _file, cb) => {
-      const { uploadId, chunkIndex } = req.body;
-      cb(null, `${uploadId}-chunk-${String(chunkIndex).padStart(6, "0")}`);
+    filename: (_req, _file, cb) => {
+      cb(null, `tmp-chunk-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     },
   }),
   limits: { fileSize: 6 * 1024 * 1024 }, // 6 MB per chunk
@@ -759,7 +761,21 @@ export async function registerRoutes(
       if (!req.file) {
         return res.status(400).json({ message: "No chunk data received" });
       }
+      // req.body is now fully available after multer has finished parsing
       const { uploadId, chunkIndex, totalChunks } = req.body;
+      if (!uploadId || chunkIndex === undefined) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(400).json({ message: "Missing uploadId or chunkIndex" });
+      }
+      // Rename temp file to its proper chunk name so finalize can find it in order
+      const properName = `${uploadId}-chunk-${String(chunkIndex).padStart(6, "0")}`;
+      const properPath = path.join(chunksDir, properName);
+      try {
+        fs.renameSync(req.file.path, properPath);
+      } catch (renameErr: any) {
+        console.error("[chunk rename error]", renameErr.message);
+        return res.status(500).json({ message: "Failed to save chunk" });
+      }
       console.log(`[chunk] ${uploadId} chunk ${chunkIndex}/${Number(totalChunks) - 1} saved (${Math.round(req.file.size / 1024)} KB)`);
       res.json({ received: true, chunkIndex: Number(chunkIndex) });
     });
