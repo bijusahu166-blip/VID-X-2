@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, ChevronLeft, ChevronRight, Heart, MessageCircle, Share2, MoreHorizontal } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Heart, Share2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { playLike } from "@/lib/sounds";
@@ -9,6 +9,7 @@ interface Story {
   userId: string;
   user?: any;
   imageUrl?: string | null;
+  videoUrl?: string | null;
   caption?: string | null;
   createdAt: string;
   hasLiked?: boolean;
@@ -21,27 +22,28 @@ interface StoryViewerProps {
   onClose: () => void;
 }
 
-const STORY_DURATION = 5000; // 5 seconds per story
+const PHOTO_DURATION = 5000;
 
 export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerProps) {
   const [idx, setIdx] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const [liked, setLiked] = useState(false);
-  const [dragX, setDragX] = useState(0);
   const [, navigate] = useLocation();
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTime = useRef(Date.now());
   const accumulated = useRef(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const story = stories[idx];
   const hasPrev = idx > 0;
   const hasNext = idx < stories.length - 1;
+  const isVideoStory = !!(story as any)?.videoUrl;
 
   const author = story?.user;
   const authorName = author ? `${author.firstName} ${author.lastName}` : "User";
   const authorAvatar = author?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${author?.firstName || "user"}`;
-  const authorHandle = `@${(author as any)?.username || author?.firstName?.toLowerCase() || "user"}`;
   const timeAgo = story ? getTimeAgo(story.createdAt) : "";
 
   function getTimeAgo(dateStr: string) {
@@ -76,8 +78,10 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
     }
   }, [hasPrev]);
 
-  // Auto-advance timer
+  // Photo story: interval-based timer
   useEffect(() => {
+    if (isVideoStory) return;
+
     accumulated.current = 0;
     startTime.current = Date.now();
     setProgress(0);
@@ -85,7 +89,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
     const tick = () => {
       if (!paused) {
         const elapsed = accumulated.current + (Date.now() - startTime.current);
-        const pct = Math.min((elapsed / STORY_DURATION) * 100, 100);
+        const pct = Math.min((elapsed / PHOTO_DURATION) * 100, 100);
         setProgress(pct);
         if (pct >= 100) goNext();
       }
@@ -95,19 +99,50 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [idx, paused, goNext]);
+  }, [idx, paused, goNext, isVideoStory]);
 
-  // Pause when holding
+  // Video story: drive progress from <video> timeupdate
+  const handleVideoTimeUpdate = () => {
+    const vid = videoRef.current;
+    if (!vid || !vid.duration) return;
+    const pct = Math.min((vid.currentTime / vid.duration) * 100, 100);
+    setProgress(pct);
+  };
+
+  const handleVideoEnded = () => {
+    goNext();
+  };
+
+  // Auto-play / pause video when paused state changes
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    if (paused) {
+      vid.pause();
+    } else {
+      vid.play().catch(() => {});
+    }
+  }, [paused]);
+
+  // Reset video on story change
+  useEffect(() => {
+    setProgress(0);
+    const vid = videoRef.current;
+    if (vid) {
+      vid.currentTime = 0;
+      vid.play().catch(() => {});
+    }
+  }, [idx]);
+
   const handlePointerDown = () => {
     setPaused(true);
-    accumulated.current += Date.now() - startTime.current;
+    if (!isVideoStory) accumulated.current += Date.now() - startTime.current;
   };
   const handlePointerUp = () => {
     setPaused(false);
-    startTime.current = Date.now();
+    if (!isVideoStory) startTime.current = Date.now();
   };
 
-  // Tap left/right to navigate
   const handleTap = (e: React.MouseEvent) => {
     const x = e.clientX;
     const w = window.innerWidth;
@@ -121,7 +156,6 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
     if (!liked) playLike();
   };
 
-  // Swipe detection
   const touchStart = useRef(0);
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStart.current = e.touches[0].clientX;
@@ -137,6 +171,8 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
   };
 
   if (!story) return null;
+
+  const videoUrl = (story as any).videoUrl as string | null | undefined;
 
   return (
     <AnimatePresence>
@@ -200,7 +236,21 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
               exit={{ opacity: 0, x: -30 }}
               transition={{ duration: 0.15 }}
             >
-              {story.imageUrl && !story.imageUrl.startsWith("blob:") ? (
+              {videoUrl ? (
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  playsInline
+                  muted={false}
+                  loop={false}
+                  controls={false}
+                  draggable={false}
+                  onTimeUpdate={handleVideoTimeUpdate}
+                  onEnded={handleVideoEnded}
+                />
+              ) : story.imageUrl && !story.imageUrl.startsWith("blob:") ? (
                 <img
                   src={story.imageUrl}
                   alt={story.caption || "Story"}
@@ -223,7 +273,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
           </AnimatePresence>
         </div>
 
-        {/* Left / Right tap zones (visual chevrons on hover) */}
+        {/* Left / Right tap zones */}
         {hasPrev && (
           <div className="absolute left-0 top-1/2 -translate-y-1/2 z-20 flex items-center justify-start pl-2 w-1/3 h-1/2 pointer-events-none opacity-0 group-hover:opacity-100">
             <ChevronLeft className="w-6 h-6 text-white/30" />
@@ -255,7 +305,6 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
             <Share2 className="w-6 h-6" />
           </button>
           <div className="flex-1" />
-          {/* Story count indicator */}
           <span className="text-white/50 text-xs">{idx + 1} / {stories.length}</span>
         </div>
       </motion.div>

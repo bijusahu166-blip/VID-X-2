@@ -589,19 +589,25 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     // Determine the correct file to upload:
     // - Reels always use reelVideoFile (always a video)
     // - Videos use selectedFile (always a video from handleVideoFileChange)
-    // - Stories use selectedFile ONLY if it is actually a video (not a photo)
+    // - Stories: video can come from reelVideoFile (Video tab) or selectedFile if it is a video MIME.
+    //   Photo-stories use imageUrl only — image files must NOT be sent to the video endpoint.
     // This prevents image/jpeg files from being sent to the video upload endpoint.
     let videoFile: File | null = null;
     if (uploadType === "reel") {
       videoFile = reelVideoFile;
     } else if (uploadType === "video") {
       videoFile = selectedFile;
-    } else if (uploadType === "story" && selectedFile) {
-      const mime = selectedFile.type;
-      if (mime.startsWith("video/") || mime === "application/octet-stream") {
-        videoFile = selectedFile;
+    } else if (uploadType === "story") {
+      if (reelVideoFile) {
+        // User selected a video via the "Video" tab in story upload mode
+        videoFile = reelVideoFile;
+      } else if (selectedFile) {
+        const mime = selectedFile.type;
+        if (mime.startsWith("video/") || mime === "application/octet-stream") {
+          videoFile = selectedFile;
+        }
+        // If it's an image/jpeg etc., skip video upload — use imageUrl directly
       }
-      // If it's an image (e.g. image/jpeg), skip video upload — use imageUrl directly
     }
 
     if (videoFile) {
