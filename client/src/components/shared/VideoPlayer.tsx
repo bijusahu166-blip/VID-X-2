@@ -69,6 +69,9 @@ export function VideoPlayer({
   const [tapped, setTapped] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // firstFrame: false until the browser can render the first video frame.
+  // The shimmer overlay is shown while this is false so there's no black flash.
+  const [firstFrame, setFirstFrame] = useState(false);
 
   const { dataSaver, quality } = useVideoSettings();
 
@@ -248,12 +251,24 @@ export function VideoPlayer({
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  // Shimmer: disappears as soon as the browser can paint the first video frame
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onCanPlay = () => setFirstFrame(true);
+    video.addEventListener("canplay", onCanPlay);
+    // If already ready (e.g. cached), fire immediately
+    if (video.readyState >= 3) setFirstFrame(true);
+    return () => video.removeEventListener("canplay", onCanPlay);
+  }, [src]);
+
   // Reset on src change
   useEffect(() => {
     setLoaded(false);
     setPlaying(false);
     setBuffering(false);
     setProgress(0);
+    setFirstFrame(false);
     ++playRequestRef.current;
   }, [src]);
 
@@ -333,6 +348,21 @@ export function VideoPlayer({
         className="w-full h-full object-cover"
         data-testid="video-element"
       />
+
+      {/* Loading shimmer — visible until the first video frame is ready.
+          Gives instant visual feedback while HLS fetches its first segment. */}
+      {!firstFrame && !showDataSaverOverlay && (
+        <div className="video-shimmer" aria-hidden="true">
+          {/* Play icon centred so users know something will play */}
+          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+            <div className="w-12 h-12 rounded-full bg-white/8 border border-white/10 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" className="w-5 h-5 text-white/30 fill-current ml-0.5">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Buffering spinner */}
       {buffering && !showDataSaverOverlay && (

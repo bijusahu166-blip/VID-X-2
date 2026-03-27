@@ -26,8 +26,11 @@ cloudinary.config({
   secure: true,
 });
 
-// Upload a local file to Cloudinary and return the optimised secure_url.
-// Applies f_auto + q_auto so Cloudinary picks the best format/quality per device.
+// Upload a local file to Cloudinary.
+// - Triggers an async eager HLS transformation (sp_auto streaming profile)
+//   so the .m3u8 manifest is generated in the background immediately.
+// - Returns the HLS URL as the primary URL so HLS.js can start adaptive
+//   streaming straight away.  Falls back to f_auto/q_auto MP4 on failure.
 async function uploadToCloudinary(localPath: string, folder = "litlink-videos"): Promise<string> {
   const result = await cloudinary.uploader.upload(localPath, {
     resource_type: "video",
@@ -36,13 +39,21 @@ async function uploadToCloudinary(localPath: string, folder = "litlink-videos"):
     unique_filename: true,
     overwrite: false,
     chunk_size: 6_000_000, // 6 MB chunks for resilient upload
+    // Kick off adaptive HLS generation asynchronously so it is ready
+    // by the time the first viewer requests the stream.
+    eager: [{ streaming_profile: "auto", format: "m3u8" }],
+    eager_async: true, // don't block the response — HLS is built in the background
   });
-  // Insert f_auto,q_auto into the URL right after /upload/
-  const optimisedUrl = result.secure_url.replace(
-    "/upload/",
-    "/upload/f_auto,q_auto/"
-  );
-  return optimisedUrl;
+
+  // Derive the HLS manifest URL from the upload result.
+  // Cloudinary serves HLS on-demand via /upload/sp_auto/<public_id>.m3u8
+  // even before eager processing completes (just-in-time generation).
+  const hlsUrl = result.secure_url
+    .replace("/upload/", "/upload/sp_auto/")
+    .replace(/\.[^/.]+$/, ".m3u8");
+
+  console.log(`[cloudinary] HLS URL: ${hlsUrl}`);
+  return hlsUrl;
 }
 
 const uploadsDir = path.join(process.cwd(), "uploads", "videos");

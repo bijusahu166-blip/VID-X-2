@@ -38,6 +38,7 @@ function ReelCard({ reel, isActive, isNext, nextVideoUrl }: {
   const [liked, setLiked] = useState(reel.hasLiked ?? false);
   const [likeCount, setLikeCount] = useState(reel.likesCount ?? 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [firstFrame, setFirstFrame] = useState(false);
   const queryClient = useQueryClient();
   const { dataSaver, quality } = useVideoSettings();
 
@@ -110,6 +111,21 @@ function ReelCard({ reel, isActive, isNext, nextVideoUrl }: {
       video.removeEventListener("seeking", onSeeking);
       video.removeEventListener("seeked", onSeeked);
     };
+  }, [isActive]);
+
+  // Shimmer: listen for first renderable frame then hide the shimmer overlay
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onCanPlay = () => setFirstFrame(true);
+    video.addEventListener("canplay", onCanPlay);
+    if (video.readyState >= 3) setFirstFrame(true);
+    return () => video.removeEventListener("canplay", onCanPlay);
+  }, [reel.videoUrl]);
+
+  // Reset first-frame flag each time this reel becomes active
+  useEffect(() => {
+    if (isActive) setFirstFrame(false);
   }, [isActive]);
 
   useEffect(() => {
@@ -199,6 +215,19 @@ function ReelCard({ reel, isActive, isNext, nextVideoUrl }: {
           className="absolute inset-0 w-full h-full object-cover"
           onClick={togglePlay}
         />
+      )}
+
+      {/* Loading shimmer — shown while the first HLS segment is being fetched */}
+      {hasVideo && isActive && !firstFrame && (
+        <div className="video-shimmer" aria-hidden="true">
+          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+            <div className="w-14 h-14 rounded-full bg-white/8 border border-white/10 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" className="w-6 h-6 text-white/30 fill-current ml-0.5">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Gradient overlays */}
