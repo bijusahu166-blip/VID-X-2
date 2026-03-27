@@ -426,9 +426,27 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     setCameraMode(true);
   };
 
+  const MAX_VIDEO_SIZE_MB = 500;
+  const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  };
+
   const handleReelVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      toast({
+        title: "Video too large",
+        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+        variant: "destructive",
+      });
+      e.target.value = "";
+      return;
+    }
     setReelVideoFile(file);
     const url = URL.createObjectURL(file);
     setReelVideoUrl(url);
@@ -514,6 +532,15 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
   const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      toast({
+        title: "Video too large",
+        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+        variant: "destructive",
+      });
+      e.target.value = "";
+      return;
+    }
     setSelectedFile(file);
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
@@ -578,6 +605,16 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     }
 
     if (videoFile) {
+      // Guard: reject oversized files before even starting the upload
+      if (videoFile.size > MAX_VIDEO_SIZE_BYTES) {
+        toast({
+          title: "Video too large",
+          description: `Your video is ${formatFileSize(videoFile.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       try {
         setIsUploadingVideo(true);
         setUploadProgress(5);
@@ -777,6 +814,9 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                         <>
                           <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
                           <span className="text-[11px] text-green-400 font-semibold truncate flex-1">{selectedFile?.name}</span>
+                          {selectedFile && (
+                            <span className="text-[10px] text-white/50 shrink-0">{formatFileSize(selectedFile.size)}</span>
+                          )}
                           {imageUrl && (
                             <img src={imageUrl} alt="thumb" className="w-8 h-8 rounded object-cover border border-white/20 shrink-0" />
                           )}
