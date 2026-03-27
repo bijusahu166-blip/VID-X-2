@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2, WifiOff, Loader2 } from "lucide-react";
 import { useVideoSettings } from "@/contexts/VideoSettingsContext";
 import Hls from "hls.js";
+import { toCloudinaryVideoUrl } from "@/lib/utils";
 
 // ── Global single-video coordinator ─────────────────────────────────────────
 // Only ONE video across the entire page is allowed to play at a time.
@@ -38,7 +39,7 @@ interface VideoPlayerProps {
 }
 
 export function VideoPlayer({
-  src,
+  src: rawSrc,
   poster,
   loop = true,
   className = "",
@@ -48,6 +49,10 @@ export function VideoPlayer({
   showControls = true,
   onVisible,
 }: VideoPlayerProps) {
+  // Apply Cloudinary f_auto + q_auto to every Cloudinary URL automatically.
+  // Non-Cloudinary URLs (local /uploads, external) pass through untouched.
+  const src = toCloudinaryVideoUrl(rawSrc);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
