@@ -426,8 +426,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     setCameraMode(true);
   };
 
-  const MAX_VIDEO_SIZE_MB = 500;
-  const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
+  const MAX_VIDEO_SIZE_GB = 5;
+  const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_GB * 1024 * 1024 * 1024;
 
   const formatFileSize = (bytes: number) => {
     if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -441,7 +441,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     if (file.size > MAX_VIDEO_SIZE_BYTES) {
       toast({
         title: "Video too large",
-        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_GB} GB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
         variant: "destructive",
       });
       e.target.value = "";
@@ -535,7 +535,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     if (file.size > MAX_VIDEO_SIZE_BYTES) {
       toast({
         title: "Video too large",
-        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_GB} GB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
         variant: "destructive",
       });
       e.target.value = "";
@@ -609,7 +609,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
       if (videoFile.size > MAX_VIDEO_SIZE_BYTES) {
         toast({
           title: "Video too large",
-          description: `Your video is ${formatFileSize(videoFile.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+          description: `Your video is ${formatFileSize(videoFile.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_GB} GB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
           variant: "destructive",
         });
         return;

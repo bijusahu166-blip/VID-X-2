@@ -28,7 +28,7 @@ const videoUpload = multer({
       cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
     },
   }),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
+  limits: { fileSize: 5 * 1024 * 1024 * 1024 }, // 5GB limit
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const isVideoMime = file.mimetype.startsWith("video/") || file.mimetype === "application/octet-stream";
@@ -714,7 +714,7 @@ export async function registerRoutes(
       if (err) {
         console.error("[video upload error]", err.message || err);
         if (err.code === "LIMIT_FILE_SIZE") {
-          return res.status(413).json({ message: "File too large. Maximum size is 500MB." });
+          return res.status(413).json({ message: "File too large. Maximum size is 5 GB." });
         }
         return res.status(400).json({ message: err.message || "Upload failed" });
       }
