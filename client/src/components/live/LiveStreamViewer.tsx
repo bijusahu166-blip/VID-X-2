@@ -1,4 +1,4 @@
-import { X, Heart, MessageCircle, Share2, Users, Radio } from "lucide-react";
+import { X, Heart, Share2, Users, Radio } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { playGoLive, playNotification } from "@/lib/sounds";
@@ -9,49 +9,50 @@ interface LiveStreamViewerProps {
   onClose: () => void;
 }
 
-const FAKE_CHAT: { user: string; msg: string; color: string }[] = [
-  { user: "👑 king_vibes", msg: "LETS GOOO 🔥🔥", color: "#f97316" },
-  { user: "luna_star", msg: "I'm here! 😍", color: "#a855f7" },
-  { user: "tech_bro99", msg: "This is insane 😤", color: "#3b82f6" },
-  { user: "xoxo_grace", msg: "First time watching live ❤️", color: "#ec4899" },
-  { user: "gamer_kid", msg: "W stream", color: "#22c55e" },
-  { user: "zero.cool", msg: "Can you see me?? 👀", color: "#f59e0b" },
-  { user: "night_owl", msg: "bro this goes hard 💎", color: "#06b6d4" },
-  { user: "art3mis", msg: "Stay live plz 🙏", color: "#e879f9" },
-];
-
 export function LiveStreamViewer({ post, onClose }: LiveStreamViewerProps) {
   const [, navigate] = useLocation();
-  const [chatMessages, setChatMessages] = useState<typeof FAKE_CHAT>([]);
-  const [viewerCount, setViewerCount] = useState(post.viewerCount ?? Math.floor(Math.random() * 400) + 50);
+  const [chatMessages, setChatMessages] = useState<{ user: string; msg: string; color: string }[]>([]);
+  const [viewerCount, setViewerCount] = useState<number>(post.viewerCount ?? post.viewer_count ?? 0);
   const [heartAnim, setHeartAnim] = useState(false);
-  const [likeCount, setLikeCount] = useState(Math.floor(Math.random() * 1000) + 100);
   const [myMsg, setMyMsg] = useState("");
   const chatRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const leftRef = useRef(false);
 
   const author = post.user;
   const authorName = author ? `${author.firstName} ${author.lastName}` : "Unknown";
   const authorHandle = `@${(author as any)?.username || author?.firstName?.toLowerCase() || "user"}`;
   const authorAvatar = author?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${author?.firstName}`;
 
-  // Simulate incoming chat messages
   useEffect(() => {
     playGoLive();
-    let msgIdx = 0;
-    const interval = setInterval(() => {
-      const msg = FAKE_CHAT[msgIdx % FAKE_CHAT.length];
-      setChatMessages(prev => [...prev.slice(-20), msg]);
-      msgIdx++;
-      // Simulate fluctuating viewer count
-      setViewerCount((v: number) => v + Math.floor(Math.random() * 5) - 1);
-      chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
-    }, 1800);
-    return () => clearInterval(interval);
-  }, []);
+    leftRef.current = false;
+
+    // Join: increment real viewer count in DB
+    fetch(`/api/live/${post.id}/join`, { method: "POST", credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (typeof d.viewerCount === "number") setViewerCount(d.viewerCount); })
+      .catch(() => {});
+
+    // Poll real viewer count every 10 seconds
+    pollRef.current = setInterval(() => {
+      fetch(`/api/live/${post.id}/viewers`, { credentials: "include" })
+        .then(r => r.json())
+        .then(d => { if (typeof d.viewerCount === "number") setViewerCount(d.viewerCount); })
+        .catch(() => {});
+    }, 10000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (!leftRef.current) {
+        leftRef.current = true;
+        fetch(`/api/live/${post.id}/leave`, { method: "POST", credentials: "include" }).catch(() => {});
+      }
+    };
+  }, [post.id]);
 
   const sendHeart = () => {
     setHeartAnim(true);
-    setLikeCount((n: number) => n + 1);
     setTimeout(() => setHeartAnim(false), 600);
     playNotification();
   };
@@ -64,6 +65,14 @@ export function LiveStreamViewer({ post, onClose }: LiveStreamViewerProps) {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
   };
 
+  const handleClose = () => {
+    if (!leftRef.current) {
+      leftRef.current = true;
+      fetch(`/api/live/${post.id}/leave`, { method: "POST", credentials: "include" }).catch(() => {});
+    }
+    onClose();
+  };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -72,7 +81,7 @@ export function LiveStreamViewer({ post, onClose }: LiveStreamViewerProps) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 40 }}
       >
-        {/* Background — gradient or video */}
+        {/* Background */}
         <div className="absolute inset-0">
           {post.videoUrl ? (
             <video
@@ -94,23 +103,22 @@ export function LiveStreamViewer({ post, onClose }: LiveStreamViewerProps) {
 
         {/* Top bar */}
         <div className="relative z-10 flex items-center gap-3 px-4 pt-4 pb-2">
-          {/* LIVE badge */}
           <div className="flex items-center gap-1.5 bg-red-500 px-2.5 py-1 rounded-lg">
             <Radio className="w-3 h-3 text-white" />
             <span className="text-white text-[11px] font-black tracking-widest">LIVE</span>
           </div>
 
-          {/* Viewer count */}
           <div className="flex items-center gap-1 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full">
             <Users className="w-3 h-3 text-zinc-300" />
-            <span className="text-zinc-300 text-[11px] font-bold">{viewerCount.toLocaleString()}</span>
+            <span className="text-zinc-300 text-[11px] font-bold" data-testid="text-live-viewer-count">
+              {viewerCount.toLocaleString()}
+            </span>
           </div>
 
           <div className="flex-1" />
 
-          {/* Close */}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center"
             data-testid="button-close-livestream"
           >
@@ -122,7 +130,7 @@ export function LiveStreamViewer({ post, onClose }: LiveStreamViewerProps) {
         <div className="relative z-10 px-4 mt-1">
           <button
             className="flex items-center gap-2 bg-black/50 backdrop-blur rounded-full px-3 py-1.5"
-            onClick={() => { onClose(); navigate(`/profile/${post.userId}`); }}
+            onClick={() => { handleClose(); navigate(`/profile/${post.userId}`); }}
           >
             <img src={authorAvatar} alt={authorName} className="w-7 h-7 rounded-full object-cover border border-white/20" />
             <div className="text-left">
@@ -132,10 +140,9 @@ export function LiveStreamViewer({ post, onClose }: LiveStreamViewerProps) {
           </button>
         </div>
 
-        {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Chat messages */}
+        {/* Chat messages (only user's own messages) */}
         <div
           ref={chatRef}
           className="relative z-10 px-4 mb-2 max-h-[35vh] overflow-y-auto flex flex-col gap-1.5 scrollbar-hide"
@@ -153,7 +160,7 @@ export function LiveStreamViewer({ post, onClose }: LiveStreamViewerProps) {
           ))}
         </div>
 
-        {/* Bottom bar: chat input + actions */}
+        {/* Bottom bar */}
         <div className="relative z-10 flex items-center gap-3 px-4 pb-6 pt-3 bg-gradient-to-t from-black to-transparent">
           <form onSubmit={sendChat} className="flex-1 flex">
             <input
@@ -165,19 +172,14 @@ export function LiveStreamViewer({ post, onClose }: LiveStreamViewerProps) {
             />
           </form>
 
-          {/* Like heart */}
           <button
             onClick={sendHeart}
             className="relative w-11 h-11 flex items-center justify-center"
             data-testid="button-live-like"
           >
             <Heart className={`w-7 h-7 transition-transform ${heartAnim ? "scale-150 text-red-400 fill-red-400" : "text-white"}`} />
-            <span className="absolute -top-1 -right-1 text-[9px] font-black text-white bg-red-500 rounded-full min-w-[16px] px-0.5 text-center">
-              {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}K` : likeCount}
-            </span>
           </button>
 
-          {/* Share */}
           <button className="w-9 h-9 flex items-center justify-center text-white/70">
             <Share2 className="w-5 h-5" />
           </button>

@@ -485,10 +485,14 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         setLiveStarted(true);
         setLiveViewers(0);
         setLiveChat([{ name: "System", msg: "🔴 You are now live! Your followers have been notified.", color: "#ef4444" }]);
-        // Poll viewer count every 30 seconds
+        // Poll real viewer count from DB every 10 seconds
+        const postId = data.post.id;
         liveIntervalRef.current = setInterval(() => {
-          setLiveViewers(v => v); // In a real app this would fetch from server
-        }, 30000);
+          fetch(`/api/live/${postId}/viewers`, { credentials: "include" })
+            .then(r => r.json())
+            .then(d => { if (typeof d.viewerCount === "number") setLiveViewers(d.viewerCount); })
+            .catch(() => {});
+        }, 10000);
       }
     } catch {
       setLiveStarted(true);

@@ -92,6 +92,8 @@ function OtherUserProfile({ userId }: { userId: string }) {
   const { data: profileData, isLoading } = useQuery<any>({
     queryKey: ["/api/users", userId],
     queryFn: () => fetch(`/api/users/${userId}`, { credentials: "include" }).then(r => r.json()),
+    refetchInterval: 15000,
+    staleTime: 5000,
   });
 
   const { data: userPosts, isLoading: postsLoading } = useQuery<any[]>({
@@ -308,6 +310,8 @@ export default function Profile() {
     queryKey: ["/api/users", user?.id],
     queryFn: () => fetch(`/api/users/${user?.id}`, { credentials: "include" }).then(r => r.json()),
     enabled: !!user?.id,
+    refetchInterval: 15000,
+    staleTime: 5000,
   });
   const myPosts = posts?.filter(p => p.userId === user?.id) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);

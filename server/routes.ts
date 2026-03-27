@@ -1178,6 +1178,44 @@ export async function registerRoutes(
     res.json((rows as any).rows ?? rows);
   });
 
+  // ── Real view counting ────────────────────────────────────────────────────
+  // Called once per session per video from the client (guarded by sessionStorage).
+  app.post("/api/posts/:id/view", isAuthenticated, async (req: any, res) => {
+    const postId = Number(req.params.id);
+    if (isNaN(postId)) return res.status(400).json({ message: "Invalid post id" });
+    await db.execute(sql`UPDATE posts SET viewer_count = viewer_count + 1 WHERE id = ${postId}`);
+    const row = await db.execute(sql`SELECT viewer_count FROM posts WHERE id = ${postId}`);
+    const viewerCount = parseInt(((row as any).rows?.[0] ?? (row as any)[0])?.viewer_count ?? "0");
+    res.json({ viewerCount });
+  });
+
+  // Live: join (increment viewer_count) — called when viewer opens stream
+  app.post("/api/live/:postId/join", isAuthenticated, async (req: any, res) => {
+    const postId = Number(req.params.postId);
+    if (isNaN(postId)) return res.status(400).json({ message: "Invalid post id" });
+    await db.execute(sql`UPDATE posts SET viewer_count = viewer_count + 1 WHERE id = ${postId}`);
+    const row = await db.execute(sql`SELECT viewer_count FROM posts WHERE id = ${postId}`);
+    const viewerCount = parseInt(((row as any).rows?.[0] ?? (row as any)[0])?.viewer_count ?? "0");
+    res.json({ viewerCount });
+  });
+
+  // Live: leave (decrement viewer_count, minimum 0)
+  app.post("/api/live/:postId/leave", isAuthenticated, async (req: any, res) => {
+    const postId = Number(req.params.postId);
+    if (isNaN(postId)) return res.status(400).json({ message: "Invalid post id" });
+    await db.execute(sql`UPDATE posts SET viewer_count = GREATEST(viewer_count - 1, 0) WHERE id = ${postId}`);
+    res.json({ success: true });
+  });
+
+  // Live: get current viewer count
+  app.get("/api/live/:postId/viewers", isAuthenticated, async (req: any, res) => {
+    const postId = Number(req.params.postId);
+    if (isNaN(postId)) return res.status(400).json({ message: "Invalid post id" });
+    const row = await db.execute(sql`SELECT viewer_count FROM posts WHERE id = ${postId}`);
+    const viewerCount = parseInt(((row as any).rows?.[0] ?? (row as any)[0])?.viewer_count ?? "0");
+    res.json({ viewerCount });
+  });
+
   // ── Reel Songs (songs used in public reels) ────────────────────────────────
   app.get("/api/posts/reel-songs", isAuthenticated, async (_req, res) => {
     const rows = await db.execute(sql`

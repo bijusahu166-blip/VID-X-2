@@ -81,6 +81,13 @@ function ReelCard({ reel, isActive, isNext, nextVideoUrl }: {
       // As soon as this reel starts playing, silently pre-cache the next one
       // so the user sees zero buffering when they swipe up.
       if (nextVideoUrl) precacheVideo(nextVideoUrl);
+
+      // Record a real view — once per browser session per post
+      const viewKey = `viewed_post_${reel.id}`;
+      if (!sessionStorage.getItem(viewKey)) {
+        sessionStorage.setItem(viewKey, "1");
+        fetch(`/api/posts/${reel.id}/view`, { method: "POST", credentials: "include" }).catch(() => {});
+      }
     } else {
       ++playRequestRef.current; // cancel any pending play
       video.pause();
@@ -91,7 +98,7 @@ function ReelCard({ reel, isActive, isNext, nextVideoUrl }: {
     return () => {
       ++playRequestRef.current; // cancel on unmount
     };
-  }, [isActive, dataSaver, playWhenReady, nextVideoUrl]);
+  }, [isActive, dataSaver, playWhenReady, nextVideoUrl, reel.id]);
 
   // Buffering events
   useEffect(() => {
