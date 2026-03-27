@@ -19,6 +19,21 @@ import fs from "fs";
 const uploadsDir = path.join(process.cwd(), "uploads", "videos");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+const chunksDir = path.join(process.cwd(), "uploads", "chunks");
+if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
+
+// Multer for individual chunks — each chunk must be ≤6 MB so the proxy never 413s
+const chunkUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, chunksDir),
+    filename: (req: any, _file, cb) => {
+      const { uploadId, chunkIndex } = req.body;
+      cb(null, `${uploadId}-chunk-${String(chunkIndex).padStart(6, "0")}`);
+    },
+  }),
+  limits: { fileSize: 6 * 1024 * 1024 }, // 6 MB per chunk
+});
+
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp", ".flv", ".wmv", ".ts"]);
 const videoUpload = multer({
   storage: multer.diskStorage({
@@ -731,6 +746,61 @@ export async function registerRoutes(
       console.log(`[video upload] saved: ${req.file.filename} (${Math.round(req.file.size / 1024)}KB)`);
       res.json({ url: fileUrl, filename: req.file.filename, size: req.file.size });
     });
+  });
+
+  // ── Chunked video upload ──────────────────────────────────────────────────
+  // Upload a single 4 MB chunk.  Each request is tiny so the proxy never 413s.
+  app.post("/api/upload/chunk", isAuthenticated, (req: any, res) => {
+    chunkUpload.single("chunk")(req, res, (err: any) => {
+      if (err) {
+        console.error("[chunk upload error]", err.message || err);
+        return res.status(400).json({ message: err.message || "Chunk upload failed" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "No chunk data received" });
+      }
+      const { uploadId, chunkIndex, totalChunks } = req.body;
+      console.log(`[chunk] ${uploadId} chunk ${chunkIndex}/${Number(totalChunks) - 1} saved (${Math.round(req.file.size / 1024)} KB)`);
+      res.json({ received: true, chunkIndex: Number(chunkIndex) });
+    });
+  });
+
+  // Assemble all chunks into the final video file once every chunk has arrived.
+  app.post("/api/upload/finalize", isAuthenticated, async (req: any, res) => {
+    const { uploadId, totalChunks, originalName } = req.body;
+    if (!uploadId || !totalChunks || !originalName) {
+      return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
+    }
+    const ext = path.extname(String(originalName)).toLowerCase() || ".mp4";
+    const finalFilename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    const finalPath = path.join(uploadsDir, finalFilename);
+    try {
+      const writeStream = fs.createWriteStream(finalPath);
+      const n = Number(totalChunks);
+      for (let i = 0; i < n; i++) {
+        const chunkPath = path.join(chunksDir, `${uploadId}-chunk-${String(i).padStart(6, "0")}`);
+        if (!fs.existsSync(chunkPath)) {
+          writeStream.destroy();
+          fs.unlink(finalPath, () => {});
+          return res.status(400).json({ message: `Missing chunk ${i}` });
+        }
+        const data = fs.readFileSync(chunkPath);
+        writeStream.write(data);
+        fs.unlink(chunkPath, () => {}); // clean up chunk immediately
+      }
+      writeStream.end();
+      await new Promise<void>((resolve, reject) => {
+        writeStream.on("finish", resolve);
+        writeStream.on("error", reject);
+      });
+      const stats = fs.statSync(finalPath);
+      console.log(`[finalize] ${finalFilename} assembled (${Math.round(stats.size / 1024 / 1024)} MB)`);
+      res.json({ url: `/uploads/videos/${finalFilename}`, filename: finalFilename, size: stats.size });
+    } catch (err: any) {
+      console.error("[finalize error]", err.message || err);
+      fs.unlink(finalPath, () => {});
+      res.status(500).json({ message: "Failed to assemble video" });
+    }
   });
 
   // ── Follow / Unfollow ─────────────────────────────────────────────────────

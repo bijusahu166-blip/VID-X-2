@@ -644,43 +644,60 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         setIsUploadingVideo(true);
         setUploadProgress(1);
 
-        // Use XHR so we can track real upload progress
-        const uploadResult = await new Promise<{ url: string } | { error: string }>((resolve) => {
-          const xhr = new XMLHttpRequest();
-          const formData = new FormData();
-          formData.append("video", videoFile);
+        // ── Chunked upload ────────────────────────────────────────────────────
+        // Split the video into 4 MB slices so no single HTTP request exceeds
+        // the deployment proxy's body-size limit (which caused the 413 error).
+        const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB
+        const totalChunks = Math.ceil(videoFile.size / CHUNK_SIZE);
+        const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              const pct = Math.round((e.loaded / e.total) * 95);
-              setUploadProgress(Math.max(pct, 1));
-            }
-          };
-          xhr.onload = () => {
-            setUploadProgress(100);
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try { resolve({ url: JSON.parse(xhr.responseText).url }); }
-              catch { resolve({ error: "Invalid server response" }); }
-            } else {
-              let msg = "Upload failed";
-              try { msg = JSON.parse(xhr.responseText)?.message || msg; } catch {}
-              resolve({ error: `${msg} (${xhr.status})` });
-            }
-          };
-          xhr.onerror = () => resolve({ error: "Network error — check your connection" });
-          xhr.ontimeout = () => resolve({ error: "Upload timed out — file may be too large for your connection" });
-          xhr.timeout = 0; // no timeout — large files can take minutes
-          xhr.withCredentials = true;
-          xhr.open("POST", "/api/upload/video");
-          xhr.send(formData);
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, videoFile.size);
+          const chunk = videoFile.slice(start, end);
+
+          const fd = new FormData();
+          fd.append("chunk", chunk, videoFile.name);
+          fd.append("uploadId", uploadId);
+          fd.append("chunkIndex", String(i));
+          fd.append("totalChunks", String(totalChunks));
+
+          const resp = await fetch("/api/upload/chunk", {
+            method: "POST",
+            body: fd,
+            credentials: "include",
+          });
+
+          if (!resp.ok) {
+            let msg = "Chunk upload failed";
+            try { msg = (await resp.json()).message || msg; } catch {}
+            toast({ title: "Upload failed", description: `${msg} (chunk ${i + 1}/${totalChunks})`, variant: "destructive" });
+            return;
+          }
+
+          // Progress: chunks account for 90%, finalize for the last 10%
+          setUploadProgress(Math.round(((i + 1) / totalChunks) * 90));
+        }
+
+        // Ask server to assemble all chunks into the final video file
+        setUploadProgress(92);
+        const finalResp = await fetch("/api/upload/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ uploadId, totalChunks, originalName: videoFile.name }),
         });
 
-        if ("error" in uploadResult) {
-          toast({ title: "Upload failed", description: uploadResult.error, variant: "destructive" });
-          return; // stop here — don't create a post without a video
-        } else {
-          videoFileUrl = uploadResult.url;
+        if (!finalResp.ok) {
+          let msg = "Failed to assemble video";
+          try { msg = (await finalResp.json()).message || msg; } catch {}
+          toast({ title: "Upload failed", description: msg, variant: "destructive" });
+          return;
         }
+
+        const finalData = await finalResp.json();
+        setUploadProgress(100);
+        videoFileUrl = finalData.url;
       } catch (err: any) {
         toast({ title: "Upload failed", description: err?.message || "Something went wrong", variant: "destructive" });
         return;
