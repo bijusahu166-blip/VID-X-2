@@ -303,3 +303,9 @@ html, body {
 .page-bottom-pad {
   padding-bottom: var(--bottom-nav-h);
 }
+
+/* ── Video Performance ───────────────────────────────────────────────────── */
+/* Browser sirf visible content load karega — off-screen videos skip render */
+video {
+  content-visibility: auto;
+}
