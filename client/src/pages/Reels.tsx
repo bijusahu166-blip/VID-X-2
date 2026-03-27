@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useVideoSettings } from "@/contexts/VideoSettingsContext";
+import { toCloudinaryVideoUrl } from "@/lib/utils";
+import { precacheVideo } from "@/lib/videoPrecache";
 
 interface ReelPost {
   id: number;
@@ -20,7 +22,12 @@ interface ReelPost {
   hasLiked?: boolean;
 }
 
-function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
+function ReelCard({ reel, isActive, isNext, nextVideoUrl }: {
+  reel: ReelPost;
+  isActive: boolean;
+  isNext: boolean;
+  nextVideoUrl?: string | null;
+}) {
   const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastTap = useRef(0);
@@ -70,6 +77,9 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
 
     if (isActive && !dataSaver) {
       playWhenReady();
+      // As soon as this reel starts playing, silently pre-cache the next one
+      // so the user sees zero buffering when they swipe up.
+      if (nextVideoUrl) precacheVideo(nextVideoUrl);
     } else {
       ++playRequestRef.current; // cancel any pending play
       video.pause();
@@ -80,7 +90,7 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
     return () => {
       ++playRequestRef.current; // cancel on unmount
     };
-  }, [isActive, dataSaver, playWhenReady]);
+  }, [isActive, dataSaver, playWhenReady, nextVideoUrl]);
 
   // Buffering events
   useEffect(() => {
@@ -154,10 +164,18 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
   });
 
   const hasVideo = Boolean(reel.videoUrl);
+  // Apply Cloudinary f_auto,q_auto to every reel video URL
+  const videoSrc = reel.videoUrl ? toCloudinaryVideoUrl(reel.videoUrl) : null;
 
-  // Preload strategy: only preload active reel, keep all others as "none"
+  // Preload strategy:
+  //  active → "auto" (high quality) or "metadata" (adaptive)
+  //  next   → "metadata" so the browser fetches headers + first frames
+  //           ready to play the instant the user swipes up
+  //  others → "none" — don't waste bandwidth on off-screen reels
   const preloadAttr = isActive
     ? (quality === "high" ? "auto" : "metadata")
+    : isNext
+    ? "metadata"
     : "none";
 
   return (
@@ -165,7 +183,7 @@ function ReelCard({ reel, isActive }: { reel: ReelPost; isActive: boolean }) {
       {hasVideo ? (
         <video
           ref={videoRef}
-          src={reel.videoUrl!}
+          src={videoSrc!}
           className="absolute inset-0 w-full h-full object-cover"
           loop
           muted={isMuted}
@@ -352,7 +370,13 @@ export default function Reels() {
         )}
 
         {reels.map((reel, i) => (
-          <ReelCard key={reel.id} reel={reel} isActive={i === activeIndex} />
+          <ReelCard
+            key={reel.id}
+            reel={reel}
+            isActive={i === activeIndex}
+            isNext={i === activeIndex + 1}
+            nextVideoUrl={reels[i + 1]?.videoUrl ?? null}
+          />
         ))}
       </div>
       <div className="relative z-50">

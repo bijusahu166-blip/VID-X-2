@@ -3,6 +3,7 @@ import { Volume2, VolumeX, Play, Pause, RotateCcw, Music, Maximize2, Minimize2, 
 import { useVideoSettings } from "@/contexts/VideoSettingsContext";
 import Hls from "hls.js";
 import { toCloudinaryVideoUrl } from "@/lib/utils";
+import { precacheVideo } from "@/lib/videoPrecache";
 
 // ── Global single-video coordinator ─────────────────────────────────────────
 // Only ONE video across the entire page is allowed to play at a time.
@@ -28,6 +29,8 @@ function isTokenActive(token: number): boolean {
 
 interface VideoPlayerProps {
   src: string;
+  /** URL of the NEXT video to silently pre-cache while this one plays */
+  precacheSrc?: string | null;
   poster?: string;
   loop?: boolean;
   className?: string;
@@ -40,6 +43,7 @@ interface VideoPlayerProps {
 
 export function VideoPlayer({
   src: rawSrc,
+  precacheSrc,
   poster,
   loop = true,
   className = "",
@@ -182,6 +186,8 @@ export function VideoPlayer({
           if (hlsRef.current) hlsRef.current.startLoad(-1);
           playWhenReady(video);
           onVisible?.();
+          // Pre-cache the next video while this one plays
+          if (precacheSrc) precacheVideo(precacheSrc);
         } else {
           ++playRequestRef.current;
           try { video.pause(); } catch {}
@@ -199,7 +205,7 @@ export function VideoPlayer({
       observer.disconnect();
       ++playRequestRef.current;
     };
-  }, [src, dataSaver, quality, playWhenReady, onVisible]);
+  }, [src, dataSaver, quality, playWhenReady, onVisible, precacheSrc]);
 
   // Buffering/waiting events
   useEffect(() => {
