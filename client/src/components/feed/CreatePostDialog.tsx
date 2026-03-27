@@ -121,25 +121,29 @@ function readFileAsDataURL(file: File): Promise<string> {
   });
 }
 
+const THUMB_W = 480;
+const THUMB_H = 270;
+const THUMB_QUALITY = 0.55;
+
 function generateVideoThumbnail(file: File): Promise<string> {
   return new Promise((resolve) => {
     const fallback = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = 640; canvas.height = 360;
+      canvas.width = THUMB_W; canvas.height = THUMB_H;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        const grad = ctx.createLinearGradient(0, 0, 640, 360);
+        const grad = ctx.createLinearGradient(0, 0, THUMB_W, THUMB_H);
         grad.addColorStop(0, "#1a0030");
         grad.addColorStop(0.5, "#0d1a40");
         grad.addColorStop(1, "#200010");
-        ctx.fillStyle = grad; ctx.fillRect(0, 0, 640, 360);
-        // Play icon
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, THUMB_W, THUMB_H);
         ctx.fillStyle = "rgba(255,255,255,0.2)";
-        ctx.beginPath(); ctx.arc(320, 180, 50, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(THUMB_W / 2, THUMB_H / 2, 40, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "rgba(255,255,255,0.8)";
-        ctx.beginPath(); ctx.moveTo(305, 155); ctx.lineTo(355, 180); ctx.lineTo(305, 205); ctx.closePath(); ctx.fill();
+        const cx = THUMB_W / 2, cy = THUMB_H / 2;
+        ctx.beginPath(); ctx.moveTo(cx - 12, cy - 16); ctx.lineTo(cx + 20, cy); ctx.lineTo(cx - 12, cy + 16); ctx.closePath(); ctx.fill();
       }
-      resolve(canvas.toDataURL("image/jpeg", 0.85));
+      resolve(canvas.toDataURL("image/jpeg", THUMB_QUALITY));
     };
     const video = document.createElement("video");
     const objectUrl = URL.createObjectURL(file);
@@ -147,8 +151,7 @@ function generateVideoThumbnail(file: File): Promise<string> {
     video.crossOrigin = "anonymous";
     video.muted = true;
     video.preload = "metadata";
-    // Safety timeout — if video never loads, use fallback after 8s
-    const timeout = setTimeout(() => { URL.revokeObjectURL(objectUrl); fallback(); }, 8000);
+    const timeout = setTimeout(() => { URL.revokeObjectURL(objectUrl); fallback(); }, 10000);
     video.onloadeddata = () => {
       video.currentTime = Math.min(1, video.duration * 0.1 || 0.1);
     };
@@ -156,12 +159,16 @@ function generateVideoThumbnail(file: File): Promise<string> {
       clearTimeout(timeout);
       try {
         const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 360;
+        // Cap at THUMB_W×THUMB_H — never store a 4K canvas
+        const srcW = video.videoWidth || THUMB_W;
+        const srcH = video.videoHeight || THUMB_H;
+        const scale = Math.min(THUMB_W / srcW, THUMB_H / srcH, 1);
+        canvas.width = Math.round(srcW * scale);
+        canvas.height = Math.round(srcH * scale);
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(objectUrl);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
+        resolve(canvas.toDataURL("image/jpeg", THUMB_QUALITY));
       } catch { URL.revokeObjectURL(objectUrl); clearTimeout(timeout); fallback(); }
     };
     video.onerror = () => { clearTimeout(timeout); URL.revokeObjectURL(objectUrl); fallback(); };
@@ -623,34 +630,43 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
       try {
         setIsUploadingVideo(true);
-        setUploadProgress(5);
+        setUploadProgress(1);
 
-        // Simulate progress while uploading (fetch doesn't expose upload progress)
-        const progressInterval = setInterval(() => {
-          setUploadProgress(p => Math.min(p + 3, 90));
-        }, 400);
-
-        try {
+        // Use XHR so we can track real upload progress
+        const uploadResult = await new Promise<{ url: string } | { error: string }>((resolve) => {
+          const xhr = new XMLHttpRequest();
           const formData = new FormData();
           formData.append("video", videoFile);
-          const response = await fetch("/api/upload/video", {
-            method: "POST",
-            credentials: "include",
-            body: formData,
-          });
-          clearInterval(progressInterval);
-          if (response.ok) {
-            const data = await response.json();
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = Math.round((e.loaded / e.total) * 95);
+              setUploadProgress(Math.max(pct, 1));
+            }
+          };
+          xhr.onload = () => {
             setUploadProgress(100);
-            videoFileUrl = data.url;
-          } else {
-            let errMsg = "Upload failed";
-            try { errMsg = (await response.json())?.message || errMsg; } catch {}
-            toast({ title: "Upload failed", description: `${errMsg} (${response.status})`, variant: "destructive" });
-          }
-        } catch (fetchErr: any) {
-          clearInterval(progressInterval);
-          toast({ title: "Upload failed", description: fetchErr?.message || "Network error — check your connection", variant: "destructive" });
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try { resolve({ url: JSON.parse(xhr.responseText).url }); }
+              catch { resolve({ error: "Invalid server response" }); }
+            } else {
+              let msg = "Upload failed";
+              try { msg = JSON.parse(xhr.responseText)?.message || msg; } catch {}
+              resolve({ error: `${msg} (${xhr.status})` });
+            }
+          };
+          xhr.onerror = () => resolve({ error: "Network error — check your connection" });
+          xhr.ontimeout = () => resolve({ error: "Upload timed out — file may be too large for your connection" });
+          xhr.timeout = 0; // no timeout — large files can take minutes
+          xhr.withCredentials = true;
+          xhr.open("POST", "/api/upload/video");
+          xhr.send(formData);
+        });
+
+        if ("error" in uploadResult) {
+          toast({ title: "Upload failed", description: uploadResult.error, variant: "destructive" });
+        } else {
+          videoFileUrl = uploadResult.url;
         }
       } catch (err: any) {
         toast({ title: "Upload failed", description: err?.message || "Something went wrong", variant: "destructive" });
@@ -687,7 +703,6 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
           songColor: selectedSong.color,
         } : {}),
       } as any);
-      toast({ title: "Posted!", description: "Your content is live.", });
       handleClose();
     } catch (err: any) {
       toast({ title: "Post failed", description: err?.message || "Something went wrong. Please try again.", variant: "destructive" });
