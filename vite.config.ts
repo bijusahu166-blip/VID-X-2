@@ -6,7 +6,21 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 export default defineConfig({
   plugins: [
     react(),
-    runtimeErrorOverlay(),
+    runtimeErrorOverlay({
+      filter(err) {
+        // Suppress resource-load false positives.
+        // When a browser resource (img/video/font) fails to load, window.onerror
+        // fires with evt.error === null.  The plugin converts that null into a
+        // synthetic Error("(unknown runtime error)").  Those are not app crashes —
+        // filter them out so Replit's crash reporter isn't triggered by a missing
+        // avatar or a blocked HLS segment.
+        if (err.message === "(unknown runtime error)") return false;
+        // Also suppress NotAllowedError thrown by video.play() when autoplay is
+        // blocked — the player already handles this gracefully.
+        if (err.name === "NotAllowedError") return false;
+        return true;
+      },
+    }),
   ],
   resolve: {
     alias: {
