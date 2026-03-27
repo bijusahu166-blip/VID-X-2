@@ -606,20 +606,27 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
     // This prevents image/jpeg files from being sent to the video upload endpoint.
     let videoFile: File | null = null;
     if (uploadType === "reel") {
-      videoFile = reelVideoFile;
+      if (reelVideoFile) {
+        videoFile = reelVideoFile; // user selected a video file
+      }
+      // If reelVideoFile is null the user selected a photo (camera or photo tab) — no video upload needed
     } else if (uploadType === "video") {
       videoFile = selectedFile;
     } else if (uploadType === "story") {
       if (reelVideoFile) {
-        // User selected a video via the "Video" tab in story upload mode
         videoFile = reelVideoFile;
       } else if (selectedFile) {
         const mime = selectedFile.type;
         if (mime.startsWith("video/") || mime === "application/octet-stream") {
           videoFile = selectedFile;
         }
-        // If it's an image/jpeg etc., skip video upload — use imageUrl directly
       }
+    }
+
+    // Explicit check: video-type posts require a file
+    if (uploadType === "video" && !videoFile) {
+      toast({ title: "No video selected", description: "Tap the upload area to choose a video file.", variant: "destructive" });
+      return;
     }
 
     if (videoFile) {
