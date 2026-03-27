@@ -264,11 +264,18 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
   const [step, setStep] = useState<"select" | "edit" | "video-details" | "details">("select");
   const [uploadType, setUploadType] = useState<UploadType>(defaultTab ?? "post");
 
-  // When dialog opens with a defaultTab, jump straight to that type
+  // When dialog opens with a defaultTab, jump straight to that type's entry step
   useEffect(() => {
     if (open && defaultTab) {
       setUploadType(defaultTab);
-      if (defaultTab === "live") setStep("edit");
+      // Live goes to "details" (title + go live), all others go to their natural step
+      if (defaultTab === "live") {
+        setStep("details");
+      } else if (defaultTab === "reel" || defaultTab === "story" || defaultTab === "editing") {
+        setStep("edit");
+      } else {
+        setStep("details");
+      }
     }
     if (!open) {
       setStep("select");
