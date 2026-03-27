@@ -344,7 +344,11 @@ export async function registerRoutes(
 
   // ── Public config (App IDs for client SDKs) ─────────────────────────────
   app.get("/api/config", (_req, res) => {
-    res.json({ agoraAppId: process.env.AGORA_APP_ID || "" });
+    res.json({
+      agoraAppId: process.env.AGORA_APP_ID || "",
+      cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+      cloudinaryUploadPreset: process.env.CLOUDINARY_UPLOAD_PRESET || "",
+    });
   });
 
   // Check if email exists (for forgot password flow)

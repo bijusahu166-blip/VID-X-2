@@ -21,63 +21,87 @@ export function Header() {
 
   return (
     <>
-      {/* Black top bar — 0.5 cm tall (or device safe-area if larger). z-index 9999 */}
+      {/*
+        ── Solid black status-bar cover ─────────────────────────────────
+        Always 0.5 cm tall (or the device's safe-area-inset-top if larger).
+        z-index 9999 keeps it above everything including modals.
+      */}
       <div
         className="fixed top-0 left-0 right-0 bg-black"
-        style={{ height: 'var(--top-bar-h)', zIndex: 9999 }}
+        style={{ height: "var(--top-bar-h)", zIndex: 9999, minHeight: "19px" }}
         aria-hidden="true"
       />
 
-      {/* Header — sits immediately below the black top bar, always h-14 */}
+      {/* Header — sits flush below the black bar */}
       <header
-        className="fixed left-0 right-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border/40 h-14"
-        style={{ top: 'var(--top-bar-h)' }}
+        className="fixed left-0 right-0 z-50 w-full h-14"
+        style={{
+          top: "var(--top-bar-h)",
+          background: "rgba(0,0,0,0.92)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
+        }}
       >
-        <div className="flex items-center justify-between gap-4 h-full px-4 max-w-sm mx-auto">
+        <div className="flex items-center justify-between h-full px-4 max-w-sm mx-auto">
 
-          {/* Left: Create Button */}
+          {/* Left: Create Post button */}
           <Button
             size="icon"
             variant="ghost"
             onClick={() => setIsCreateOpen(true)}
-            className="rounded-full shadow-[0_0_10px_rgba(74,222,128,0.6)] border border-green-500/50 hover:bg-green-500/10 transition-all duration-300 shrink-0"
+            className="rounded-full border border-green-500/50 hover:bg-green-500/10 transition-all duration-300 shrink-0"
+            style={{ boxShadow: "0 0 10px rgba(74,222,128,0.5)" }}
             data-testid="button-create-post"
           >
-            <Plus className="w-5 h-5 text-green-500" />
+            <Plus className="w-5 h-5 text-green-400" />
             <span className="sr-only">Create</span>
           </Button>
 
           {/* Center: Logo */}
           <div className="flex items-center gap-2">
             <img src={logoSrc} alt="VID-X" className="w-8 h-8 rounded-lg object-cover" />
-            <h1 className="font-display bg-clip-text bg-gradient-to-r from-primary to-accent text-[22px] leading-none font-black text-[transparent]">VID-X</h1>
+            <h1
+              className="font-display text-[22px] leading-none font-black"
+              style={{
+                background: "linear-gradient(90deg, #a855f7, #ec4899, #f97316)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              VID-X
+            </h1>
           </div>
 
-          {/* Right: icons */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Random Video Call button */}
-            <div className="spin-border-green">
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setIsRandomCallOpen(true)}
-                className="rounded-full w-9 h-9 text-green-400 hover:text-green-300 hover:bg-green-500/10 transition-colors relative z-10"
-                data-testid="button-random-video-call"
-              >
-                <Video className="w-4 h-4" />
-                <span className="sr-only">Random Video Call</span>
-              </Button>
-            </div>
+          {/* Right: Call + Notifications */}
+          <div className="flex items-center gap-1.5 shrink-0">
 
-            {/* Notifications bell — navigates to /notifications */}
+            {/* Video Call — Agora RTC powered */}
+            <button
+              onClick={() => setIsRandomCallOpen(true)}
+              data-testid="button-random-video-call"
+              className="relative flex flex-col items-center justify-center w-10 h-10 rounded-full transition-all active:scale-90"
+              style={{
+                background: "linear-gradient(135deg, #7c3aed, #db2777)",
+                boxShadow: "0 0 14px rgba(168,85,247,0.6)",
+              }}
+            >
+              <Video className="w-4 h-4 text-white" />
+              {/* Pulse ring to indicate "active" */}
+              <span className="absolute inset-0 rounded-full animate-ping"
+                style={{ background: "rgba(168,85,247,0.3)", animationDuration: "2s" }} />
+              <span className="sr-only">Random Video Call</span>
+            </button>
+
+            {/* Notifications */}
             <Button
               size="icon"
               variant="ghost"
               onClick={() => navigate("/notifications")}
-              className="rounded-full w-9 h-9 hover:bg-secondary transition-colors relative"
+              className="rounded-full w-9 h-9 hover:bg-white/10 transition-colors relative"
               data-testid="button-notifications"
             >
-              <Bell className="w-4 h-4" />
+              <Bell className="w-4 h-4 text-zinc-300" />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">
                   {unreadCount > 99 ? "99+" : unreadCount}

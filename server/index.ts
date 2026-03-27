@@ -43,9 +43,11 @@ wss.on("connection", (ws) => {
           if (partnerId === userId) continue; // skip self
           const partnerWs = wsClients.get(partnerId);
           if (partnerWs && partnerWs.readyState === WebSocket.OPEN) {
-            // Pair them: queued user = callee, current user = caller
-            partnerWs.send(JSON.stringify({ type: "random-call-matched", role: "callee", partnerId: userId }));
-            ws.send(JSON.stringify({ type: "random-call-matched", role: "caller", partnerId }));
+            // Shared Agora channel for this pair (deterministic, order-independent)
+            const agoraChannel = `random_${[userId, partnerId].sort().join("_")}`;
+            // Pair them — both get the shared channel name so they join the same Agora room
+            partnerWs.send(JSON.stringify({ type: "random-call-matched", role: "callee", partnerId: userId, agoraChannel }));
+            ws.send(JSON.stringify({ type: "random-call-matched", role: "caller", partnerId, agoraChannel }));
             matched = true;
             break;
           }

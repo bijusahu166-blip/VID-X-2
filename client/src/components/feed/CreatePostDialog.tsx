@@ -25,12 +25,13 @@ import filterIconSrc from "@assets/image_1774511462472.png";
 import heroIconSrc from "@assets/image_1774512160722.png";
 import { SongPicker, type Song } from "@/components/shared/SongPicker";
 
+type UploadType = "post" | "video" | "reel" | "story" | "live" | "editing";
+
 interface CreatePostDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultTab?: UploadType;
 }
-
-type UploadType = "post" | "video" | "reel" | "story" | "live" | "editing";
 
 const CATEGORIES = ["Vlog", "Gaming", "Music", "Travel", "Food", "Tech", "Education", "Comedy", "Fitness", "Fashion"];
 const VISIBILITY = [
@@ -259,9 +260,22 @@ function ARFilterStrip({
   );
 }
 
-export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) {
+export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostDialogProps) {
   const [step, setStep] = useState<"select" | "edit" | "video-details" | "details">("select");
-  const [uploadType, setUploadType] = useState<UploadType>("post");
+  const [uploadType, setUploadType] = useState<UploadType>(defaultTab ?? "post");
+
+  // When dialog opens with a defaultTab, jump straight to that type
+  useEffect(() => {
+    if (open && defaultTab) {
+      setUploadType(defaultTab);
+      if (defaultTab === "live") setStep("edit");
+    }
+    if (!open) {
+      setStep("select");
+      setUploadType(defaultTab ?? "post");
+    }
+  }, [open, defaultTab]);
+
   const [imageUrl, setImageUrl] = useState("");
   const [caption, setCaption] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
@@ -1581,9 +1595,9 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                   </div>
                   <button
                     onClick={startLiveStream}
-                    disabled={!liveTitle}
-                    className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ background: liveTitle ? "linear-gradient(135deg,#dc2626,#ec4899)" : "rgba(255,255,255,0.05)", color: "white", boxShadow: liveTitle ? "0 0 25px rgba(220,38,38,0.5)" : "none" }}>
+                    className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95"
+                    style={{ background: "linear-gradient(135deg,#dc2626,#ec4899)", color: "white", boxShadow: "0 0 25px rgba(220,38,38,0.5)" }}
+                    data-testid="button-start-live">
                     <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
                     Start Live Stream
                   </button>

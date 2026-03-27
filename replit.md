@@ -1,6 +1,19 @@
 # Overview
 
-**LITLink (VID-X)** — a mobile-first dark-themed social media platform built with React + Express + PostgreSQL. Features: Home feed, Search, Reels, Reading, full-featured Messages (with 1-to-1 chat, voice notes, media sharing, AI translation, smart replies, polls, location, disappearing messages, reactions, pinning, chat themes), Video Calling with 4K HD + 81 AR filters + screen sharing + recording, and AI assistant. Uses Replit Auth (OIDC) for authentication.
+**LITLink (VID-X)** — a mobile-first dark-themed social media platform built with React + Express + PostgreSQL. Features: Home feed, Search, Reels, Reading, full-featured Messages (1:1 chat, voice notes, media, AI translation, smart replies, polls, disappearing messages, reactions, chat themes), Video Calling (Agora RTC P2P + random matching, AR effects, flip camera, mute), Live Streaming (Agora RTC broadcaster + viewer, Agora RTM real-time chat, real viewer counts via WebSocket + DB), Cloudinary HLS video upload/streaming, XP/level system, follow system, and AI assistant. Uses custom email/password auth.
+
+## Agora Integration
+- **AGORA_APP_ID** secret — used for both live streaming and P2P video calls
+- **Live streaming** (`CreatePostDialog` → "Go Live"): broadcaster uses `useAgoraRTCBroadcaster` (custom camera+mic track), all viewers connect via `useAgoraRTCViewer`. Real-time chat via `useAgoraRTM` (shared RTM channel `live_{postId}`).
+- **Random P2P video calls** (Header → Video button): both matched users join the same Agora RTC channel `random_{userId1}_{userId2}` via `useAgoraRTCCall` in `"rtc"` mode. WebSocket only used for match-making; Agora handles the actual video.
+- **Agora hooks**: `client/src/lib/useAgoraRTM.ts`, `useAgoraRTCBroadcaster.ts`, `useAgoraRTCViewer.ts`, `useAgoraRTCCall.ts`
+- **Config**: `/api/config` returns `{ agoraAppId, cloudinaryCloudName, cloudinaryUploadPreset }`
+
+## Cloudinary Integration
+- **Secrets**: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_UPLOAD_PRESET`
+- All video uploads go server-side via `uploadToCloudinary()` in `server/routes.ts`
+- Returns HLS `.m3u8` URL via Cloudinary's `sp_auto` streaming profile
+- Local temp files deleted after upload
 
 # User Preferences
 
