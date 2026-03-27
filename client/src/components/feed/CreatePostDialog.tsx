@@ -670,23 +670,15 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
 
         if ("error" in uploadResult) {
           toast({ title: "Upload failed", description: uploadResult.error, variant: "destructive" });
+          return; // stop here — don't create a post without a video
         } else {
           videoFileUrl = uploadResult.url;
         }
       } catch (err: any) {
         toast({ title: "Upload failed", description: err?.message || "Something went wrong", variant: "destructive" });
+        return;
       } finally {
         setIsUploadingVideo(false);
-      }
-
-      // For video and reel posts the video is required — stop if upload failed
-      if (!videoFileUrl && (uploadType === "video" || uploadType === "reel")) {
-        toast({
-          title: "Video required",
-          description: "Your video couldn't be uploaded. Please try again.",
-          variant: "destructive",
-        });
-        return;
       }
     }
 
@@ -709,8 +701,8 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
         } : {}),
       } as any);
       handleClose();
-    } catch {
-      // error toast handled by useCreatePost.onError
+    } catch (err: any) {
+      toast({ title: "Failed to post", description: err?.message || "Something went wrong. Please try again.", variant: "destructive" });
     }
   };
 
@@ -823,12 +815,11 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Upload area */}
               <div
-                className="relative w-full rounded-2xl border-2 border-dashed border-white/15 bg-white/3 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-red-500/40 hover:bg-red-500/5 transition-all group overflow-hidden"
-                onClick={() => videoInputRef.current?.click()}
+                className="relative w-full rounded-2xl border-2 border-dashed border-white/15 bg-white/3 overflow-hidden group"
                 style={{ minHeight: previewUrl ? "auto" : "9rem" }}
               >
                 {previewUrl ? (
-                  <div className="w-full" onClick={e => e.stopPropagation()}>
+                  <div className="w-full">
                     <video src={previewUrl} className="w-full rounded-t-2xl max-h-48 object-cover" controls muted />
                     <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border-t border-green-500/20 rounded-b-2xl">
                       {isReadingFile ? (
@@ -849,9 +840,13 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                         </>
                       )}
                     </div>
+                    <label htmlFor="video-upload-input" className="absolute top-2 right-2 cursor-pointer bg-black/60 rounded-full px-2 py-1 flex items-center gap-1 border border-white/20 hover:bg-white/20 transition-colors">
+                      <Film className="w-3.5 h-3.5 text-white" />
+                      <span className="text-[10px] text-white font-semibold">Change</span>
+                    </label>
                   </div>
                 ) : (
-                  <div className="py-8 flex flex-col items-center gap-2">
+                  <label htmlFor="video-upload-input" className="py-8 flex flex-col items-center gap-2 cursor-pointer w-full hover:bg-red-500/5 transition-colors block">
                     <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Upload className="w-5 h-5 text-red-400" />
                     </div>
@@ -859,9 +854,10 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                       <p className="text-sm font-semibold text-white">Tap to select video</p>
                       <p className="text-[10px] text-zinc-500 mt-0.5">MP4, MOV, AVI up to 4GB</p>
                     </div>
-                  </div>
+                  </label>
                 )}
                 <input
+                  id="video-upload-input"
                   ref={videoInputRef}
                   type="file"
                   accept="video/*,video/mp4,video/mov,video/quicktime,video/avi,video/webm,video/mkv,.mp4,.mov,.avi,.webm,.mkv,.m4v,.3gp"
@@ -955,11 +951,16 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                 </div>
               </div>
 
-              <button type="submit" disabled={!videoTitle || createPost.isPending || isReadingFile || isUploadingVideo}
+              {!selectedFile && (
+                <p className="text-[11px] text-center text-amber-400 font-semibold py-1">
+                  ↑ Tap the area above to select a video file first
+                </p>
+              )}
+              <button type="submit" disabled={!videoTitle || !selectedFile || createPost.isPending || isReadingFile || isUploadingVideo}
                 className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 relative overflow-hidden"
                 style={{
-                  background: videoTitle ? "linear-gradient(135deg, #ef4444, #f97316)" : "rgba(255,255,255,0.05)",
-                  boxShadow: videoTitle ? "0 0 20px rgba(239,68,68,0.4)" : "none",
+                  background: (videoTitle && selectedFile) ? "linear-gradient(135deg, #ef4444, #f97316)" : "rgba(255,255,255,0.05)",
+                  boxShadow: (videoTitle && selectedFile) ? "0 0 20px rgba(239,68,68,0.4)" : "none",
                   color: "white",
                 }}>
                 {isUploadingVideo && (
@@ -1168,10 +1169,7 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                     </div>
                   ) : (
                     /* ── VIDEO UPLOAD for Reel/Story ── */
-                    <div
-                      className="aspect-[9/16] rounded-2xl bg-zinc-950 relative overflow-hidden flex items-center justify-center border border-dashed border-red-500/30 cursor-pointer"
-                      onClick={() => !reelVideoUrl && reelVideoInputRef.current?.click()}
-                    >
+                    <div className="aspect-[9/16] rounded-2xl bg-zinc-950 relative overflow-hidden flex items-center justify-center border border-dashed border-red-500/30">
                       {isReadingFile ? (
                         <div className="flex flex-col items-center gap-2">
                           <Loader2 className="w-8 h-8 text-red-400 animate-spin" />
@@ -1196,21 +1194,20 @@ export function CreatePostDialog({ open, onOpenChange }: CreatePostDialogProps) 
                               <span className="text-[9px] text-yellow-300 font-semibold max-w-[80px] truncate">{storyMusic}</span>
                             </div>
                           )}
-                          <button onClick={(e) => { e.stopPropagation(); reelVideoInputRef.current?.click(); }}
-                            className="absolute bottom-2 right-2 z-30 w-8 h-8 rounded-full bg-black/70 flex items-center justify-center border border-white/20 hover:bg-white/20 transition-colors">
+                          <label htmlFor="reel-video-input" className="absolute bottom-2 right-2 z-30 w-8 h-8 rounded-full bg-black/70 flex items-center justify-center border border-white/20 hover:bg-white/20 transition-colors cursor-pointer">
                             <Film className="w-4 h-4 text-white" />
-                          </button>
+                          </label>
                         </>
                       ) : (
-                        <div className="text-center space-y-3">
+                        <label htmlFor="reel-video-input" className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer text-center space-y-3">
                           <div className="w-14 h-14 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto">
                             <Film className="w-7 h-7 text-red-400" />
                           </div>
                           <p className="text-xs text-zinc-400 font-semibold">Tap to select video</p>
                           <p className="text-[10px] text-zinc-600">MP4, MOV, AVI</p>
-                        </div>
+                        </label>
                       )}
-                      <input ref={reelVideoInputRef} type="file" accept="video/*" className="hidden" onChange={handleReelVideoFileChange} />
+                      <input id="reel-video-input" ref={reelVideoInputRef} type="file" accept="video/*" className="hidden" onChange={handleReelVideoFileChange} />
                     </div>
                   )}
 
