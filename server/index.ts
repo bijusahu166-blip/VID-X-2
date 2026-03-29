@@ -61,8 +61,22 @@ wss.on("connection", (ws) => {
             // Shared Agora channel for this pair (deterministic, order-independent)
             const agoraChannel = `random_${[userId, partnerId].sort().join("_")}`;
             // Pair them — both get the shared channel name so they join the same Agora room
-            partnerWs.send(JSON.stringify({ type: "random-call-matched", role: "callee", partnerId: userId, agoraChannel }));
-            ws.send(JSON.stringify({ type: "random-call-matched", role: "caller", partnerId, agoraChannel }));
+            partnerWs.send(
+              JSON.stringify({
+                type: "random-call-matched",
+                role: "callee",
+                partnerId: userId,
+                agoraChannel,
+              }),
+            );
+            ws.send(
+              JSON.stringify({
+                type: "random-call-matched",
+                role: "caller",
+                partnerId,
+                agoraChannel,
+              }),
+            );
             matched = true;
             break;
           }
@@ -70,7 +84,12 @@ wss.on("connection", (ws) => {
         if (!matched) {
           // No one waiting — add to queue
           if (!randomCallQueue.includes(userId)) randomCallQueue.push(userId);
-          ws.send(JSON.stringify({ type: "random-call-waiting", queueSize: randomCallQueue.length }));
+          ws.send(
+            JSON.stringify({
+              type: "random-call-waiting",
+              queueSize: randomCallQueue.length,
+            }),
+          );
         }
         return;
       }
@@ -88,7 +107,9 @@ wss.on("connection", (ws) => {
           target.send(JSON.stringify({ ...msg, from: userId }));
         }
       }
-    } catch { /* ignore malformed messages */ }
+    } catch {
+      /* ignore malformed messages */
+    }
   });
 
   ws.on("close", () => {
@@ -141,7 +162,8 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: "Too many requests. Please slow down." },
   // Skip rate limiting in dev AND for chunk/finalize upload endpoints (they're already auth-gated)
-  skip: (req) => process.env.NODE_ENV === "development" || req.path.startsWith("/upload/"),
+  skip: (req) =>
+    process.env.NODE_ENV === "development" || req.path.startsWith("/upload/"),
 });
 
 app.use("/api/auth", authLimiter);
@@ -232,7 +254,7 @@ process.on("SIGINT", () => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "5001", 10);
   httpServer.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
