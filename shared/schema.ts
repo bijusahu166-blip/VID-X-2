@@ -72,6 +72,7 @@ export const books = pgTable("books", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   author: text("author"),
+  subject: text("subject"),
   content: text("content").notNull().default(""),
   imageUrl: text("image_url"),
   pdfUrl: text("pdf_url"),
@@ -157,3 +158,11 @@ export interface PostResponse extends Post {
   commentsCount?: number;
   hasLiked?: boolean;
 }
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(),
+  message: text("message").notNull(),
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

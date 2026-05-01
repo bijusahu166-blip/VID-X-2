@@ -254,7 +254,7 @@ process.on("SIGINT", () => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5001", 10);
+  const port = process.env.PORT || 5001;
   httpServer.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });

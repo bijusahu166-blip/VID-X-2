@@ -22,7 +22,24 @@ import { LiveStreamViewer } from "@/components/live/LiveStreamViewer";
 import { PostViewerModal } from "@/components/post/PostViewerModal";
 import { StoryViewer } from "@/components/story/StoryViewer";
 import { playLike, playUnlike } from "@/lib/sounds";
-
+const goalSubjectMap: Record<string, string[]> = {
+  ias: ["upsc", "history", "polity", "geography", "ias"],
+  doctor: ["medical", "biology", "chemistry", "mbbs"],
+  engineer: ["coding", "programming", "math", "engineering"],
+  teacher: ["education", "teaching", "pedagogy"],
+  business: ["business", "marketing", "finance", "entrepreneur"],
+  fitness: ["fitness", "health", "nutrition", "workout"],
+  law: ["law", "legal", "llb", "constitution"],
+  ca: ["finance", "accounting", "ca", "economics"],
+  neet: ["biology", "chemistry", "neet", "medical"],
+  design: ["design", "ui", "ux", "graphics"],
+  music: ["music", "theory", "instrument"],
+  cyber: ["cybersecurity", "hacking", "networking"],
+  space: ["space", "physics", "isro", "astronomy"],
+  language: ["language", "english", "grammar"],
+  defense: ["defense", "army", "gk", "reasoning"],
+  police: ["ssc", "police", "gk", "reasoning"],
+};
 const CATEGORIES = [
   { label: "All", icon: null },
   { label: "Trending", icon: Flame },
@@ -356,6 +373,20 @@ export default function Home() {
     queryFn: () => fetch("/api/live/active", { credentials: "include" }).then(r => r.json()),
     refetchInterval: 15000,
   });
+  const { data: allBooks = [] } = useQuery<any[]>({
+  queryKey: ["/api/books"],
+  queryFn: () => fetch("/api/books", { credentials: "include" }).then(r => r.json()),
+});
+
+const userGoal = (user as any)?.goal || localStorage.getItem("user_goal") || "";
+const allowedSubjects = goalSubjectMap[userGoal] || [];
+
+const recommendedBooks = allBooks.filter((book: any) => {
+  if (!book.subject) return true;
+  return allowedSubjects.some(s => 
+    book.subject?.toLowerCase().includes(s)
+  );
+}).slice(0, 10);
 
   const likeMutation = useMutation({
     mutationFn: (postId: number) => apiRequest("POST", `/api/posts/${postId}/like`),
@@ -393,46 +424,56 @@ export default function Home() {
           ))}
         </div>
 
-        {/* ── LIVE NOW SHELF ── */}
-        {liveStreams.length > 0 && (
-          <div className="mt-1 pb-3 border-b border-white/5">
-            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[13px] font-black text-white tracking-wide">Live Now</span>
-              <span className="text-[10px] text-red-400 font-bold">{liveStreams.length} live</span>
-            </div>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide px-3">
-              {liveStreams.map((stream: any) => (
-                <button
-                  key={stream.id}
-                  onClick={() => setLivePost(stream)}
-                  className="flex flex-col items-center gap-1.5 shrink-0 group"
-                  data-testid={`live-stream-${stream.id}`}
-                >
-                  <div className="relative w-[88px] h-[148px] rounded-xl overflow-hidden border-2 border-red-500">
-                    <img
-                      src={stream.image_url || stream.imageUrl || `https://api.dicebear.com/7.x/shapes/svg?seed=${stream.user_id}`}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded flex items-center gap-1">
-                      <div className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
-                    </div>
-                    <div className="absolute bottom-2 left-0 right-0 text-center px-1">
-                      <div className="w-7 h-7 rounded-full overflow-hidden border-2 border-white mx-auto mb-1">
-                        <img
-                          src={stream.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${stream.username}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <p className="text-[9px] text-white font-bold truncate">@{stream.username}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+       {/* ── BOOKS RECOMMENDED ── */}
+{recommendedBooks.length > 0 && (
+  <div className="mt-1 pb-3 border-b border-white/5">
+    <div className="flex items-center justify-between px-3 pt-3 pb-2">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">📚</span>
+        <span className="text-[13px] font-black text-white tracking-wide">
+          Recommended Books
+        </span>
+      </div>
+      <button
+        onClick={() => navigate("/reading")}
+        className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1"
+      >
+        See all <ChevronRight className="w-3 h-3" />
+      </button>
+    </div>
+    <div className="flex gap-3 overflow-x-auto scrollbar-hide px-3">
+      {recommendedBooks.map((book: any) => (
+        <button
+          key={book.id}
+          onClick={() => navigate("/reading")}
+          className="flex flex-col items-start gap-1.5 shrink-0 group w-[100px]"
+        >
+          <div className="w-[100px] h-[140px] rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 relative">
+            {book.imageUrl ? (
+              <img
+                src={book.imageUrl}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-3xl"
+                style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)" }}>
+                📖
+              </div>
+            )}
           </div>
-        )}
+          <p className="text-[10px] text-zinc-300 font-semibold text-left line-clamp-2 leading-tight">
+            {book.title}
+          </p>
+          {book.author && (
+            <p className="text-[9px] text-zinc-600 text-left truncate w-full">
+              {book.author}
+            </p>
+          )}
+        </button>
+      ))}
+    </div>
+  </div>
+)}
 
         {/* ── STORIES SHELF ── */}
         <div className="mt-1 pb-2 border-b border-white/5">

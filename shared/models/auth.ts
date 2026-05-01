@@ -25,6 +25,8 @@ export const users = pgTable("users", {
   isCelebrity: boolean("is_celebrity").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  goal: varchar("goal"),
+  goalSetAt: timestamp("goal_set_at"),
 });
 
 export type UpsertUser = typeof users.$inferInsert;

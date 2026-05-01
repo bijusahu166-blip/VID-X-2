@@ -16,6 +16,7 @@ import Login from "@/pages/Login";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Reading from "@/pages/Reading";
+import AimSelection from "@/pages/AimSelection";
 import Reels from "@/pages/Reels";
 import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
@@ -75,6 +76,12 @@ function Router() {
 
   if (!user) {
     return <Login />;
+  }
+
+  // Goal set nahi hai toh AimSelection screen dikhao
+ const localGoal = localStorage.getItem("user_goal");
+  if (!(user as any).goal && !localGoal) {
+    return <AimSelection />;
   }
 
   return (
