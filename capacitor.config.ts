@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'VID-X',
   webDir: 'dist',
   server: {
-    url: 'http://192.168.1.40:5001', 
+    url: 'https://vid-x-2-production.up.railway.app', 
     cleartext: true,
     androidScheme: 'http'
   }
