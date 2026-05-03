@@ -141,9 +141,10 @@ export default function Reading() {
         const formData = new FormData();
         formData.append("pdf", file);
         const res = await fetch("/api/upload/book-pdf", {
-          method: "POST",
-          body: formData,
-        });
+  method: "POST",
+  credentials: "include",
+  body: formData,
+});
         if (!res.ok) throw new Error("Upload failed");
         const data = await res.json();
         setUploadPdfUrl(data.pdfUrl);
