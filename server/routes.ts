@@ -536,11 +536,22 @@ export async function registerRoutes(
   });
 
   // PDF upload for books
-  app.post("/api/upload/book-pdf", isAuthenticated, bookUpload.single("pdf"), (req: any, res) => {
-    if (!req.file) return res.status(400).json({ message: "No PDF file uploaded" });
-    const fileUrl = `/uploads/books/${req.file.filename}`;
-    res.json({ pdfUrl: fileUrl });
-  });
+  app.post("/api/upload/book-pdf", isAuthenticated, bookUpload.single("pdf"), async (req: any, res) => {
+  if (!req.file) return res.status(400).json({ message: "No PDF file uploaded" });
+  try {
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      resource_type: "raw",
+      folder: "litlink-books",
+      use_filename: true,
+      unique_filename: true,
+    });
+    fs.unlink(req.file.path, () => {});
+    res.json({ pdfUrl: result.secure_url });
+  } catch (err: any) {
+    fs.unlink(req.file.path, () => {});
+    res.status(500).json({ message: "PDF upload failed" });
+  }
+});
 
   // Ads
   app.get("/api/ads/:placement", isAuthenticated, async (req, res) => {
