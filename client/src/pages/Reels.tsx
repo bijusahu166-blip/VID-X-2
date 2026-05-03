@@ -207,7 +207,7 @@ function ReelCard({ reel, isActive, isNext, nextVideoUrl }: {
         <video
           ref={videoRef}
           src={videoSrc!}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-contain"
           loop
           muted={isMuted}
           playsInline
@@ -219,7 +219,7 @@ function ReelCard({ reel, isActive, isNext, nextVideoUrl }: {
         <img
           src={reel.imageUrl}
           alt="reel"
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-contain"
           onClick={togglePlay}
         />
       )}
@@ -366,7 +366,7 @@ export default function Reels() {
     queryKey: ["/api/posts"],
   });
 
-  const reels = (allPosts ?? []).filter(p => p.type === "reel" || p.type === "video" || p.type === "live");
+  const reels = (allPosts ?? []).filter(p => p.type === "reel");
 
   useEffect(() => {
     const container = containerRef.current;

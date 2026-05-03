@@ -69,51 +69,37 @@ export function registerAuthRoutes(app: Express): void {
   });
 
   // Login — Step 1: verify password, issue OTP
-  app.post("/api/auth/login", async (req: any, res) => {
-    try {
-      const parsed = loginSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ message: parsed.error.errors[0].message });
-      }
-      const { email, password } = parsed.data;
-
-      const user = await authStorage.getUserByEmail(email);
-      if (!user || !user.password) {
-        return res.status(401).json({ message: "Invalid email or password." });
-      }
-
-      const match = await bcrypt.compare(password, user.password);
-      if (!match) {
-        return res.status(401).json({ message: "Invalid email or password." });
-      }
-
-      // Clean up any old OTPs for this user
-      await db.execute(sql`DELETE FROM otps WHERE user_id = ${user.id}`);
-
-      // Generate OTP + temp token
-      const code = generateOTP();
-      const token = generateToken();
-      const hashedCode = await bcrypt.hash(code, 8);
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-      await db.execute(sql`
-        INSERT INTO otps (user_id, code, token, expires_at)
-        VALUES (${user.id}, ${hashedCode}, ${token}, ${expiresAt.toISOString()})
-      `);
-
-      // Return OTP token + the code (in production this would be emailed)
-      res.json({
-        needsOtp: true,
-        otpToken: token,
-        otpCode: code,         // shown in UI (simulates email delivery)
-        expiresIn: 300,        // seconds
-      });
-    } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ message: "Login failed" });
+ app.post("/api/auth/login", async (req: any, res) => {
+  try {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
     }
-  });
+    const { email, password } = parsed.data;
 
+    const user = await authStorage.getUserByEmail(email);
+    if (!user || !user.password) {
+      return res.status(401).json({ message: "Invalid email or password." });
+    }
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      return res.status(401).json({ message: "Invalid email or password." });
+    }
+
+    req.session.userId = user.id;
+    await new Promise((resolve, reject) => {
+      req.session.save((err: any) => err ? reject(err) : resolve(true));
+    });
+
+    const { password: _, ...safeUser } = user as any;
+    res.json(safeUser);
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Login failed" });
+  }
+}); 
+ 
   // Login — Step 2: verify OTP, create session
   app.post("/api/auth/verify-otp", async (req: any, res) => {
     try {

@@ -669,7 +669,7 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
       : caption;
     const DEFAULT_THUMB = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
     // Never use a blob:// URL as the stored imageUrl (it's device-local and expires)
-    const safeImageUrl = (imageUrl && !imageUrl.startsWith("blob:")) ? imageUrl : undefined;
+    const safeImageUrl = (imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) ? imageUrl : undefined;
     const safePreviewUrl = (previewUrl && !previewUrl.startsWith("blob:") && uploadType !== "video") ? previewUrl : undefined;
     const finalImageUrl = thumbnailUrl || safeImageUrl || safePreviewUrl || DEFAULT_THUMB;
 

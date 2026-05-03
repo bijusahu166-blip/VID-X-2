@@ -592,6 +592,8 @@ const recommendedBooks = allBooks.filter((book: any) => {
             </div>
           ) : (
             posts?.filter((post) => {
+              if (post.type==="reel") return false;
+
               if (activeCategory === "All") return true;
               if (activeCategory === "Trending") return (post.likesCount ?? 0) >= 0; // all show for trending
               if (activeCategory === "Reels") return post.type === "reel" || post.type === "video";
@@ -621,15 +623,19 @@ const recommendedBooks = allBooks.filter((book: any) => {
 
                     {/* Media: real video if available, else thumbnail */}
                     {isVideo && (post as any).videoUrl ? (
-                      <VideoPlayer
-                        src={(post as any).videoUrl}
-                        poster={post.imageUrl && !post.imageUrl.startsWith("blob:") ? post.imageUrl : undefined}
-                        loop
-                        songTitle={(post as any).songTitle}
-                        songArtist={(post as any).songArtist}
-                        songColor={(post as any).songColor}
-                        className="absolute inset-0 w-full h-full"
-                      />
+                     <VideoPlayer
+                      src={(post as any).videoUrl}
+                      poster={post.imageUrl && !post.imageUrl.startsWith("blob:") ? post.imageUrl : undefined}
+                     loop
+                     songTitle={(post as any).songTitle}
+                     songArtist={(post as any).songArtist}
+                     songColor={(post as any).songColor}
+                     className="absolute inset-0 w-full h-full"
+                     // Ye add karo:
+                     precacheSrc={posts?.filter(p => p.type === "video" && (p as any).videoUrl)?.[
+                     posts?.filter(p => p.type === "video" && (p as any).videoUrl).indexOf(post) + 1
+                     ]?.videoUrl ?? null}
+                    />
                     ) : post.imageUrl && !post.imageUrl.startsWith("blob:") ? (
                       <img
                         src={post.imageUrl}

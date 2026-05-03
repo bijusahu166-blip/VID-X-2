@@ -15,8 +15,13 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function toCloudinaryVideoUrl(src: string): string {
   if (!src) return src;
-  if (!src.includes("res.cloudinary.com")) return src;          // not a Cloudinary URL
-  if (src.includes("f_auto") || src.includes("q_auto")) return src; // already transformed
+  if (!src.includes("res.cloudinary.com")) return src;
+  
+  // HLS .m3u8 URLs — mat chhuo, as-is return karo
+  if (src.includes(".m3u8")) return src;
+  
+  // Already transformed
+  if (src.includes("f_auto") || src.includes("q_auto")) return src;
 
   // Insert transformations right after /upload/
   return src.replace("/upload/", "/upload/f_auto,q_auto/");

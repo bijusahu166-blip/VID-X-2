@@ -18,7 +18,14 @@ import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
 import { v2 as cloudinary } from "cloudinary";
+const uploadsDir = path.join(process.cwd(), "uploads", "videos");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+const chunksDir = path.join(process.cwd(), "uploads", "chunks");
+if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
+
+const hlsBaseDir = path.join(process.cwd(), "uploads", "hls");
+if (!fs.existsSync(hlsBaseDir)) fs.mkdirSync(hlsBaseDir, { recursive: true });
 // Configure Cloudinary from secrets
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -32,6 +39,8 @@ cloudinary.config({
 //   so the .m3u8 manifest is generated in the background immediately.
 // - Returns the HLS URL as the primary URL so HLS.js can start adaptive
 //   streaming straight away.  Falls back to f_auto/q_auto MP4 on failure.
+// Move moov atom to the beginning of an MP4 so browsers can stream it
+// without downloading the whole file first. Fast — no re-encoding.
 async function uploadToCloudinary(localPath: string, folder = "litlink-videos"): Promise<string> {
   const result = await cloudinary.uploader.upload(localPath, {
     resource_type: "video",
@@ -39,62 +48,12 @@ async function uploadToCloudinary(localPath: string, folder = "litlink-videos"):
     use_filename: true,
     unique_filename: true,
     overwrite: false,
-    chunk_size: 6_000_000, // 6 MB chunks for resilient upload
-    // Kick off adaptive HLS generation asynchronously so it is ready
-    // by the time the first viewer requests the stream.
-    eager: [{ streaming_profile: "auto", format: "m3u8" }],
-    eager_async: true, // don't block the response — HLS is built in the background
+    chunk_size: 6_000_000,
   });
 
-  // Derive the HLS manifest URL from the upload result.
-  // Cloudinary serves HLS on-demand via /upload/sp_auto/<public_id>.m3u8
-  // even before eager processing completes (just-in-time generation).
-  const hlsUrl = result.secure_url
-    .replace("/upload/", "/upload/sp_auto/")
-    .replace(/\.[^/.]+$/, ".m3u8");
-
-  console.log(`[cloudinary] HLS URL: ${hlsUrl}`);
-  return hlsUrl;
+  console.log(`[cloudinary] MP4 URL: ${result.secure_url}`);
+  return result.secure_url;
 }
-
-const uploadsDir = path.join(process.cwd(), "uploads", "videos");
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
-const chunksDir = path.join(process.cwd(), "uploads", "chunks");
-if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
-
-const hlsBaseDir = path.join(process.cwd(), "uploads", "hls");
-if (!fs.existsSync(hlsBaseDir)) fs.mkdirSync(hlsBaseDir, { recursive: true });
-
-// Move moov atom to the beginning of an MP4 so browsers can stream it
-// without downloading the whole file first. Fast — no re-encoding.
-async function faststartMp4(inputPath: string): Promise<boolean> {
-  const tmpPath = inputPath + "_fs.mp4";
-  return new Promise((resolve) => {
-    const ff = spawn("ffmpeg", [
-      "-y",
-      "-i", inputPath,
-      "-c", "copy",
-      "-movflags", "+faststart",
-      "-f", "mp4",
-      tmpPath,
-    ]);
-    const timer = setTimeout(() => { ff.kill(); resolve(false); }, 120_000);
-    ff.on("close", (code) => {
-      clearTimeout(timer);
-      if (code === 0 && fs.existsSync(tmpPath)) {
-        try {
-          fs.renameSync(tmpPath, inputPath);
-          return resolve(true);
-        } catch { /* fall through */ }
-      }
-      try { fs.unlinkSync(tmpPath); } catch {}
-      resolve(false);
-    });
-    ff.on("error", () => { clearTimeout(timer); resolve(false); });
-  });
-}
-
 // Probe the video duration in seconds (returns null on failure)
 function probeDuration(inputPath: string): Promise<number | null> {
   return new Promise((resolve) => {

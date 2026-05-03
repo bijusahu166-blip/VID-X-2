@@ -445,17 +445,17 @@ export default function Login() {
         });
       }
     },
-    onSuccess: (data) => {
-      if (data.needsOtp) {
-        // Login: proceed to OTP step
-        setOtpData({ token: data.otpToken, code: data.otpCode, expiresIn: data.expiresIn });
-        setView("otp");
-      } else {
-        // Register: direct login
-        queryClient.setQueryData(["/api/auth/user"], data);
-        navigate("/");
-      }
-    },
+   onSuccess: (data) => {
+  if (data.needsOtp) {
+    // OTP flow (agar kabhi wapas enable karo)
+    setOtpData({ token: data.otpToken, code: data.otpCode, expiresIn: data.expiresIn });
+    setView("otp");
+  } else {
+    // Login + Register dono direct navigate karein
+    queryClient.setQueryData(["/api/auth/user"], data);
+    navigate("/");
+  }
+},
     onError: (err: Error) => {
       toast({ title: err.message, variant: "destructive" });
     },
