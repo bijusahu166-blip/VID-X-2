@@ -343,8 +343,9 @@ export default function Reading() {
                           <span className="text-[9px] font-semibold uppercase tracking-wider">Cover</span>
                         </>
                       )}
-                       <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverSelect} />
+                      <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverSelect} />
                     </label>
+
                     <div className="flex-1 space-y-3">
                       <div>
                         <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1 block">Title *</label>
@@ -371,45 +372,40 @@ export default function Reading() {
                   </div>
 
                   {/* File upload area — PDF or TXT */}
-                  <div>
-                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 block">Book File (PDF or TXT)</label>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-zinc-700 hover:border-zinc-500 transition-colors text-left"
-                    >
-                      {isReadingFile || isUploadingPdf ? (
-                        <Loader2 className="w-5 h-5 text-red-400 animate-spin shrink-0" />
-                      ) : (
-                        <FileText className="w-5 h-5 text-zinc-500 shrink-0" />
-                      )}
-                      <div className="min-w-0">
-                        {isUploadingPdf ? (
-                          <p className="text-sm text-zinc-300">Uploading PDF…</p>
-                        ) : isReadingFile ? (
-                          <p className="text-sm text-zinc-300">Reading file…</p>
-                        ) : uploadPdfUrl ? (
-                          <p className="text-sm text-green-400 font-semibold truncate">✓ PDF ready: {uploadPdfName}</p>
-                        ) : uploadContent ? (
-                          <p className="text-sm text-green-400 font-semibold truncate">✓ {uploadContent.length.toLocaleString()} characters loaded</p>
-                        ) : (
-                          <>
-                            <p className="text-sm text-zinc-300">Upload a PDF or .txt file</p>
-                            <p className="text-[11px] text-zinc-600 mt-0.5">Tap to browse files</p>
-                          </>
-                        )}
-                      </div>
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.txt,.text,.md,.rtf,application/pdf,text/plain,text/*"
-                      className="hidden"
-                      onChange={handleFileSelect}
-                      data-testid="input-book-file"
-                    />
-                  </div>
-
+<div>
+  <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 block">Book File (PDF or TXT)</label>
+  <label className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-zinc-700 hover:border-zinc-500 transition-colors text-left cursor-pointer">
+    {isReadingFile || isUploadingPdf ? (
+      <Loader2 className="w-5 h-5 text-red-400 animate-spin shrink-0" />
+    ) : (
+      <FileText className="w-5 h-5 text-zinc-500 shrink-0" />
+    )}
+    <div className="min-w-0">
+      {isUploadingPdf ? (
+        <p className="text-sm text-zinc-300">Uploading PDF…</p>
+      ) : isReadingFile ? (
+        <p className="text-sm text-zinc-300">Reading file…</p>
+      ) : uploadPdfUrl ? (
+        <p className="text-sm text-green-400 font-semibold truncate">✓ PDF ready: {uploadPdfName}</p>
+      ) : uploadContent ? (
+        <p className="text-sm text-green-400 font-semibold truncate">✓ {uploadContent.length.toLocaleString()} characters loaded</p>
+      ) : (
+        <>
+          <p className="text-sm text-zinc-300">Upload a PDF or .txt file</p>
+          <p className="text-[11px] text-zinc-600 mt-0.5">Tap to browse files</p>
+        </>
+      )}
+    </div>
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept=".pdf,.txt,.text,.md,.rtf,application/pdf,text/plain,text/*"
+      className="hidden"
+      onChange={handleFileSelect}
+      data-testid="input-book-file"
+    />
+  </label>
+</div>
                   {/* Manual paste fallback (only show for non-PDF) */}
                   {!uploadPdfUrl && (
                     <div>
