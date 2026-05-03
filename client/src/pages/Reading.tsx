@@ -343,9 +343,8 @@ export default function Reading() {
                           <span className="text-[9px] font-semibold uppercase tracking-wider">Cover</span>
                         </>
                       )}
+                       <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverSelect} />
                     </label>
-                    <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverSelect} />
-
                     <div className="flex-1 space-y-3">
                       <div>
                         <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1 block">Title *</label>
