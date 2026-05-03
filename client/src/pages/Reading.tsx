@@ -78,6 +78,7 @@ export default function Reading() {
   const [uploadPdfName, setUploadPdfName] = useState("");
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const { data: books, isLoading } = useQuery<Book[]>({
     queryKey: ["/api/books"],
