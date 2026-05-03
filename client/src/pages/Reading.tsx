@@ -78,7 +78,6 @@ export default function Reading() {
   const [uploadPdfName, setUploadPdfName] = useState("");
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const { data: books, isLoading } = useQuery<Book[]>({
     queryKey: ["/api/books"],
@@ -141,9 +140,9 @@ export default function Reading() {
         const formData = new FormData();
         formData.append("pdf", file);
         const res = await fetch("/api/upload/book-pdf", {
-  method: "POST",
-  credentials: "include",
-  body: formData,
+         method: "POST",
+         credentials: "include",
+         body: formData,
 });
         if (!res.ok) throw new Error("Upload failed");
         const data = await res.json();
@@ -332,10 +331,8 @@ export default function Reading() {
                 <form onSubmit={handleUploadSubmit} className="space-y-4">
                   {/* Cover image */}
                   <div className="flex gap-3 items-start">
-                    <button
-                      type="button"
-                      onClick={() => coverInputRef.current?.click()}
-                      className="shrink-0 w-20 h-28 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-1 text-zinc-600 hover:border-zinc-500 hover:text-zinc-400 transition-colors overflow-hidden"
+                    <label
+                      className="shrink-0 w-20 h-28 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-1 text-zinc-600 hover:border-zinc-500 hover:text-zinc-400 transition-colors overflow-hidden cursor-pointer"
                     >
                       {uploadCoverPreview ? (
                         <img src={uploadCoverPreview} className="w-full h-full object-cover" alt="Cover" />
@@ -345,7 +342,7 @@ export default function Reading() {
                           <span className="text-[9px] font-semibold uppercase tracking-wider">Cover</span>
                         </>
                       )}
-                    </button>
+                    </label>
                     <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverSelect} />
 
                     <div className="flex-1 space-y-3">
