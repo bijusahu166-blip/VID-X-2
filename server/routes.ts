@@ -536,23 +536,35 @@ export async function registerRoutes(
   });
 
   // PDF upload for books
-  app.post("/api/upload/book-pdf", isAuthenticated, bookUpload.single("pdf"), async (req: any, res) => {
-  if (!req.file) return res.status(400).json({ message: "No PDF file uploaded" });
-  try {
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      resource_type: "raw",
-      folder: "litlink-books",
-      use_filename: true,
-      unique_filename: true,
-    });
-    fs.unlink(req.file.path, () => {});
-    res.json({ pdfUrl: result.secure_url });
-  } catch (err: any) {
-    fs.unlink(req.file.path, () => {});
-    res.status(500).json({ message: "PDF upload failed" });
-  }
+app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
+  bookUpload.single("pdf")(req, res, async (err: any) => {
+    if (err) {
+      console.error("[book-pdf] Multer error:", err.message);
+      return res.status(400).json({ message: err.message || "File rejected" });
+    }
+    if (!req.file) {
+      console.error("[book-pdf] No file received");
+      return res.status(400).json({ message: "No PDF file received" });
+    }
+    try {
+      console.log("[book-pdf] Uploading to Cloudinary...");
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        resource_type: "raw",
+        folder: "litlink-books",
+        use_filename: true,
+        unique_filename: true,
+        overwrite: false,
+      });
+      fs.unlink(req.file.path, () => {});
+      console.log("[book-pdf] Success:", result.secure_url);
+      res.json({ pdfUrl: result.secure_url });
+    } catch (err: any) {
+      console.error("[book-pdf] Cloudinary FAILED:", err.message, err.http_code);
+      fs.unlink(req.file.path, () => {});
+      res.status(500).json({ message: `Upload failed: ${err.message}` });
+    }
+  });
 });
-
   // Ads
   app.get("/api/ads/:placement", isAuthenticated, async (req, res) => {
     const placement = req.params.placement as string;
