@@ -189,10 +189,16 @@ const bookUpload = multer({
     },
   }),
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype === "application/pdf" || file.originalname.toLowerCase().endsWith(".pdf")) cb(null, true);
-    else cb(new Error("Only PDF files allowed"));
-  },
+ fileFilter: (_req, file, cb) => {
+    const name = file.originalname.toLowerCase();
+    const allowed = 
+      file.mimetype === "application/pdf" ||
+      file.mimetype === "application/octet-stream" ||
+      name.endsWith(".pdf") ||
+      name.endsWith(".txt");
+    if (allowed) cb(null, true);
+    else cb(new Error("Only PDF or TXT files allowed"));
+},
 });
 
 async function seed() {
@@ -549,8 +555,8 @@ app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
     try {
       console.log("[book-pdf] Uploading to Cloudinary...");
       const result = await cloudinary.uploader.upload(req.file.path, {
-        resource_type: "raw",
-        folder: "litlink-books",
+        resource_type: "auto",
+        folder: "circle-books",
         use_filename: true,
         unique_filename: true,
         overwrite: false,
