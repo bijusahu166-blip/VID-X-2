@@ -190,14 +190,7 @@ const bookUpload = multer({
   }),
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
  fileFilter: (_req, file, cb) => {
-    const name = file.originalname.toLowerCase();
-    const allowed = 
-      file.mimetype === "application/pdf" ||
-      file.mimetype === "application/octet-stream" ||
-      name.endsWith(".pdf") ||
-      name.endsWith(".txt");
-    if (allowed) cb(null, true);
-    else cb(new Error("Only PDF or TXT files allowed"));
+  cb (null,true);
 },
 });
 
