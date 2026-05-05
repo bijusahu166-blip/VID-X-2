@@ -492,7 +492,7 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
     setCameraMode(true);
   };
 
-  const MAX_VIDEO_SIZE_GB = 5;
+  const MAX_VIDEO_SIZE_GB = 2;
   const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_GB * 1024 * 1024 * 1024;
 
   const formatFileSize = (bytes: number) => {

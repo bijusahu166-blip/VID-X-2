@@ -529,9 +529,10 @@ export async function registerRoutes(
     res.json(books);
   });
 
-  app.post("/api/books", isAuthenticated, async (req, res) => {
-    const book = await storage.createBook({ ...req.body, content: req.body.content || "" });
-    res.status(201).json(book);
+ app.post("/api/books", isAuthenticated, async (req, res) => {
+  const book = await storage.createBook({ 
+    ...req.body, 
+    content: req.body.pdfUrl ? "" : (req.body.content || ""),
   });
 
   // PDF upload for books
@@ -1240,4 +1241,5 @@ app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
   });
 
   return httpServer;
+});
 }
