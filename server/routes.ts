@@ -191,6 +191,14 @@ const bookUpload = multer({
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
  fileFilter: (_req, file, cb) => {
   cb (null,true);
+    const name = file.originalname.toLowerCase();
+    const allowed = 
+      file.mimetype === "application/pdf" ||
+      file.mimetype === "application/octet-stream" ||
+      name.endsWith(".pdf") ||
+      name.endsWith(".txt");
+    if (allowed) cb(null, true);
+    else cb(new Error("Only PDF or TXT files allowed"));
 },
 });
 
@@ -529,10 +537,9 @@ export async function registerRoutes(
     res.json(books);
   });
 
- app.post("/api/books", isAuthenticated, async (req, res) => {
-  const book = await storage.createBook({ 
-    ...req.body, 
-    content: req.body.pdfUrl ? "" : (req.body.content || ""),
+  app.post("/api/books", isAuthenticated, async (req, res) => {
+    const book = await storage.createBook({ ...req.body, content: req.body.content || "" });
+    res.status(201).json(book);
   });
 
   // PDF upload for books
@@ -1241,5 +1248,4 @@ app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
   });
 
   return httpServer;
-});
 }
