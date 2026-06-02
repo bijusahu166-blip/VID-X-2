@@ -1,0 +1,57 @@
+1. Main Content Types (Posting Features)
+
+Feed Posts (Photos, Videos, Carousels – ab longer carousels allowed, 20+ slides tak)
+Reels (Short videos, up to 20 minutes long in some cases, music, effects, AI restyle)
+Stories (24-hour temporary posts, photos/videos/text, stickers, polls, questions, countdowns, link stickers, scheduling stories – new in 2026)
+Live Videos (Real-time streaming, with guests, shopping, badges)
+IGTV / Long Videos (Ab Reels mein merge ho gaya zyadatar)
+Notes (Short text updates for close friends/followers)
+
+2. Editing & Creation Tools
+
+Built-in Filters & Effects (Classic + AR effects, beauty filters)
+Instagram Edits App (Separate app for pro editing – reusable templates, teleprompter, lip-sync, advanced text styling, in-video links, AI-powered content prompts, restyle with AI, 25+ new effects, storyboard expansion – 2026 major update)
+AI Features in Edits/Reels → Auto-dub (translate audio/text in multiple languages like Hindi, English, Spanish), AI-assisted captioning, AI restyle, generative prompts
+Collage Maker (Stories/Reels mein)
+Music Library (Add trending audio, original audio)
+Text, Stickers, GIFs, Polls, Quizzes, Emoji Sliders, Add Yours templates
+
+3. Sharing & Interaction Features
+
+DMs (Direct Messages) → Text, photos, videos, voice notes, disappearing messages, chat themes, group chats, vanish mode, reactions
+Reposts (Others ke posts/Reels apne profile pe share karo – new sharing smarter bana)
+Shares as Ranking Signal (Zyada shares = zyada reach)
+Comments, Likes, Saves
+Close Friends (Stories only for selected people)
+Broadcast Channels (One-to-many messaging for creators)
+
+4. Discovery & Algorithm Features (2026 Updates)
+
+Your Algorithm (New dashboard – users apne Reels topics control kar sakte hain, interests add/remove/down-rank, share profile to Story)
+Explore Page (Personalized recommendations)
+Reels Tab (Dedicated short video feed)
+Friends Tab in Reels (Friends ke liked/commented/reposted Reels dekho)
+Trial Reels (Non-followers ko test karne ke liye post without showing followers)
+Early Access Reels (Followers ko pehle dikhao)
+Friend-based Reel Discovery
+Algorithm Customization (Personal tweaks)
+
+5. Shopping & Business Features
+
+Instagram Shopping (Product tags in posts/Stories/Reels)
+Shoppable Reels (Direct buy from video)
+Checkout (In-app payments in some countries)
+Professional Dashboard (Insights, promotions, boosted posts)
+Meta AI Business Assistant (For brands/creators)
+
+6. Other Important Features
+
+Profile Customization (Bio, links, highlights, favorites, grid layout)
+Highlights (Permanent Stories collection)
+Hashtags (Ab limit 5 tak reduced in some tests – less spam)
+Elements in Reels (Clickable links/accounts inside Reels – new 2026)
+Instagram Map (Optional location sharing with friends)
+Meta AI Assistant (In-app AI chat for ideas, captions, etc.)
+Multi-Language Support (Auto-translate Reels captions/audio)
+Privacy Controls (Account private/public, restricted accounts, limits)
+Accessibility (Alt text, captions auto-generate)

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "61789239939",
+    "project_id": "vid-x-b1f29",
+    "storage_bucket": "vid-x-b1f29.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:61789239939:android:464c4bd84ef38b6ba139b6",
+        "android_client_info": {
+          "package_name": "com.circledot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdiyRxl4YcXHBj2MHCQXGzMPLMxoLxffI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

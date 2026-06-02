@@ -1,0 +1,338 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Outfit', sans-serif;
+
+  /* Vibrant Social Palette - Light Mode */
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  
+  --primary: 280 100% 65%; /* Vibrant Purple */
+  --primary-foreground: 0 0% 98%;
+  
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  
+  --accent: 330 100% 65%; /* Vibrant Pink */
+  --accent-foreground: 0 0% 98%;
+  
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 326 100% 60%;
+  
+  --radius: 1rem;
+}
+
+.dark {
+  /* Deep Black Night Mode */
+  --background: 0 0% 0%;
+  --foreground: 0 0% 98%;
+  
+  --card: 240 6% 6%;
+  --card-foreground: 0 0% 98%;
+  
+  --popover: 240 6% 6%;
+  --popover-foreground: 0 0% 98%;
+  
+  --primary: 280 100% 70%; /* Vibrant Purple */
+  --primary-foreground: 0 0% 98%;
+  
+  --secondary: 240 5% 12%;
+  --secondary-foreground: 0 0% 98%;
+  
+  --muted: 240 5% 12%;
+  --muted-foreground: 240 5% 55%;
+  
+  --accent: 330 100% 68%; /* Vibrant Pink */
+  --accent-foreground: 0 0% 98%;
+  
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  
+  --border: 240 5% 16%;
+  --input: 240 5% 12%;
+  --ring: 280 100% 70%;
+}
+
+@layer base {
+  html {
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #1a1a1a #000000;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #000000;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2a;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3a;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply font-bold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+  }
+  
+  .bg-gradient-social {
+    @apply bg-gradient-to-r from-primary to-accent;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Rotating border for bottom nav icons */
+@property --border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@property --border-angle-green {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes spin-border {
+  to { --border-angle: 360deg; }
+}
+
+@keyframes spin-border-green {
+  to { --border-angle-green: 360deg; }
+}
+
+/* Pink rotating border (bottom nav) */
+.nav-spin-border {
+  position: relative;
+  isolation: isolate;
+  border-radius: 0.75rem;
+}
+
+.nav-spin-border::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 0.85rem;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 0deg,
+    transparent 200deg,
+    #ffb6c1 260deg,
+    #ff85a1 310deg,
+    #ffb6c1 340deg,
+    transparent 360deg
+  );
+  animation: spin-border 2.4s linear infinite;
+  z-index: -1;
+}
+
+.nav-spin-border::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 0.65rem;
+  background: black;
+  z-index: -1;
+}
+
+/* Green rotating border (video call) */
+.spin-border-green {
+  position: relative;
+  isolation: isolate;
+  border-radius: 9999px;
+}
+
+.spin-border-green::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from var(--border-angle-green),
+    transparent 0deg,
+    transparent 200deg,
+    #4ade80 260deg,
+    #22c55e 310deg,
+    #4ade80 340deg,
+    transparent 360deg
+  );
+  animation: spin-border-green 2s linear infinite;
+  z-index: -1;
+}
+
+.spin-border-green::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 9999px;
+  background: black;
+  z-index: -1;
+}
+
+@layer utilities {
+  .clip-pentagon {
+    clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+  }
+
+  .premium-status-ring {
+    background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+    filter: drop-shadow(0 0 8px rgba(220, 39, 67, 0.4));
+  }
+}
+
+@layer utilities {
+  .bg-status-premium {
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #059669 100%);
+    box-shadow: 0 0 15px rgba(5, 150, 105, 0.3);
+  }
+
+  .animate-watermark {
+    background: linear-gradient(45deg, transparent 45%, rgba(5, 150, 105, 0.1) 50%, transparent 55%);
+    background-size: 200% 200%;
+    animation: watermark-flow 10s linear infinite;
+  }
+
+  @keyframes watermark-flow {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 200% 200%; }
+  }
+
+  .profile-bg-square {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30%;
+    aspect-ratio: 1/1;
+    z-index: -1;
+  }
+}
+
+/* ── Mobile Safe Area (status bar + home indicator) ─────────────────────── */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+
+  /*
+   * --bottom-nav-h: total vertical space consumed by the fixed bottom nav.
+   * 88px  = 8(min-safe-area) + pt-1(4) + py-2*2(16) + item(44) + a bit of buffer
+   * + env(safe-area-inset-bottom) for home-indicator / Android gesture bar
+   * Reel overlays and page padding-bottom should use this so nothing overlaps.
+   */
+  --bottom-nav-h: calc(88px + env(safe-area-inset-bottom, 0px));
+
+  /*
+   * --top-bar-h: solid black bar at the very top (z-index 9999), 0.5cm tall.
+   * On devices with a notch/dynamic-island the safe-area-inset-top wins.
+   * --header-total: full vertical space consumed by top-bar + h-14 header.
+   */
+  --top-bar-h: max(env(safe-area-inset-top, 0px), 0.5cm);
+  --header-total: calc(3.5rem + var(--top-bar-h));
+}
+
+html, body {
+  /* Prevent content from ever going under the status bar or home indicator */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Fixed header — needs its own top padding to clear the status bar */
+.safe-header {
+  padding-top: env(safe-area-inset-top, 0px) !important;
+}
+
+/* Fixed bottom nav — needs bottom padding to clear the home indicator.
+   The extra 4px ensures no pixel-perfect clipping on any device. */
+.safe-bottom-nav {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 4px) !important;
+  background: transparent;
+}
+
+/* Page content that scrolls behind the bottom nav — keep last item visible */
+.page-bottom-pad {
+  padding-bottom: var(--bottom-nav-h);
+}
+
+/* ── Video Loading Shimmer ───────────────────────────────────────────────── */
+/* Shown over video players while the first HLS segment is being fetched.
+   The sweep animation gives instant visual feedback so the UI never feels stuck. */
+@keyframes shimmer-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.video-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 40%, #0d0d0d 100%);
+  overflow: hidden;
+  z-index: 8;
+}
+
+.video-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.07) 50%,
+    transparent 70%
+  );
+  animation: shimmer-sweep 1.6s ease-in-out infinite;
+}
+
+/* ── Video Performance ───────────────────────────────────────────────────── */
+/* content-visibility:auto is intentionally NOT set on video — it breaks
+   HLS.js init and prevents media elements from loading in scroll containers */

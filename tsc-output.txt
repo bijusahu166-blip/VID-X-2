@@ -1,0 +1,190 @@
+client/src/components/ads/BannerAd.tsx(4,10): error TS2305: Module '"@shared/schema"' has no exported member 'Ad'.
+client/src/components/ads/InterstitialAd.tsx(6,10): error TS2305: Module '"@shared/schema"' has no exported member 'Ad'.
+client/src/components/ads/NativeAd.tsx(4,10): error TS2305: Module '"@shared/schema"' has no exported member 'Ad'.
+client/src/components/feed/CreatePostDialog.tsx(1515,34): error TS2367: This comparison appears to be unintentional because the types 'UploadType' and '"live"' have no overlap.
+client/src/components/feed/CreatePostDialog.tsx(1814,60): error TS2367: This comparison appears to be unintentional because the types '"post" | "reel" | "story" | "job" | "editing"' and '"live"' have no overlap.
+client/src/hooks/use-interstitial-ad.ts(3,10): error TS2305: Module '"@shared/schema"' has no exported member 'Ad'.
+client/src/lib/firebase.ts(1,31): error TS2307: Cannot find module 'firebase/app' or its corresponding type declarations.
+client/src/lib/firebase.ts(2,25): error TS2307: Cannot find module 'firebase/auth' or its corresponding type declarations.
+client/src/lib/firebase.ts(3,30): error TS2307: Cannot find module 'firebase/firestore' or its corresponding type declarations.
+client/src/pages/Groups.tsx(1569,103): error TS2554: Expected 1-2 arguments, but got 0.
+client/src/pages/Groups.tsx(1573,47): error TS2554: Expected 1-2 arguments, but got 0.
+client/src/pages/Jobs.tsx(207,18): error TS2345: Argument of type '{ name: string; email: string; phone: string; exp: string; portfolio: string; note: string; }' is not assignable to parameter of type 'SetStateAction<{ name: string; email: string; phone: string; exp: string; portfolio: string; customSkills: string; note: string; }>'.
+  Property 'customSkills' is missing in type '{ name: string; email: string; phone: string; exp: string; portfolio: string; note: string; }' but required in type '{ name: string; email: string; phone: string; exp: string; portfolio: string; customSkills: string; note: string; }'.
+client/src/pages/Profile.tsx(212,12): error TS2304: Cannot find name 'params'.
+server/index.ts(3,25): error TS7016: Could not find a declaration file for module 'compression'. 'D:/vid-x/VID-X-2/VID-X-2/node_modules/compression/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/compression` if it exists or add a new declaration (.d.ts) file containing `declare module 'compression';`
+server/index.ts(5,18): error TS7016: Could not find a declaration file for module 'cors'. 'D:/vid-x/VID-X-2/VID-X-2/node_modules/cors/lib/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/cors` if it exists or add a new declaration (.d.ts) file containing `declare module 'cors';`
+server/index.ts(291,27): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'string' is not assignable to parameter of type 'number'.
+server/middleware/privacy.ts(40,36): error TS2339: Property 'includes' does not exist on type '{}'.
+server/middleware/privacy.ts(45,34): error TS2339: Property 'includes' does not exist on type '{}'.
+server/middleware/privacy.ts(86,10): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{ id: string; email: string | null; password: string | null; firstName: string | null; lastName: string | null; username: string | null; profileImageUrl: string | null; bio: string | null; ... 25 more ...; messagePrivacy: string | null; }'.
+  Property '0' does not exist on type '{ id: string; email: string | null; password: string | null; firstName: string | null; lastName: string | null; username: string | null; profileImageUrl: string | null; bio: string | null; ... 25 more ...; messagePrivacy: string | null; }'.
+server/middleware/privacy.ts(90,23): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{ id: string; email: string | null; password: string | null; firstName: string | null; lastName: string | null; username: string | null; profileImageUrl: string | null; bio: string | null; ... 25 more ...; messagePrivacy: string | null; }'.
+  Property '0' does not exist on type '{ id: string; email: string | null; password: string | null; firstName: string | null; lastName: string | null; username: string | null; profileImageUrl: string | null; bio: string | null; ... 25 more ...; messagePrivacy: string | null; }'.
+server/middleware/privacy.ts(131,10): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{ id: string; email: string | null; password: string | null; firstName: string | null; lastName: string | null; username: string | null; profileImageUrl: string | null; bio: string | null; ... 25 more ...; messagePrivacy: string | null; }'.
+  Property '0' does not exist on type '{ id: string; email: string | null; password: string | null; firstName: string | null; lastName: string | null; username: string | null; profileImageUrl: string | null; bio: string | null; ... 25 more ...; messagePrivacy: string | null; }'.
+server/middleware/privacy.ts(135,23): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{ id: string; email: string | null; password: string | null; firstName: string | null; lastName: string | null; username: string | null; profileImageUrl: string | null; bio: string | null; ... 25 more ...; messagePrivacy: string | null; }'.
+  Property '0' does not exist on type '{ id: string; email: string | null; password: string | null; firstName: string | null; lastName: string | null; username: string | null; profileImageUrl: string | null; bio: string | null; ... 25 more ...; messagePrivacy: string | null; }'.
+server/middleware/rateLimiter.ts(11,5): error TS2322: Type '(...args: any[]) => Promise<unknown>' is not assignable to type 'SendCommandFn'.
+  Type 'Promise<unknown>' is not assignable to type 'Promise<RedisReply>'.
+    Type 'unknown' is not assignable to type 'RedisReply'.
+server/middleware/rateLimiter.ts(11,49): error TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.
+server/middleware/rateLimiter.ts(25,5): error TS2322: Type '(...args: any[]) => Promise<unknown>' is not assignable to type 'SendCommandFn'.
+  Type 'Promise<unknown>' is not assignable to type 'Promise<RedisReply>'.
+    Type 'unknown' is not assignable to type 'RedisReply'.
+server/middleware/rateLimiter.ts(25,49): error TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.
+server/middleware/rateLimiter.ts(39,5): error TS2322: Type '(...args: any[]) => Promise<unknown>' is not assignable to type 'SendCommandFn'.
+  Type 'Promise<unknown>' is not assignable to type 'Promise<RedisReply>'.
+    Type 'unknown' is not assignable to type 'RedisReply'.
+server/middleware/rateLimiter.ts(39,49): error TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.
+server/middleware/rateLimiter.ts(53,5): error TS2322: Type '(...args: any[]) => Promise<unknown>' is not assignable to type 'SendCommandFn'.
+  Type 'Promise<unknown>' is not assignable to type 'Promise<RedisReply>'.
+    Type 'unknown' is not assignable to type 'RedisReply'.
+server/middleware/rateLimiter.ts(53,49): error TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.
+server/middleware/rateLimiter.ts(67,5): error TS2322: Type '(...args: any[]) => Promise<unknown>' is not assignable to type 'SendCommandFn'.
+  Type 'Promise<unknown>' is not assignable to type 'Promise<RedisReply>'.
+    Type 'unknown' is not assignable to type 'RedisReply'.
+server/middleware/rateLimiter.ts(67,49): error TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.
+server/replit_integrations/audio/routes.ts(23,27): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/replit_integrations/audio/routes.ts(51,27): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/replit_integrations/audio/routes.ts(65,39): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/replit_integrations/batch/utils.ts(110,30): error TS2339: Property 'AbortError' does not exist on type '<T>(input: (attemptNumber: number) => T | PromiseLike<T>, options?: Options | undefined) => Promise<T>'.
+server/replit_integrations/batch/utils.ts(159,32): error TS2339: Property 'AbortError' does not exist on type '<T>(input: (attemptNumber: number) => T | PromiseLike<T>, options?: Options | undefined) => Promise<T>'.
+server/replit_integrations/chat/routes.ts(19,27): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/replit_integrations/chat/routes.ts(41,27): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/replit_integrations/chat/routes.ts(51,39): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(325,41): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { reporterId: string | SQL<unknown> | Placeholder<string, any>; reason: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; resolvedBy?: string | ... 3 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'postId' does not exist in type '{ reporterId: string | SQL<unknown> | Placeholder<string, any>; reason: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; resolvedBy?: string | ... 3 more ... | undefined; }'.
+  Overload 2 of 2, '(values: { reporterId: string | SQL<unknown> | Placeholder<string, any>; reason: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; resolvedBy?: string | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'postId' does not exist in type '{ reporterId: string | SQL<unknown> | Placeholder<string, any>; reason: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; resolvedBy?: string | ... 3 more ... | undefined; }[]'.
+server/routes.ts(659,51): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/messages.ts(5,32): error TS2307: Cannot find module '../middleware/auth' or its corresponding type declarations.
+server/routes/messages.ts(19,37): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'never'.
+server/routes/messages.ts(28,38): error TS2339: Property 'includes' does not exist on type '{}'.
+server/routes/messages.ts(29,36): error TS2339: Property 'includes' does not exist on type '{}'.
+server/routes/messages.ts(38,15): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "sender_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "sender_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "sender_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "sender_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+server/routes/messages.ts(39,51): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "receiver_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "receiver_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "receiver_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "receiver_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+server/routes/messages.ts(96,7): error TS2769: No overload matches this call.
+  Overload 2 of 2, '(values: { content: string | SQL<unknown> | Placeholder<string, any>; senderId: string | SQL<unknown> | Placeholder<string, any>; receiverId: string | SQL<unknown> | Placeholder<...>; ... 5 more ...; readAt?: Date | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'senderId' does not exist in type '{ content: string | SQL<unknown> | Placeholder<string, any>; senderId: string | SQL<unknown> | Placeholder<string, any>; receiverId: string | SQL<unknown> | Placeholder<...>; ... 5 more ...; readAt?: Date | ... 3 more ... | undefined; }[]'.
+server/routes/messages.ts(129,11): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "receiver_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "receiver_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "receiver_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "receiver_id"; tableName: "messages"; dataType: "string"; columnType: "PgText"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+server/routes/settings.ts(5,32): error TS2307: Cannot find module '../middleware/auth' or its corresponding type declarations.
+server/routes/settings.ts(41,26): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'never'.
+server/routes/settings.ts(82,14): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'never'.
+server/routes/settings.ts(104,14): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'never'.
+server/routes/settings.ts(112,22): error TS2339: Property 'includes' does not exist on type '{}'.
+server/routes/settings.ts(117,18): error TS2339: Property 'push' does not exist on type '{}'.
+server/routes/settings.ts(121,14): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'never'.
+server/routes/settings.ts(139,14): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'never'.
+server/routes/settings.ts(147,32): error TS2339: Property 'indexOf' does not exist on type '{}'.
+server/routes/settings.ts(154,18): error TS2339: Property 'splice' does not exist on type '{}'.
+server/routes/settings.ts(158,14): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>, right: string | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | SQLWrapper'.
+      Type 'undefined' is not assignable to type 'string | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<string | undefined>, right: string | SQLWrapper | undefined): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'Aliased<string | undefined>'.
+      Type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is missing the following properties from type 'Aliased<string | undefined>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "id"; tableName: "users"; dataType: "string"; columnType: "PgVarchar"; data: string; driverParam: string; notNull: true; hasDefault: true; isPrimaryKey: true; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'never'.
+server/routes/settings.ts(183,7): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { reporterId: string | SQL<unknown> | Placeholder<string, any>; reason: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; resolvedBy?: string | ... 3 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Type 'string | undefined' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any>'.
+      Type 'undefined' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any>'.
+  Overload 2 of 2, '(values: { reporterId: string | SQL<unknown> | Placeholder<string, any>; reason: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; resolvedBy?: string | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'reporterId' does not exist in type '{ reporterId: string | SQL<unknown> | Placeholder<string, any>; reason: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; resolvedBy?: string | ... 3 more ... | undefined; }[]'.
+server/storage.ts(3,19): error TS2305: Module '"@shared/schema"' has no exported member 'InsertPost'.
+server/storage.ts(3,36): error TS2305: Module '"@shared/schema"' has no exported member 'InsertComment'.
+server/storage.ts(3,56): error TS2305: Module '"@shared/schema"' has no exported member 'InsertLike'.
+server/storage.ts(4,22): error TS2724: '"@shared/schema"' has no exported member named 'Like'. Did you mean 'likes'?
+server/storage.ts(4,33): error TS2724: '"@shared/schema"' has no exported member named 'Book'. Did you mean 'books'?
+server/storage.ts(4,44): error TS2305: Module '"@shared/schema"' has no exported member 'InsertBook'.
+server/storage.ts(4,61): error TS2305: Module '"@shared/schema"' has no exported member 'Ad'.
+server/storage.ts(4,70): error TS2305: Module '"@shared/schema"' has no exported member 'InsertAd'.
+server/storage.ts(5,22): error TS2305: Module '"@shared/schema"' has no exported member 'InsertHistory'.
+shared/schema.ts(84,76): error TS2339: Property 'unique' does not exist on type 'IndexBuilder'.
+tsconfig.json(29,5): error TS5025: Unknown compiler option 'baseurl'. Did you mean 'baseUrl'?

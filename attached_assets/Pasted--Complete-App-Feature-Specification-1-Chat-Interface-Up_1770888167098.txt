@@ -1,0 +1,172 @@
+📱 Complete App Feature Specification
+🎭 1. Chat Interface Updates
+➤ Add Group Option
+
+Add “Crew” group option under chat name section.
+
+➤ Add Below Search Option:
+📚 News & Books Reading
+
+Features inside this section:
+
+Upload high-quality books
+
+Download books
+
+Read books/news
+
+AI-powered reading aloud:
+
+Human-like Male voice
+
+Human-like Female voice
+
+After reading:
+
+AI explains/summarizes content in simple, easy-to-understand language
+
+📸 2. Upload Image/Video Section
+
+Add the following options under Upload Image/Video:
+
+Reels
+
+Post
+
+Editing
+
+Story
+
+Live
+
+Inside Reels & Story Editing Screens:
+
+Include:
+
+🎵 Music option
+
+✂ Edit option
+
+🔤 Text option
+
+😊 Stickers option
+
+✨ Effects option
+
+🎨 3. Story Customization
+
+Add Story shape style: Pentagon Shape
+
+Color options:
+
+Violet
+
+Teal
+
+👤 4. Profile & Account Center
+Add "Settings" under Accounts Center:
+
+Password
+
+Security
+
+Personal Details
+
+Saved
+
+Account Privacy:
+
+Public
+
+Unlisted
+
+Private
+
+Blocked Option
+
+Tags & Mentions Option
+
+Subscription Options:
+
+Sound Quality Enhancement
+
+High Video Quality
+
+No Ads
+
+Help Option:
+
+Report a Problem
+
+Account Status
+
+Ad Run Problem
+
+Help Center
+
+Login
+
+Logout
+
+Add Account
+
+➤ Add “Share Profile” option
+
+Place it just above the Logout button. Here is your clear and professional English version of the feature description:
+
+🐾 Pet Option Placement & Features
+
+The Pet Option should be placed to the right side of the Settings option.
+
+📌 Pet Names Available Inside Pet Option:
+
+Buddy
+Charlie
+Max
+Bella
+Lucy
+Rocky
+Daisy
+Coco
+Milo
+Luna
+Teddy
+Simba
+Oliver
+Leo
+Rosie
+Ruby
+Jack
+Tiger
+Bruno
+Shadow
+Snowy
+Ginger
+Pepper
+Lucky
+Angel
+Honey
+Tommy
+Oscar
+Prince
+Princess
+
+🎨 Pet Design & Display Requirements:
+
+All pets must have 3D HD and 4K quality images.
+
+When a user selects any pet:
+
+That selected pet will appear sitting on top of the profile photo.
+
+The pet will remain positioned on the profile photo unless changed.
+
+🖼 Profile Background Animation:
+
+Behind the profile photo:
+
+A watermark-style animated background should appear.
+
+The animation should cover 30% of the screen in a square format.
+
+It should appear in full-screen style but limited to a 30% square area behind the profile section.

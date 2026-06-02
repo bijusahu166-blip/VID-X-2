@@ -1,0 +1,72 @@
+"Add an AI bot to my app that lets users generate photos or anime images in 4K quality. Use natural language prompts, like 'a cyberpunk city in anime style' or 'realistic photo of a mountain'. Include a UI with input field and generate button."
+What happens: Agent will:
+Write code to integrate Replit's image gen API (or external like Hugging Face if needed).
+Handle 4K resolution (e.g., 3840x2160 pixels—specify in prompts for aspect ratio like 16:9).
+Support styles: Realistic photos, anime (cartoon-like), etc. For anime, prompt with "in anime style" or "manga art".
+Add frontend (e.g., HTML/JS for web app) to display the output.
+Example code snippet the Agent might generate (Python backend with Flask, for a web app):
+from flask import Flask, request, jsonify
+import replicate  # Or Replit's built-in if available
+
+app = Flask(__name__)
+
+@app.route('/generate_image', methods=['POST'])
+def generate_image():
+    prompt = request.json['prompt']
+    # Use Replit-integrated model (or Replicate for Stable Diffusion XL)
+    model = replicate.models.get("stability-ai/sdxl")
+    output = model.predict(prompt=prompt + " in 4K quality, highly detailed", width=3840, height=2160)
+    return jsonify({'image_url': output[0]})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+For anime-specific: Use models like "Anything V5" or prompt tweaks.
+Test it: Run the app, input a prompt, and get a 4K image saved to your project files or served via URL.
+Pro tip: If you want free/high-quality anime images, Agent can integrate Hugging Face's diffusers library—no extra setup.
+3. Adding AI Video Generation (Game Videos, Anime Clips in 4K)
+Video gen is a bit more advanced, but Replit supports it via API integrations like OpenAI's Sora 2 (great for 4K videos) or RunwayML. No keys required if using Replit's unified AI system—it handles auth.
+Prompt the Agent:
+"Integrate an AI video generator into my app. Users should input a prompt like 'create a 4K anime game trailer of a hero fighting dragons'. Make it generate short videos (10-30s), with options for game-style or anime animation."
+What Agent does:
+Adds backend code to call video APIs.
+Handles input (text prompt, maybe reference image for consistency).
+Outputs MP4 in 4K (e.g., 3840x2160 at 30fps).
+For "game videos": Prompt for "pixel art game footage" or "3D game animation". For anime: "in Studio Ghibli style" or similar.
+Example integration using Sora API (from recent tutorials):
+First, Agent might add this to your code:
+import openai  # Replit handles the key
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+openai.api_key = 'replit-integrated-key'  # Auto-managed
+
+@app.route('/generate_video', methods=['POST'])
+def generate_video():
+    prompt = request.json['prompt']
+    response = openai.Video.create(
+        model="sora-2",
+        prompt=prompt + " in 4K resolution, anime style if specified",
+        size="3840x2160",
+        duration=20  # seconds
+    )
+    video_url = response['data'][0]['url']
+    return jsonify({'video_url': video_url})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+Upload a reference image if needed (e.g., for game characters).
+Cost: Videos use more credits—watch your usage on free tier.
+Alternatives if Sora isn't enough:
+Pika Labs or Runway: Agent can swap in these for better anime/video styles.
+For free options: Integrate open-source like AnimateDiff from Hugging Face, but it might need more RAM (upgrade to Core).
+4. Making It a Full AI Bot
+To tie it all together as a "bot": Agent can add a chat interface (e.g., using Streamlit or simple HTML).
+Prompt: "Turn this into an AI bot where users chat: 'Make a 4K photo of a cat' or 'Generate anime video of a space battle'."
+It’ll use models like GPT for understanding queries, then route to image/video gen.
+Deploy: One-click on Replit—get a live URL to share/test.
+Tips & Gotchas (2026 Edition)
+Quality: Always add "highly detailed, 4K UHD" to prompts for better results. Test iterations with Agent ("improve the anime style").
+Performance: Videos can take 1-5 mins to generate; add loading indicators.
+Limits: Free tier caps daily gens—go paid for unlimited/high-res.
+Customization: If your app is mobile (e.g., React Native), Agent can adapt. For game videos, specify "Unity-style gameplay" in prompts.
+Debugging: If something breaks, chat with Agent: "Fix the video gen bug."
