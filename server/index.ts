@@ -289,7 +289,7 @@ process.on("SIGINT", () => {
   const port = Number(process.env.PORT ? Number(process.env.PORT) : 10000);
   console.log(`Starting server with PORT=${process.env.PORT} resolved port=${port}`);
   httpServer.listen(port, "0.0.0.0", () => {
-    console.log(`Server started on http://0.0.0.0:${port}`);
+    console.log(`Server started on port ${port}`);
     log(`serving on port ${port}`);
   });
 })();
