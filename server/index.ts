@@ -285,8 +285,8 @@ process.on("SIGINT", () => {
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 10000 if not specified.
-  const port = Number(process.env.PORT ? Number(process.env.PORT) : 10000);
+  // Other ports are firewalled. Default to 4000 if not specified.
+  const port = Number(process.env.PORT ? Number(process.env.PORT) : 4000);
   console.log(`Starting server with PORT=${process.env.PORT} resolved port=${port}`);
   httpServer.listen(port, "0.0.0.0", () => {
     console.log(`Server started on port ${port}`);
