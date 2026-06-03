@@ -342,6 +342,7 @@ function PostActionMenu({
 
 export default function Home() {
   const { data: posts, isLoading } = usePosts();
+  const posts = Array.isArray(postsData) ? postsData : [];
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [activeCategory, setActiveCategory] = useState("All");
