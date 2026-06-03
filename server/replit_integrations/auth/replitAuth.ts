@@ -9,47 +9,30 @@ declare module "express-session" {
   }
 }
 
-let sessionStoreReady = false;
-
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-  
-  let sessionStore: any = new session.MemoryStore();
-  
-  const initializeSessionStore = async () => {
-    try {
-      const pgSession = new pgStore({
-        pool,
-        createTableIfMissing: true,
-        ttl: sessionTtl,
-        tableName: "sessions",
-      });
-
-      await pool.query("SELECT NOW()");
-      console.log("[Session Store] PostgreSQL connected");
-      sessionStore = pgSession;
-      sessionStoreReady = true;
-    } catch (err: any) {
-      console.warn("[Session Store] PostgreSQL connection failed, using memory store:", err?.message || err);
-      sessionStore = new session.MemoryStore();
-    }
-  };
-  
-  initializeSessionStore().catch((err) => {
-    console.warn("[Session Store] Initialization failed, using memory store:", err?.message || err);
-    sessionStore = new session.MemoryStore();
+  const pool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
   });
-  
+
+  const store = new pgStore({
+    pool,
+    createTableIfMissing: true,
+    ttl: sessionTtl,
+    tableName: "sessions",
+  });
+
   return session({
     secret: process.env.SESSION_SECRET || "default-session-secret",
-    store: sessionStore,
+    store, // ✅ Direct PostgreSQL store — no async, no MemoryStore
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
+      sameSite: "none" as const, // ✅ Cross-origin ke liye zaroori
       maxAge: sessionTtl,
     },
   });
