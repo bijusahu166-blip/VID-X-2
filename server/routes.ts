@@ -742,7 +742,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/users/:id", isAuthenticated, async (req, res) => {
     try {
+      console.log("[users/:id] Looking for:", req.params.id); //
       const user = await authStorage.getUser(String(req.params.id));
+      console.log("[users/:id] Found:", user ? "yes" : "no"); //
       if (!user) return res.status(404).json({ message: "User not found" });
       const { password: _, ...safeUser } = user as any;
       const followersRow = await db.execute(sql`SELECT COUNT(*) AS cnt FROM follows WHERE following_id = ${req.params.id}`);
