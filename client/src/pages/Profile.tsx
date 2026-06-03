@@ -351,6 +351,7 @@ export default function Profile() {
   const { data: xpData, error: xpError, isLoading: xpLoading } = useQuery<{ totalXP: number; xpInLevel: number; xpMax: number; level: number; breakdown: any }>({
     queryKey: ["/api/profile/xp"],
     queryFn: () => apiRequest("GET", "/api/profile/xp").then((res) => res.json()),
+    retry: false,
   });
   const myPosts = posts?.filter(p => p.userId === user?.id).slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
@@ -427,9 +428,8 @@ export default function Profile() {
     reader.readAsDataURL(file);
   };
 
-  const pageError = profileError || viewedUserError || myStatsError || historyError || xpError;
-  const loading = authLoading || profileLoading || xpLoading || (params.id ? viewedUserLoading : false) || myStatsLoading || historyLoading;
-
+  const pageError = params.id ? viewedUserError :profileError;
+  const loading = authLoading || profileLoading || (params.id ? viewedUserLoading : false)
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
