@@ -7,7 +7,7 @@
   "exclude": [
     "node_modules",
     "build",
-    "dist",02
+    "dist",
     "**/*.test.ts"
   ],
   "compilerOptions": {
