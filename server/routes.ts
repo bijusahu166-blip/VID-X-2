@@ -422,6 +422,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Send OTP for Password Reset ──────────────────────────────────────────
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body as { email?: string };
+    if (!email) return res.status(400).json({ message: "Email required" });
+    
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY!
+    );
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: undefined,
+    });
+    
+    if (error) return res.status(400).json({ message: error.message });
+    res.json({ message: "OTP sent to email" });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── Verify OTP & Reset Password ──────────────────────────────────────────
+app.post("/api/auth/verify-reset-otp", async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) 
+      return res.status(400).json({ message: "Email, OTP and new password required" });
+    
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY!
+    );
+    
+    // Verify OTP
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      email,
+      token: otp,
+      type: "recovery",
+    });
+    
+    if (verifyError) return res.status(400).json({ message: "Invalid or expired OTP" });
+    
+    // Update password in your DB
+    const bcrypt = await import("bcryptjs");
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await db.update(users)
+      .set({ password: hashed })
+      .where(eq(users.email, email.toLowerCase().trim()));
+    
+    res.json({ message: "Password reset successful" });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
   // ── User Goal ─────────────────────────────────────────────────────────────
   app.post("/api/user/goal", isAuthenticated, async (req, res) => {
     try {
