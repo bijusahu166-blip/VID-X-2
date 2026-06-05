@@ -508,28 +508,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: err.message || "Server error" });
     }
   });
-    
-    // Verify OTP
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: "recovery",
-    });
-    
-    if (verifyError) return res.status(400).json({ message: "Invalid or expired OTP" });
-    
-    // Update password in your DB
-    const bcrypt = await import("bcryptjs");
-    const hashed = await bcrypt.hash(newPassword, 10);
-    await db.update(users)
-      .set({ password: hashed })
-      .where(eq(users.email, email.toLowerCase().trim()));
-    
-    res.json({ message: "Password reset successful" });
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
 
   // ── User Goal ─────────────────────────────────────────────────────────────
   app.post("/api/user/goal", isAuthenticated, async (req, res) => {
