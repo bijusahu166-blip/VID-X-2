@@ -292,6 +292,7 @@ export default function Login() {
     setGoogleLoading(true);
     const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(
+      "https://iqryevbdhlitnpdzoars.supabase.co",
      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlxcnlldmJkaGxpdG5wZHpvYXJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MDg1MjQsImV4cCI6MjA5MzE4NDUyNH0.pSpXTPHY9R_WH2J00Ks1Gfp9Dd2wZvPl57SQR-xRXHA"
     );
     await supabase.auth.signInWithOAuth({
