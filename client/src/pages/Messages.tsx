@@ -8,11 +8,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { useCall } from "@/contexts/CallContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
-  ArrowLeft, Send, Mic, MicOff, Image, Phone, Video, MoreVertical,
+  ArrowLeft, Send, Mic, MicOff, Image,MoreVertical,
   Lock, Smile, Paperclip, ChevronDown, Check, CheckCheck, Pin,
   Globe, Clock, Palette, X, Plus, MapPin, BarChart2, Search,
   Users, Trash2, Star, Volume2, VolumeX, Play, Pause,
@@ -284,7 +283,6 @@ function ChatList({
             </Avatar>
             <div className="text-left">
               <p className="font-medium">{u.firstName} {u.lastName}</p>
-              <p className="text-xs text-zinc-400">{u.email}</p>
             </div>
           </button>
         ))}
@@ -563,12 +561,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
           <p className="text-xs text-zinc-400">{chat.isOnline ? "Online" : chat.lastSeen ? `Last seen ${formatTime(chat.lastSeen)}` : "Offline"}</p>
         </div>
         <div className="flex items-center gap-1">
-          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { if (other?.id) startCall(other.id, `${other.firstName} ${other.lastName}`, other.profileImageUrl || undefined, false); }}>
-            <Video className="w-4 h-4" />
-          </button>
-          <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => { if (other?.id) startCall(other.id, `${other.firstName} ${other.lastName}`, other.profileImageUrl || undefined, true); }}>
-            <Phone className="w-4 h-4" />
-          </button>
           <button className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" onClick={() => setShowThemePicker(p => !p)}>
             <Palette className="w-4 h-4" />
           </button>
