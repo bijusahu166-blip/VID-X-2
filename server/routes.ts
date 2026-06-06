@@ -803,14 +803,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/users", isAuthenticated, async (req, res) => {
-    try {
-      const allUsers = await db.select().from(users);
-      const me = (req.session as any).userId;
-      res.json(allUsers.filter(u => u.id !== me));
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
+  try {
+    const allUsers = await db.select().from(users);
+    const me = (req.session as any).userId;
+    res.json(allUsers.filter(u => u.id !== me).map(u => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      username: u.username,
+      profileImageUrl: u.profileImageUrl,
+      bio: (u as any).bio,
+    })));
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
   app.get("/api/users/search", isAuthenticated, async (req, res) => {
     try {
@@ -818,14 +825,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const allUsers = await db.select().from(users);
       const me = (req.session as any).userId;
       const filtered = allUsers.filter(u => u.id !== me && (
-        !q || (u.firstName + " " + u.lastName).toLowerCase().includes(q) ||
-        (u.email || "").toLowerCase().includes(q)
+        !q || (u.firstName + " " + u.lastName).toLowerCase().includes(q) || (u.username || "").toLowerCase().includes(q)
       ));
-      res.json(filtered);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
+      res.json(filtered.map(u => ({
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        username: u.username,
+  profileImageUrl: u.profileImageUrl,
+  bio: (u as any).bio,
+})));
 
   app.get("/api/users/:id", isAuthenticated, async (req, res) => {
     try {
