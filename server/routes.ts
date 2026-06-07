@@ -835,7 +835,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   profileImageUrl: u.profileImageUrl,
   bio: (u as any).bio,
 })));
-
+} catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
   app.get("/api/users/:id", isAuthenticated, async (req, res) => {
     try {
       console.log("[users/:id] Looking for:", req.params.id); //
@@ -1226,4 +1229,4 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   return httpServer;
-}
+ }
