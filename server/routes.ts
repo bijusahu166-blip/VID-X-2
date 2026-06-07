@@ -14,6 +14,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { v2 as cloudinary } from "cloudinary";
+import { wsClients } from "./realtime";
 
 const GEMINI_MODEL_FALLBACKS = [
   process.env.GEMINI_MODEL || "gemini-2.0-flash",
@@ -1066,7 +1067,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `);
       }
     } catch {}
-
+    // WebSocket: real-time broadcast to receiver
+try {
+  const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
+  const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
+  if (chatRow) {
+    const receiverId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
+    const receiverWs = wsClients.get(String(receiverId));
+    if (receiverWs && receiverWs.readyState === 1) {
+      receiverWs.send(JSON.stringify({
+        type: "new_message",
+        chatId,
+        message: msg,
+      }));
+    }
+  }
+} catch {}
     res.status(201).json(msg);
   });
 
@@ -1090,9 +1106,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/messages/:id", isAuthenticated, async (req, res) => {
-    await storage.deleteMessage(Number(req.params.id));
-    res.json({ ok: true });
-  });
+  const userId = (req.session as any).userId;
+  const messageId = Number(req.params.id);
+
+  // Get message before deleting (to find chatId + other user)
+  const msgRows = await db.execute(sql`SELECT * FROM direct_messages WHERE id = ${messageId} LIMIT 1`);
+  const msgRow = ((msgRows as any).rows ?? msgRows as any)[0];
+
+  await storage.deleteMessage(messageId);
+
+  // WebSocket: broadcast delete to both users
+  if (msgRow) {
+    const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${msgRow.chat_id} LIMIT 1`);
+    const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
+    if (chatRow) {
+      const otherUserId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
+      [wsClients.get(String(userId)), wsClients.get(String(otherUserId))].forEach(ws => {
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: "delete_message", messageId, chatId: msgRow.chat_id }));
+        }
+      });
+    }
+  }
+
+  res.json({ ok: true });
+});
 
   app.post("/api/direct-chats/:id/typing", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
