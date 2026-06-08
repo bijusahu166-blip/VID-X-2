@@ -1,3 +1,5 @@
+"use client"
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -62,11 +64,11 @@ const THEMES: Record<string, {
   bg: string; sent: string; recv: string;
   accent: string; label: string; glow: string; headerBg: string;
 }> = {
-  noir:     { bg: "bg-[#0a0a0f]",  sent: "bg-gradient-to-br from-violet-600 to-indigo-700 text-white", recv: "bg-[#1a1a2e] text-white border border-white/5", accent: "violet", label: "Noir",     glow: "shadow-violet-500/20",  headerBg: "bg-[#0d0d16]/90" },
-  aurora:   { bg: "bg-[#060d1a]",  sent: "bg-gradient-to-br from-cyan-500 to-blue-600 text-white",   recv: "bg-[#0d1f35] text-white border border-cyan-900/30", accent: "cyan",   label: "Aurora",   glow: "shadow-cyan-500/20",    headerBg: "bg-[#060d1a]/90" },
-  ember:    { bg: "bg-[#120a08]",  sent: "bg-gradient-to-br from-orange-500 to-rose-600 text-white", recv: "bg-[#1f1008] text-white border border-orange-900/30", accent: "orange", label: "Ember",   glow: "shadow-orange-500/20",  headerBg: "bg-[#120a08]/90" },
-  forest:   { bg: "bg-[#070f0a]",  sent: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",recv: "bg-[#0d1f12] text-white border border-emerald-900/30",accent: "emerald",label: "Forest",  glow: "shadow-emerald-500/20", headerBg: "bg-[#070f0a]/90" },
-  sakura:   { bg: "bg-[#120810]",  sent: "bg-gradient-to-br from-pink-500 to-rose-500 text-white",   recv: "bg-[#1f1020] text-white border border-pink-900/30",  accent: "pink",   label: "Sakura",   glow: "shadow-pink-500/20",    headerBg: "bg-[#120810]/90" },
+  noir:   { bg: "bg-[#0a0a0f]", sent: "bg-gradient-to-br from-violet-600 to-indigo-700 text-white", recv: "bg-[#1a1a2e] text-white", accent: "violet", label: "Noir",   glow: "shadow-violet-500/20",  headerBg: "bg-[#0d0d16]/90" },
+  aurora: { bg: "bg-[#060d1a]", sent: "bg-gradient-to-br from-cyan-500 to-blue-600 text-white",   recv: "bg-[#0d1f35] text-white", accent: "cyan",   label: "Aurora", glow: "shadow-cyan-500/20",    headerBg: "bg-[#060d1a]/90" },
+  ember:  { bg: "bg-[#120a08]", sent: "bg-gradient-to-br from-orange-500 to-rose-600 text-white", recv: "bg-[#1f1008] text-white", accent: "orange", label: "Ember",  glow: "shadow-orange-500/20",  headerBg: "bg-[#120a08]/90" },
+  forest: { bg: "bg-[#070f0a]", sent: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",recv: "bg-[#0d1f12] text-white", accent: "emerald",label: "Forest", glow: "shadow-emerald-500/20", headerBg: "bg-[#070f0a]/90" },
+  sakura: { bg: "bg-[#120810]", sent: "bg-gradient-to-br from-pink-500 to-rose-500 text-white",   recv: "bg-[#1f1020] text-white", accent: "pink",   label: "Sakura", glow: "shadow-pink-500/20",    headerBg: "bg-[#120810]/90" },
 };
 
 const QUICK_EMOJIS = ["❤️", "😂", "🔥", "👍", "😮", "😢", "🙏", "💯"];
@@ -164,6 +166,7 @@ function useChatSocket(
           onMessage(data.message);
           playReceive();
         }
+        // ✅ FIX: delete_message event handle karo
         if (data.type === "delete_message") {
           onDelete(data.messageId);
         }
@@ -265,6 +268,45 @@ function OnlineBadge() {
   );
 }
 
+// ── Fullscreen Media Viewer ────────────────────────────────────────────────────
+// ✅ NEW: Photo/Video fullscreen on tap
+function FullscreenViewer({ url, type, onClose }: { url: string; type: "image" | "video"; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center"
+      onClick={onClose}
+    >
+      <button
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center z-10 hover:bg-white/20 transition-colors"
+        onClick={onClose}
+      >
+        <X className="w-5 h-5 text-white" />
+      </button>
+      {type === "image" ? (
+        <img
+          src={url}
+          className="max-w-full max-h-full object-contain rounded-lg"
+          onClick={e => e.stopPropagation()}
+        />
+      ) : (
+        <video
+          src={url}
+          controls
+          autoPlay
+          className="max-w-full max-h-full rounded-lg"
+          onClick={e => e.stopPropagation()}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Chat List ─────────────────────────────────────────────────────────────────
 function ChatList({
   onOpenChat,
@@ -335,7 +377,6 @@ function ChatList({
 
   if (showNewChat) return (
     <div className="flex flex-col h-full bg-[#0a0a0f]">
-      {/* Header */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-white/5">
         <button onClick={() => setShowNewChat(false)}
           className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
@@ -377,7 +418,6 @@ function ChatList({
 
   return (
     <div className="flex flex-col h-full bg-[#0a0a0f]">
-      {/* Header */}
       <div className="px-5 pt-5 pb-4 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -398,7 +438,6 @@ function ChatList({
           </div>
         </div>
 
-        {/* Search */}
         <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-2xl px-4 py-2.5 focus-within:border-violet-500/40 transition-colors">
           <Search className="w-4 h-4 text-zinc-500 shrink-0" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations..."
@@ -439,7 +478,6 @@ function ChatList({
               return (
                 <button key={chat.id} onClick={() => onOpenChat(chat)}
                   className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-white/4 active:bg-white/6 transition-all group">
-                  {/* Avatar */}
                   <div className="relative shrink-0">
                     <Avatar className="w-12 h-12 ring-1 ring-white/8">
                       <AvatarImage src={u?.profileImageUrl || undefined} />
@@ -454,7 +492,6 @@ function ChatList({
                     )}
                   </div>
 
-                  {/* Content */}
                   <div className="flex-1 text-left min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
                       <p className="font-semibold text-[15px] text-white truncate">
@@ -468,6 +505,7 @@ function ChatList({
                       <p className="text-sm text-zinc-400 truncate leading-relaxed">
                         {last?.type === "voice" ? "🎤 Voice message"
                           : last?.type === "image" ? "📷 Photo"
+                          : last?.type === "video" ? "🎥 Video"
                           : last?.type === "poll" ? "📊 Poll"
                           : last?.content || "Start a conversation"}
                       </p>
@@ -509,16 +547,16 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   const [disappearing, setDisappearing] = useState(false);
   const [theme, setTheme] = useState<string>(chat.theme || "noir");
   const [decryptedContents, setDecryptedContents] = useState<Record<number, string>>({});
+  // ✅ NEW: Fullscreen viewer state
+  const [fullscreenMedia, setFullscreenMedia] = useState<{ url: string; type: "image" | "video" } | null>(null);
   const voiceRec = useVoiceRecorder();
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const partnerId = chat.otherUser?.id ?? "";
   const T = THEMES[theme] || THEMES.noir;
   const other = chat.otherUser;
 
-  // ── Queries ──
   const { data: messages = [] } = useQuery<DirectMessage[]>({
     queryKey: ["/api/direct-chats", chat.id, "messages"],
-    // No refetchInterval — WebSocket handles real-time
   });
 
   const { data: typingData } = useQuery<{ typers: string[] }>({
@@ -527,7 +565,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   });
   const isOtherTyping = (typingData?.typers?.length ?? 0) > 0;
 
-  // ── WebSocket ──
   useChatSocket(
     chat.id,
     currentUserId,
@@ -539,6 +576,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
       qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
     },
     (deletedId) => {
+      // ✅ FIX: WebSocket delete event se UI update
       qc.setQueryData<DirectMessage[]>(
         ["/api/direct-chats", chat.id, "messages"],
         (old = []) => old.filter(m => m.id !== deletedId)
@@ -546,7 +584,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     }
   );
 
-  // ── Effects ──
   useEffect(() => {
     apiRequest("PATCH", `/api/direct-chats/${chat.id}/read`, {}).catch(() => { });
     qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
@@ -556,7 +593,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isOtherTyping]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -564,7 +600,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     }
   }, [text]);
 
-  // Decrypt messages
   useEffect(() => {
     if (!messages.length || !currentUserId || !partnerId) return;
     const decryptAll = async () => {
@@ -586,7 +621,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     apiRequest("POST", `/api/direct-chats/${chat.id}/typing`, {}).catch(() => { });
   }, [chat.id]);
 
-  // Smart replies
   useEffect(() => {
     const last = messages[messages.length - 1];
     if (!last || last.senderId === currentUserId || last.type !== "text") { setSmartReplies([]); return; }
@@ -595,7 +629,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
       .then((r: any) => setSmartReplies(r.suggestions || [])).catch(() => { });
   }, [messages.length, currentUserId]);
 
-  // ── Mutations ──
   const sendMsg = useMutation({
     mutationFn: (body: any) => apiRequest("POST", `/api/direct-chats/${chat.id}/messages`, body),
     onSuccess: () => {
@@ -620,15 +653,16 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/messages/${id}`, {}),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
+      // ✅ FIX: Optimistic UI update — turant hatao
       qc.setQueryData<DirectMessage[]>(
         ["/api/direct-chats", chat.id, "messages"],
-        (old = []) => old.filter(m => m.id !== contextMsg?.id)
+        (old = []) => old.filter(m => m.id !== deletedId)
       );
+      qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
     },
   });
 
-  // ── Handlers ──
   const handleSend = async () => {
     if (!text.trim()) return;
     const encrypted = await encryptMessage(text, currentUserId, partnerId);
@@ -646,13 +680,34 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     }
   };
 
-  const handleMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ✅ FIX: Photo/video upload to server, phir send
+  const handleMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    const type = file.type.startsWith("video") ? "video" : "image";
-    sendMsg.mutate({ content: `Shared a ${type}`, type, mediaUrl: url });
     setShowAttachMenu(false);
+
+    const isVideo = file.type.startsWith("video");
+    const formData = new FormData();
+    formData.append(isVideo ? "video" : "image", file);
+
+    try {
+      toast({ title: `Uploading ${isVideo ? "video" : "photo"}...` });
+      const res = await fetch(`/api/upload/${isVideo ? "video" : "image"}`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const data = await res.json();
+      const url = data.url || data.imageUrl || data.videoUrl;
+      if (!url) throw new Error("Upload failed");
+      sendMsg.mutate({
+        content: isVideo ? "🎥 Video" : "📷 Photo",
+        type: isVideo ? "video" : "image",
+        mediaUrl: url,
+      });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    }
   };
 
   const handleLocation = () => {
@@ -699,6 +754,15 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
 
   return (
     <div className={cn("flex flex-col h-full", T.bg)}>
+
+      {/* ✅ Fullscreen Viewer */}
+      {fullscreenMedia && (
+        <FullscreenViewer
+          url={fullscreenMedia.url}
+          type={fullscreenMedia.type}
+          onClose={() => setFullscreenMedia(null)}
+        />
+      )}
 
       {/* ── Header ── */}
       <div className={cn("flex items-center gap-3 px-4 py-3 border-b border-white/6 backdrop-blur-xl", T.headerBg)}>
@@ -824,7 +888,13 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
                       <div className={cn("text-[10px] px-2.5 py-1.5 rounded-t-xl border-l-2 mb-0.5",
                         isSender ? "border-white/30 bg-white/8" : "border-violet-400/50 bg-white/5")}>
                         <span className="font-semibold text-zinc-300">Reply · </span>
-                        <span className="text-zinc-400">{replyRef.content}</span>
+                        {/* ✅ FIX: reply mein decrypted content dikhao */}
+                        <span className="text-zinc-400">
+                          {replyRef.type === "image" ? "📷 Photo"
+                            : replyRef.type === "video" ? "🎥 Video"
+                            : replyRef.type === "voice" ? "🎤 Voice"
+                            : decryptedContents[replyRef.id] || replyRef.content}
+                        </span>
                       </div>
                     )}
 
@@ -833,6 +903,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
                         <p className="text-xs text-zinc-500 italic">Message expired</p>
                       </div>
                     ) : (
+                      // ✅ FIX: border-white/5 hataya — clean look
                       <div className={cn(
                         "px-4 py-2.5 rounded-2xl shadow-sm",
                         isSender
@@ -856,12 +927,43 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
                             </button>
                           </div>
                         )}
+
+                        {/* ✅ FIX: Image — tap to fullscreen, no ugly border */}
                         {msg.type === "image" && msg.mediaUrl && (
-                          <img src={msg.mediaUrl} className="rounded-xl max-w-full max-h-64 object-cover" />
+                          <button
+                            className="block w-full p-0 m-0 focus:outline-none"
+                            onClick={() => setFullscreenMedia({ url: msg.mediaUrl!, type: "image" })}
+                          >
+                            <img
+                              src={msg.mediaUrl}
+                              className="rounded-xl max-w-full max-h-64 object-cover w-full"
+                              alt="Shared photo"
+                            />
+                          </button>
                         )}
+
+                        {/* ✅ FIX: Video — tap to fullscreen */}
                         {msg.type === "video" && msg.mediaUrl && (
-                          <video src={msg.mediaUrl} controls className="rounded-xl max-w-full max-h-64" />
+                          <div className="relative">
+                            <video
+                              src={msg.mediaUrl}
+                              className="rounded-xl max-w-full max-h-64 w-full object-cover"
+                              onClick={() => setFullscreenMedia({ url: msg.mediaUrl!, type: "video" })}
+                              // No controls here — tap opens fullscreen
+                              playsInline
+                            />
+                            {/* Play icon overlay */}
+                            <div
+                              className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/30 cursor-pointer"
+                              onClick={() => setFullscreenMedia({ url: msg.mediaUrl!, type: "video" })}
+                            >
+                              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                <Play className="w-6 h-6 text-white ml-1" />
+                              </div>
+                            </div>
+                          </div>
                         )}
+
                         {msg.type === "voice" && msg.mediaUrl && (
                           <VoiceNoteBubble url={msg.mediaUrl} isSender={isSender} />
                         )}
@@ -937,7 +1039,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
           onClick={() => setContextMsg(null)}>
           <div className="bg-[#1a1a2e] border border-white/8 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl"
             onClick={e => e.stopPropagation()}>
-            {/* Quick emoji reactions */}
             <div className="flex justify-around px-4 py-4 border-b border-white/6">
               {QUICK_EMOJIS.map(e => (
                 <button key={e} onClick={() => { reactMutation.mutate({ id: contextMsg.id, emoji: e }); setContextMsg(null); }}
@@ -947,7 +1048,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
               ))}
             </div>
 
-            {/* Actions */}
             <div className="py-2">
               {[
                 {
@@ -984,7 +1084,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
         </div>
       )}
 
-      {/* ── Delete Options (Telegram style) ── */}
+      {/* ── Delete Options ── */}
       {contextMsg && showDeleteOptions && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end justify-center p-4"
           onClick={() => { setContextMsg(null); setShowDeleteOptions(false); }}>
@@ -1051,7 +1151,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
       {showAttachMenu && (
         <div className="grid grid-cols-4 gap-3 px-4 py-4 bg-[#0d0d16] border-t border-white/6">
           {[
-            { icon: <Image className="w-5 h-5" />, label: "Photo", action: () => mediaInputRef.current?.click(), color: "from-blue-500 to-cyan-500" },
+            { icon: <Image className="w-5 h-5" />, label: "Photo/Video", action: () => mediaInputRef.current?.click(), color: "from-blue-500 to-cyan-500" },
             { icon: <MapPin className="w-5 h-5" />, label: "Location", action: handleLocation, color: "from-green-500 to-emerald-500" },
             { icon: <BarChart2 className="w-5 h-5" />, label: "Poll", action: () => { setShowPollForm(true); setShowAttachMenu(false); }, color: "from-violet-500 to-purple-500" },
             { icon: <Clock className="w-5 h-5" />, label: disappearing ? "Permanent" : "Disappear", action: () => { setDisappearing(p => !p); setShowAttachMenu(false); }, color: "from-orange-500 to-amber-500" },
@@ -1073,7 +1173,12 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
           <div className="w-0.5 h-8 rounded-full bg-violet-500 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs text-violet-400 font-semibold">Replying</p>
-            <p className="text-xs text-zinc-400 truncate">{replyTo.content}</p>
+            <p className="text-xs text-zinc-400 truncate">
+              {replyTo.type === "image" ? "📷 Photo"
+                : replyTo.type === "video" ? "🎥 Video"
+                : replyTo.type === "voice" ? "🎤 Voice"
+                : decryptedContents[replyTo.id] || replyTo.content}
+            </p>
           </div>
           <button onClick={() => setReplyTo(null)}
             className="w-6 h-6 rounded-full bg-white/8 flex items-center justify-center hover:bg-white/12 transition-colors">
@@ -1097,10 +1202,10 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
       {/* ── Input Bar ── */}
       <div className="px-3 py-3 bg-black/50 backdrop-blur-xl border-t border-white/6"
         style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
+        {/* ✅ FIX: accept image + video both */}
         <input type="file" ref={mediaInputRef} accept="image/*,video/*" className="hidden" onChange={handleMedia} />
 
         {voiceRec.recording ? (
-          /* Recording state */
           <div className="flex items-center gap-3 bg-red-500/8 border border-red-500/20 rounded-2xl px-4 py-3">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
             <div className="flex gap-0.5 items-end h-5 flex-1">
@@ -1118,16 +1223,13 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
             </button>
           </div>
         ) : (
-          /* Normal state */
           <div className="flex items-end gap-2">
-            {/* Attach */}
             <button onClick={() => setShowAttachMenu(p => !p)}
               className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-90 shrink-0",
                 showAttachMenu ? "bg-violet-600 text-white" : "bg-white/6 border border-white/8 text-zinc-400 hover:bg-white/10 hover:text-white")}>
               {showAttachMenu ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             </button>
 
-            {/* Text input container */}
             <div className="flex-1 flex items-end bg-white/6 border border-white/10 rounded-2xl px-3 py-2 focus-within:border-violet-500/40 transition-colors min-h-[44px]">
               <textarea
                 ref={textareaRef}
@@ -1143,7 +1245,6 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
               </button>
             </div>
 
-            {/* Send / Mic */}
             {text.trim() ? (
               <button onClick={handleSend}
                 className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 transition-all active:scale-90">

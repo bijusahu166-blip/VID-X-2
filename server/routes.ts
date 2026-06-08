@@ -1038,53 +1038,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(msgs);
   });
 
-  app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
-    const userId = (req.session as any).userId;
-    const chatId = Number(req.params.id);
-    const { content, type, mediaUrl, metadata, replyToId, expiresInSeconds } = req.body;
-    const expiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : undefined;
-    const msg = await storage.sendDirectMessage({
-      chatId,
-      senderId: userId,
-      content,
-      type: type || "text",
-      mediaUrl,
-      metadata,
-      replyToId,
-      ...(expiresAt ? { expiresAt } : {}),
-    });
+ // ═══════════════════════════════════════════════════════════════════
+// REPLACE the entire POST /api/direct-chats/:id/messages route
+// in your server/routes.ts with this:
+// ═══════════════════════════════════════════════════════════════════
 
-    try {
-      const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
-      const chat = ((chatRows as any).rows ?? chatRows as any)[0];
-      if (chat) {
-        const recipientId = chat.user1_id === userId ? chat.user2_id : chat.user1_id;
-        const sender = await authStorage.getUser(userId);
-        const preview = (content ?? "").slice(0, 50);
-        await db.execute(sql`
-          INSERT INTO notifications (user_id, from_user_id, type, message)
-          VALUES (${recipientId}, ${userId}, 'message', ${`${sender?.firstName ?? "Someone"} sent you a message${preview ? `: "${preview}"` : ""}`})
-        `);
-      }
-    } catch {}
-    // WebSocket: real-time broadcast to receiver
-try {
-  const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
-  const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
-  if (chatRow) {
-    const receiverId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
-    const receiverWs = wsClients.get(String(receiverId));
-    if (receiverWs && receiverWs.readyState === 1) {
-      receiverWs.send(JSON.stringify({
-        type: "new_message",
-        chatId,
-        message: msg,
-      }));
-    }
-  }
-} catch {}
-    res.status(201).json(msg);
+app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
+  const userId = (req.session as any).userId;
+  const chatId = Number(req.params.id);
+  const { content, type, mediaUrl, metadata, replyToId, expiresInSeconds } = req.body;
+  const expiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : undefined;
+
+  const msg = await storage.sendDirectMessage({
+    chatId,
+    senderId: userId,
+    content,
+    type: type || "text",
+    mediaUrl,
+    metadata,
+    replyToId,
+    ...(expiresAt ? { expiresAt } : {}),
   });
+
+  // ✅ FIX: Pehle response bhejo — notification/WS ko wait mat karao
+  res.status(201).json(msg);
+
+  // Background mein notification + WebSocket (response already sent)
+  try {
+    const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
+    const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
+    if (chatRow) {
+      const recipientId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
+      const sender = await authStorage.getUser(userId);
+      const preview = (content ?? "").slice(0, 50);
+
+      // Notification
+      await db.execute(sql`
+        INSERT INTO notifications (user_id, from_user_id, type, message)
+        VALUES (${recipientId}, ${userId}, 'message',
+        ${`${sender?.firstName ?? "Someone"} sent you a message${preview ? `: "${preview}"` : ""}`})
+      `);
+
+      // WebSocket broadcast
+      const receiverWs = wsClients.get(String(recipientId));
+      if (receiverWs && receiverWs.readyState === 1) {
+        receiverWs.send(JSON.stringify({
+          type: "new_message",
+          chatId,
+          message: msg,
+        }));
+      }
+    }
+  } catch (e) {
+    console.error("[direct-chat message] background error:", e);
+  }
+});
 
   app.patch("/api/direct-chats/:id/read", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
