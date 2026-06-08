@@ -652,30 +652,17 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] }),
   });
 
- const deleteMutation = useMutation({
-  mutationFn: async (id: number) => {
-    const res = await fetch(`/api/messages/${id}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    if (!res.ok) throw new Error("Delete failed");
-    return id;
-  },
-  onMutate: async (deletedId: number) => {
-    await qc.cancelQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
-    qc.setQueryData<DirectMessage[]>(
-      ["/api/direct-chats", chat.id, "messages"],
-      (old = []) => old.filter(m => m.id !== deletedId)
-    );
-  },
-  onError: () => {
-    qc.invalidateQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
-    toast({ title: "Delete failed", variant: "destructive" });
-  },
-  onSettled: () => {
-    qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
-  },
-});
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/messages/${id}`, {}),
+    onSuccess: (_, deletedId) => {
+      // ✅ FIX: Optimistic UI update — turant hatao
+      qc.setQueryData<DirectMessage[]>(
+        ["/api/direct-chats", chat.id, "messages"],
+        (old = []) => old.filter(m => m.id !== deletedId)
+      );
+      qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
+    },
+  });
 
   const handleSend = async () => {
     if (!text.trim()) return;
