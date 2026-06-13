@@ -149,6 +149,19 @@ app.use(helmet({
 // ── Compression ─────────────────────────────────────────────────────────────
 app.use(compression());
 
+import session from 'express-session';
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'meri-secret-key-123',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 din
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax'
+  }
+}));
 // ── CORS ────────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: process.env.FRONTEND_URL || process.env.NODE_ENV === "production" ? "*" : "*",
