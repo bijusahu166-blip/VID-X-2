@@ -928,7 +928,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (chatRow) {
         const recipientId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
         const sender = await authStorage.getUser(userId);
-        const preview = (content ?? "").slice(0, 50);
+    let preview = "";
+try {
+  const parsed = JSON.parse(content ?? "");
+  if (parsed?.e2e) {
+    preview = "sent you a message"; // encrypted msg ka preview
+  } else {
+    preview = (content ?? "").slice(0, 50);
+  }
+} catch {
+  preview = (content ?? "").slice(0, 50);
+}
         await db.execute(sql`
           INSERT INTO notifications (user_id, from_user_id, type, message)
           VALUES (${recipientId}, ${userId}, 'message',
