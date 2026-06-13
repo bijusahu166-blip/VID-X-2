@@ -51,7 +51,7 @@ cloudinary.config({
 // --- MULTER: All file types (memory storage) ---
 const anyUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const mime = file.mimetype;
     const name = file.originalname.toLowerCase();
@@ -72,7 +72,7 @@ const anyUpload = multer({
   },
 });
 
-// --- MULTER: Book PDF/TXT Upload (memory storage) ---
+// --- MULTER: Book PDF/TXT Upload ---
 const bookUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 },
@@ -117,6 +117,28 @@ async function uploadToCloudinary(
   });
 }
 
+// --- CLOUDINARY DELETE HELPER ---
+async function deleteFromCloudinary(mediaUrl: string): Promise<void> {
+  try {
+    const urlParts = mediaUrl.split("/");
+    const uploadIndex = urlParts.indexOf("upload");
+    if (uploadIndex === -1) return;
+    const afterUpload = urlParts.slice(uploadIndex + 1);
+    if (afterUpload[0]?.startsWith("v")) afterUpload.shift();
+    const publicIdWithExt = afterUpload.join("/");
+    const publicId = publicIdWithExt.replace(/\.[^/.]+$/, "");
+
+    // Try image first, then video
+    try {
+      await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
+    } catch {
+      await cloudinary.uploader.destroy(publicId, { resource_type: "video" });
+    }
+  } catch (err) {
+    console.error("[cloudinary delete] Error:", err);
+  }
+}
+
 // --- AUTO-DELETE LOGIC (2 Hours) ---
 setInterval(async () => {
   try {
@@ -154,7 +176,6 @@ async function seed() {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  // Health check endpoint
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
@@ -165,7 +186,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerChatRoutes(app);
   registerImageRoutes(app);
 
-  // Register sub-routes
   const settingsRoutes = await import('./routes/settings');
   const messagesRoutes = await import('./routes/messages');
   app.use('/api/settings', settingsRoutes.default);
@@ -174,96 +194,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   seed().catch(console.error);
 
   // ══════════════════════════════════════════════════════════════════════════
-  // UPLOAD ROUTES — Video / Image / PDF / Profile → Cloudinary
+  // UPLOAD ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  // ── Upload Video ──────────────────────────────────────────────────────────
   app.post("/api/upload/video", isAuthenticated, (req: any, res: any) => {
     anyUpload.single("video")(req, res, async (err: any) => {
-      if (err) {
-        console.error("[upload/video] Multer:", err.message);
-        return res.status(400).json({ message: err.message });
-      }
+      if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No video file received. Field name: 'video'" });
       try {
-        console.log(`[upload/video] ${req.file.originalname} (${(req.file.size / 1024 / 1024).toFixed(2)} MB)`);
         const result = await uploadToCloudinary(req.file.buffer, "video", "vid-x/videos");
-        console.log("[upload/video] Success:", result.url);
         res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
       } catch (err: any) {
-        console.error("[upload/video] Cloudinary:", err.message);
         res.status(500).json({ message: `Video upload failed: ${err.message}` });
       }
     });
   });
 
-  // ── Upload Image ──────────────────────────────────────────────────────────
   app.post("/api/upload/image", isAuthenticated, (req: any, res: any) => {
     anyUpload.single("image")(req, res, async (err: any) => {
-      if (err) {
-        console.error("[upload/image] Multer:", err.message);
-        return res.status(400).json({ message: err.message });
-      }
+      if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No image file received. Field name: 'image'" });
       try {
-        console.log(`[upload/image] ${req.file.originalname} (${(req.file.size / 1024).toFixed(1)} KB)`);
         const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/images");
-        console.log("[upload/image] Success:", result.url);
         res.json({ success: true, url: result.url, imageUrl: result.url, publicId: result.publicId });
       } catch (err: any) {
-        console.error("[upload/image] Cloudinary:", err.message);
         res.status(500).json({ message: `Image upload failed: ${err.message}` });
       }
     });
   });
 
-  // ── Upload Profile Image ──────────────────────────────────────────────────
   app.post("/api/upload/profile-image", isAuthenticated, (req: any, res: any) => {
     anyUpload.single("image")(req, res, async (err: any) => {
-      if (err) {
-        console.error("[upload/profile-image] Multer:", err.message);
-        return res.status(400).json({ message: err.message });
-      }
+      if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No image received. Field name: 'image'" });
       try {
-        console.log(`[upload/profile-image] ${req.file.originalname}`);
         const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/profiles");
-        console.log("[upload/profile-image] Success:", result.url);
         res.json({ success: true, url: result.url, imageUrl: result.url, profileImageUrl: result.url, publicId: result.publicId });
       } catch (err: any) {
-        console.error("[upload/profile-image] Cloudinary:", err.message);
         res.status(500).json({ message: `Profile image upload failed: ${err.message}` });
       }
     });
   });
 
-  // ── Upload PDF ────────────────────────────────────────────────────────────
   app.post("/api/upload/pdf", isAuthenticated, (req: any, res: any) => {
     anyUpload.single("pdf")(req, res, async (err: any) => {
-      if (err) {
-        console.error("[upload/pdf] Multer:", err.message);
-        return res.status(400).json({ message: err.message });
-      }
+      if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No PDF received. Field name: 'pdf'" });
       try {
-        console.log(`[upload/pdf] ${req.file.originalname} (${(req.file.size / 1024).toFixed(1)} KB)`);
         const result = await uploadToCloudinary(req.file.buffer, "raw", "vid-x/pdfs");
-        console.log("[upload/pdf] Success:", result.url);
         res.json({ success: true, url: result.url, pdfUrl: result.url, publicId: result.publicId });
       } catch (err: any) {
-        console.error("[upload/pdf] Cloudinary:", err.message);
         res.status(500).json({ message: `PDF upload failed: ${err.message}` });
       }
     });
   });
 
-  // ── Upload Any File (auto-detect) ─────────────────────────────────────────
   app.post("/api/upload/file", isAuthenticated, (req: any, res: any) => {
     anyUpload.single("file")(req, res, async (err: any) => {
-      if (err) {
-        console.error("[upload/file] Multer:", err.message);
-        return res.status(400).json({ message: err.message });
-      }
+      if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No file received. Field name: 'file'" });
       try {
         const mime = req.file.mimetype;
@@ -271,9 +259,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const isImage = mime.startsWith("image/");
         const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
         const folder = isVideo ? "vid-x/videos" : isImage ? "vid-x/images" : "vid-x/files";
-        console.log(`[upload/file] ${req.file.originalname} → ${resourceType}`);
         const result = await uploadToCloudinary(req.file.buffer, resourceType, folder);
-        console.log("[upload/file] Success:", result.url);
         res.json({
           success: true,
           url: result.url,
@@ -284,104 +270,67 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           type: resourceType,
         });
       } catch (err: any) {
-        console.error("[upload/file] Cloudinary:", err.message);
         res.status(500).json({ message: `Upload failed: ${err.message}` });
       }
     });
   });
 
-  // ── Book PDF Upload (legacy route kept) ──────────────────────────────────
   app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
     res.header("Access-Control-Allow-Origin", "*");
     bookUpload.single("pdf")(req, res, async (err: any) => {
-      if (err) {
-        console.error("[book-pdf] Multer error:", err.message);
-        return res.status(400).json({ message: err.message || "File rejected" });
-      }
-      if (!req.file) {
-        console.error("[book-pdf] No file received");
-        return res.status(400).json({ message: "No file received" });
-      }
+      if (err) return res.status(400).json({ message: err.message || "File rejected" });
+      if (!req.file) return res.status(400).json({ message: "No file received" });
       try {
-        console.log("[book-pdf] Uploading:", req.file.originalname, req.file.size, "bytes");
         const result = await uploadToCloudinary(req.file.buffer, "auto", "vid-x-books");
-        console.log("[book-pdf] Success:", result.url);
         res.json({ pdfUrl: result.url });
       } catch (err: any) {
-        console.error("[book-pdf] Cloudinary failed:", err.message);
         res.status(500).json({ message: `Upload failed: ${err.message}` });
       }
     });
   });
 
-  // ── Chunk Upload Routes (client uploads chunks, server assembles) ─────────
   const chunkUpload = multer({ storage: multer.memoryStorage() });
   const chunksDir = path.join(process.cwd(), "uploads", "chunks");
   if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
 
-  // POST /api/upload/chunk — receive a single chunk
   app.post("/api/upload/chunk", isAuthenticated, (req: any, res: any) => {
     chunkUpload.single("chunk")(req, res, async (err: any) => {
-      if (err) {
-        console.error("[upload/chunk] Multer error:", err.message);
-        return res.status(400).json({ message: err.message });
-      }
+      if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No chunk received" });
-
       try {
         const { uploadId, chunkIndex, totalChunks } = req.body;
-        if (!uploadId || chunkIndex === undefined || !totalChunks) {
+        if (!uploadId || chunkIndex === undefined || !totalChunks)
           return res.status(400).json({ message: "Missing uploadId, chunkIndex, or totalChunks" });
-        }
-
         const idx = Number(chunkIndex);
         const chunkPath = path.join(chunksDir, `${uploadId}-${idx}`);
         fs.writeFileSync(chunkPath, req.file.buffer);
-
-        console.log(`[upload/chunk] Saved chunk ${idx}/${Number(totalChunks) - 1} for ${uploadId}`);
         res.json({ success: true, chunkIndex: idx });
       } catch (err: any) {
-        console.error("[upload/chunk] Error:", err.message);
         res.status(500).json({ message: `Chunk save failed: ${err.message}` });
       }
     });
   });
 
-  // POST /api/upload/finalize — assemble chunks and upload to Cloudinary
   app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => {
     try {
       const { uploadId, totalChunks, originalName } = req.body;
-      if (!uploadId || !totalChunks || !originalName) {
+      if (!uploadId || !totalChunks || !originalName)
         return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
-      }
-
       const total = Number(totalChunks);
-      console.log(`[upload/finalize] Assembling ${total} chunks for ${uploadId}`);
-
-      // verify chunks
       for (let i = 0; i < total; i++) {
         const chunkPath = path.join(chunksDir, `${uploadId}-${i}`);
-        if (!fs.existsSync(chunkPath)) {
+        if (!fs.existsSync(chunkPath))
           return res.status(400).json({ message: `Missing chunk ${i}. Please retry the upload.` });
-        }
       }
-
       const buffers: Buffer[] = [];
       for (let i = 0; i < total; i++) buffers.push(fs.readFileSync(path.join(chunksDir, `${uploadId}-${i}`)));
       const fullBuffer = Buffer.concat(buffers);
-
-      // cleanup
       for (let i = 0; i < total; i++) {
         try { fs.unlinkSync(path.join(chunksDir, `${uploadId}-${i}`)); } catch {}
       }
-
-      console.log(`[upload/finalize] Assembled ${(fullBuffer.length / 1024 / 1024).toFixed(2)} MB — uploading to Cloudinary...`);
-
       const result = await uploadToCloudinary(fullBuffer, "video", "vid-x/videos");
-      console.log("[upload/finalize] Cloudinary success:", result.url);
       res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
     } catch (err: any) {
-      console.error("[upload/finalize] Error:", err.message);
       res.status(500).json({ message: `Finalize failed: ${err.message}` });
     }
   });
@@ -390,13 +339,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // AUTH ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  // ── Check Email ───────────────────────────────────────────────────────────
   app.get("/api/users/check-email", async (req, res) => {
     try {
       const email = ((req.query.email as string) || "").toLowerCase().trim();
       if (!email) return res.status(400).json({ message: "Email is required" });
-      const found = await db.select({ id: users.id }).from(users)
-        .where(eq(users.email, email)).limit(1);
+      const found = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
       if (!found.length) return res.status(404).json({ message: "No account found with that email address" });
       res.json({ exists: true });
     } catch (err: any) {
@@ -404,58 +351,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Reset Password ────────────────────────────────────────────────────────
   app.post("/api/auth/reset-password", async (req, res) => {
     try {
       const { email, newPassword } = req.body as { email?: string; newPassword?: string };
       if (!email || !newPassword) return res.status(400).json({ message: "Email and new password are required" });
       if (newPassword.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
-      const found = await db.select().from(users)
-        .where(eq(users.email, email.toLowerCase().trim())).limit(1);
+      const found = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
       if (!found.length) return res.status(404).json({ message: "No account found with that email address" });
       const bcrypt = await import("bcryptjs");
       const hashed = await bcrypt.hash(newPassword, 10);
-      await db.update(users).set({ password: hashed })
-        .where(eq(users.email, email.toLowerCase().trim()));
+      await db.update(users).set({ password: hashed }).where(eq(users.email, email.toLowerCase().trim()));
       res.json({ message: "Password updated successfully" });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Server error" });
     }
   });
 
- // ── Send Custom OTP (Nodemailer) ──────────────────────────────────────────
   app.post("/api/auth/forgot-password", async (req, res) => {
     try {
       const { email } = req.body as { email?: string };
       if (!email) return res.status(400).json({ message: "Email required" });
-
-      const found = await db.select({ id: users.id }).from(users)
-        .where(eq(users.email, email.toLowerCase().trim())).limit(1);
+      const found = await db.select({ id: users.id }).from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
       if (!found.length) return res.status(404).json({ message: "No account found" });
-
-      // Generate 6 digit OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-
-      // Store OTP in DB
+      const expiry = new Date(Date.now() + 10 * 60 * 1000);
       await db.execute(sql`
         INSERT INTO otp_tokens (email, otp, expires_at)
         VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
         ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
       `);
-
-      // Send email via Nodemailer
       const nodemailer = await import("nodemailer");
       const transporter = nodemailer.default.createTransport({
         host: process.env.SMTP_HOST || "smtp.gmail.com",
         port: Number(process.env.SMTP_PORT) || 587,
         secure: false,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
       });
-
       await transporter.sendMail({
         from: `"VID-X" <${process.env.SMTP_USER}>`,
         to: email,
@@ -475,7 +406,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           </div>
         `,
       });
-
       res.json({ message: "OTP sent" });
     } catch (err: any) {
       console.error("[forgot-password]", err.message);
@@ -483,12 +413,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Verify Custom OTP ─────────────────────────────────────────────────────
   app.post("/api/auth/verify-reset-otp", async (req, res) => {
     try {
       const { email, otp } = req.body;
       if (!email || !otp) return res.status(400).json({ message: "Email and OTP required" });
-
       const result = await db.execute(sql`
         SELECT * FROM otp_tokens 
         WHERE email = ${email.toLowerCase().trim()} 
@@ -496,29 +424,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         AND expires_at > NOW()
         LIMIT 1
       `);
-
       const rows = (result as any).rows ?? result;
       if (!rows.length) return res.status(400).json({ message: "Invalid or expired OTP" });
-
-      // Delete used OTP
       await db.execute(sql`DELETE FROM otp_tokens WHERE email = ${email.toLowerCase().trim()}`);
-
       res.json({ message: "OTP verified" });
     } catch (err: any) {
-      console.error("[verify-otp]", err.message);
       res.status(500).json({ message: err.message || "Server error" });
     }
   });
 
-  // ── User Goal ─────────────────────────────────────────────────────────────
   app.post("/api/user/goal", isAuthenticated, async (req, res) => {
     try {
       const goal = (req.body.goal as string || "").trim();
       if (!goal) return res.status(400).json({ message: "Goal is required" });
       const userId = (req.session as any).userId;
-      await db.update(users)
-        .set({ goal, goalSetAt: new Date() })
-        .where(eq(users.id, userId));
+      await db.update(users).set({ goal, goalSetAt: new Date() }).where(eq(users.id, userId));
       res.json({ goal });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Server error" });
@@ -536,7 +456,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Config ────────────────────────────────────────────────────────────────
   app.get("/api/config", (_req, res) => {
     res.json({
       cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
@@ -544,7 +463,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  // ── Version ───────────────────────────────────────────────────────────────
   const SERVER_START_TIME = Date.now().toString();
   app.get("/api/version", (_req, res) => {
     res.set("Cache-Control", "no-store").json({ v: SERVER_START_TIME });
@@ -554,23 +472,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // POST ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  // ── Posts List ────────────────────────────────────────────────────────────
   app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
     try {
       const userId = (req.session as any).userId;
       const allPosts = await storage.getAllPosts();
-      
-      // Get blocked posts for current user (that haven't expired)
       const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
-        .where(and(
-          eq(pendingBlocks.blockedUserId, userId),
-          sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`
-        ));
+        .where(and(eq(pendingBlocks.blockedUserId, userId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
       const blockedPostIds = new Set(blockedPosts.map(b => b.postId));
-      
-      // Filter out blocked posts
       const filteredPosts = allPosts.filter(post => !blockedPostIds.has(post.id));
-      
       const enrichedPosts = await Promise.all(filteredPosts.map(async (post) => {
         const user = await authStorage.getUser(post.userId);
         const likesCount = await storage.getLikesCount(post.id);
@@ -586,7 +495,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Create Post ───────────────────────────────────────────────────────────
   app.post(api.posts.create.path, isAuthenticated, async (req, res) => {
     try {
       const post = await storage.createPost({ ...req.body, userId: (req.session as any).userId });
@@ -596,7 +504,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Get Post ──────────────────────────────────────────────────────────────
   app.get(api.posts.get.path, isAuthenticated, async (req, res) => {
     try {
       const post = await storage.getPost(Number(req.params.id));
@@ -611,7 +518,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Like Post ─────────────────────────────────────────────────────────────
   app.post(api.posts.like.path, isAuthenticated, async (req, res) => {
     try {
       const postId = Number(req.params.id);
@@ -633,7 +539,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Comment on Post ───────────────────────────────────────────────────────
   app.post(api.posts.comment.path, isAuthenticated, async (req, res) => {
     try {
       const postId = Number(req.params.id);
@@ -647,7 +552,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Comment by path /api/posts/:id/comments ──────────────────────────────
   app.post("/api/posts/:id/comments", isAuthenticated, async (req, res) => {
     try {
       const postId = Number(req.params.id);
@@ -669,7 +573,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Get Comments ──────────────────────────────────────────────────────────
   app.get("/api/posts/:id/comments", isAuthenticated, async (req, res) => {
     try {
       const postId = Number(req.params.id);
@@ -684,7 +587,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Delete Post ───────────────────────────────────────────────────────────
   app.delete("/api/posts/:id", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -697,7 +599,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Save / Unsave Post ────────────────────────────────────────────────────
   app.post("/api/posts/:id/save", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -716,51 +617,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Report Post ───────────────────────────────────────────────────────────
   app.post("/api/posts/:id/report", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.session as any).userId;
       const postId = Number(req.params.id);
       const { reason } = req.body;
-      
-      // Insert report
-      await db.insert(reports).values({ 
-        reportedPostId: postId, 
-        reporterId: userId, 
-        reason: reason || "Inappropriate Content" 
-      });
-
-      // Get post details
+      await db.insert(reports).values({ reportedPostId: postId, reporterId: userId, reason: reason || "Inappropriate Content" });
       const post = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
       if (post.length === 0) return res.status(404).json({ message: "Post not found" });
-
       const postAuthorId = post[0].userId;
-
-      // Create 2-hour block (auto block the author's posts from showing to this viewer)
-      const blockUntil = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours from now
+      const blockUntil = new Date(Date.now() + 2 * 60 * 60 * 1000);
       await db.insert(pendingBlocks).values({
-        postId: postId,
-        reportedUserId: postAuthorId,
-        blockedUserId: userId,
-        reason: reason || "Reported content",
-        blockUntil: blockUntil
+        postId, reportedUserId: postAuthorId, blockedUserId: userId,
+        reason: reason || "Reported content", blockUntil,
       });
-
-      // Create notification for reporter (optional success notification)
       await db.insert(notifications).values({
-        userId: userId,
-        type: "report_submitted",
+        userId, type: "report_submitted",
         message: "Your report has been submitted. This user's content will be blocked for 2 hours.",
         createdAt: new Date(),
       });
-
-      res.json({ success: true, blockUntil: blockUntil });
+      res.json({ success: true, blockUntil });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  // ── View Count ────────────────────────────────────────────────────────────
   app.post("/api/posts/:id/view", isAuthenticated, async (req, res) => {
     try {
       const postId = Number(req.params.id);
@@ -804,21 +685,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/users", isAuthenticated, async (req, res) => {
-  try {
-    const allUsers = await db.select().from(users);
-    const me = (req.session as any).userId;
-    res.json(allUsers.filter(u => u.id !== me).map(u => ({
-      id: u.id,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      username: u.username,
-      profileImageUrl: u.profileImageUrl,
-      bio: (u as any).bio,
-    })));
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
+    try {
+      const allUsers = await db.select().from(users);
+      const me = (req.session as any).userId;
+      res.json(allUsers.filter(u => u.id !== me).map(u => ({
+        id: u.id, firstName: u.firstName, lastName: u.lastName,
+        username: u.username, profileImageUrl: u.profileImageUrl, bio: (u as any).bio,
+      })));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   app.get("/api/users/search", isAuthenticated, async (req, res) => {
     try {
@@ -829,22 +706,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         !q || (u.firstName + " " + u.lastName).toLowerCase().includes(q) || (u.username || "").toLowerCase().includes(q)
       ));
       res.json(filtered.map(u => ({
-        id: u.id,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        username: u.username,
-  profileImageUrl: u.profileImageUrl,
-  bio: (u as any).bio,
-})));
-} catch (err: any) {
+        id: u.id, firstName: u.firstName, lastName: u.lastName,
+        username: u.username, profileImageUrl: u.profileImageUrl, bio: (u as any).bio,
+      })));
+    } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
+
   app.get("/api/users/:id", isAuthenticated, async (req, res) => {
     try {
-      console.log("[users/:id] Looking for:", req.params.id); //
       const user = await authStorage.getUser(String(req.params.id));
-      console.log("[users/:id] Found:", user ? "yes" : "no"); //
       if (!user) return res.status(404).json({ message: "User not found" });
       const { password: _, ...safeUser } = user as any;
       const followersRow = await db.execute(sql`SELECT COUNT(*) AS cnt FROM follows WHERE following_id = ${req.params.id}`);
@@ -859,7 +731,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Get Profile ───────────────────────────────────────────────────────────
   app.get("/api/profile", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -872,7 +743,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Profile Update ────────────────────────────────────────────────────────
   app.patch("/api/profile", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -1038,61 +908,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(msgs);
   });
 
- // ═══════════════════════════════════════════════════════════════════
-// REPLACE the entire POST /api/direct-chats/:id/messages route
-// in your server/routes.ts with this:
-// ═══════════════════════════════════════════════════════════════════
+  app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
+    const userId = (req.session as any).userId;
+    const chatId = Number(req.params.id);
+    const { content, type, mediaUrl, metadata, replyToId, expiresInSeconds } = req.body;
+    const expiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : undefined;
 
-app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
-  const userId = (req.session as any).userId;
-  const chatId = Number(req.params.id);
-  const { content, type, mediaUrl, metadata, replyToId, expiresInSeconds } = req.body;
-  const expiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : undefined;
+    const msg = await storage.sendDirectMessage({
+      chatId, senderId: userId, content,
+      type: type || "text", mediaUrl, metadata, replyToId,
+      ...(expiresAt ? { expiresAt } : {}),
+    });
 
-  const msg = await storage.sendDirectMessage({
-    chatId,
-    senderId: userId,
-    content,
-    type: type || "text",
-    mediaUrl,
-    metadata,
-    replyToId,
-    ...(expiresAt ? { expiresAt } : {}),
-  });
+    res.status(201).json(msg);
 
-  // ✅ FIX: Pehle response bhejo — notification/WS ko wait mat karao
-  res.status(201).json(msg);
-
-  // Background mein notification + WebSocket (response already sent)
-  try {
-    const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
-    const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
-    if (chatRow) {
-      const recipientId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
-      const sender = await authStorage.getUser(userId);
-      const preview = (content ?? "").slice(0, 50);
-
-      // Notification
-      await db.execute(sql`
-        INSERT INTO notifications (user_id, from_user_id, type, message)
-        VALUES (${recipientId}, ${userId}, 'message',
-        ${`${sender?.firstName ?? "Someone"} sent you a message${preview ? `: "${preview}"` : ""}`})
-      `);
-
-      // WebSocket broadcast
-      const receiverWs = wsClients.get(String(recipientId));
-      if (receiverWs && receiverWs.readyState === 1) {
-        receiverWs.send(JSON.stringify({
-          type: "new_message",
-          chatId,
-          message: msg,
-        }));
+    try {
+      const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
+      const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
+      if (chatRow) {
+        const recipientId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
+        const sender = await authStorage.getUser(userId);
+        const preview = (content ?? "").slice(0, 50);
+        await db.execute(sql`
+          INSERT INTO notifications (user_id, from_user_id, type, message)
+          VALUES (${recipientId}, ${userId}, 'message',
+          ${`${sender?.firstName ?? "Someone"} sent you a message${preview ? `: "${preview}"` : ""}`})
+        `);
+        const receiverWs = wsClients.get(String(recipientId));
+        if (receiverWs && receiverWs.readyState === 1) {
+          receiverWs.send(JSON.stringify({ type: "new_message", chatId, message: msg }));
+        }
       }
+    } catch (e) {
+      console.error("[direct-chat message] background error:", e);
     }
-  } catch (e) {
-    console.error("[direct-chat message] background error:", e);
-  }
-});
+  });
 
   app.patch("/api/direct-chats/:id/read", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
@@ -1113,33 +963,130 @@ app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => 
     res.json(msg);
   });
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ✅ FIX 1: Single message delete — res.json() sirf ek baar
+  // Cloudinary se bhi media delete hoga
+  // ══════════════════════════════════════════════════════════════════════════
   app.delete("/api/messages/:id", isAuthenticated, async (req, res) => {
-  const userId = (req.session as any).userId;
-  const messageId = Number(req.params.id);
+    const userId = (req.session as any).userId;
+    const messageId = Number(req.params.id);
 
-  // Get message before deleting (to find chatId + other user)
-  const msgRows = await db.execute(sql`SELECT * FROM direct_messages WHERE id = ${messageId} LIMIT 1`);
-  const msgRow = ((msgRows as any).rows ?? msgRows as any)[0];
+    try {
+      // Message fetch karo (chatId + mediaUrl ke liye)
+      const msgRows = await db.execute(
+        sql`SELECT * FROM direct_messages WHERE id = ${messageId} LIMIT 1`
+      );
+      const msgRow = ((msgRows as any).rows ?? msgRows as any)[0];
 
-  await storage.deleteMessage(messageId);
-res.json({ success: true, id: messageId });
+      if (!msgRow) {
+        return res.status(404).json({ message: "Message not found" });
+      }
 
-  // WebSocket: broadcast delete to both users
-  if (msgRow) {
-    const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${msgRow.chat_id} LIMIT 1`);
-    const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
-    if (chatRow) {
-      const otherUserId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
-      [wsClients.get(String(userId)), wsClients.get(String(otherUserId))].forEach(ws => {
-        if (ws && ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: "delete_message", messageId, chatId: msgRow.chat_id }));
+      // Cloudinary se media delete karo (agar image/video hai)
+      if (msgRow.media_url && msgRow.type !== "text" && msgRow.type !== "voice") {
+        deleteFromCloudinary(msgRow.media_url).catch(err =>
+          console.error("[delete message] Cloudinary cleanup error:", err)
+        );
+      }
+
+      // DB se delete karo
+      await storage.deleteMessage(messageId);
+
+      // ✅ SIRF EK BAAR res.json() — yahi bug tha
+      res.json({ success: true, id: messageId });
+
+      // Background: WebSocket broadcast (response already sent hai)
+      try {
+        const chatRows = await db.execute(
+          sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${msgRow.chat_id} LIMIT 1`
+        );
+        const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
+        if (chatRow) {
+          const otherUserId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
+          [wsClients.get(String(userId)), wsClients.get(String(otherUserId))].forEach(ws => {
+            if (ws && ws.readyState === 1) {
+              ws.send(JSON.stringify({
+                type: "delete_message",
+                messageId,
+                chatId: msgRow.chat_id,
+              }));
+            }
+          });
         }
-      });
-    }
-  }
+      } catch (wsErr) {
+        console.error("[delete message] WebSocket error:", wsErr);
+      }
 
-  res.json({ ok: true });
-});
+    } catch (err: any) {
+      console.error("[delete message] Error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: err.message || "Delete failed" });
+      }
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ✅ FIX 2: Clear all chat — naya route (pehle exist nahi tha)
+  // Cloudinary se saari media bhi delete hogi
+  // ══════════════════════════════════════════════════════════════════════════
+  app.delete("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
+    const userId = (req.session as any).userId;
+    const chatId = Number(req.params.id);
+
+    try {
+      // Verify: current user is part of this chat
+      const chatRows = await db.execute(
+        sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId} LIMIT 1`
+      );
+      const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
+
+      if (!chatRow) {
+        return res.status(404).json({ message: "Chat not found" });
+      }
+
+      if (chatRow.user1_id !== userId && chatRow.user2_id !== userId) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      // Saare media files fetch karo Cloudinary cleanup ke liye
+      const allMsgs = await db.execute(
+        sql`SELECT media_url, type FROM direct_messages WHERE chat_id = ${chatId} AND media_url IS NOT NULL`
+      );
+      const mediaRows = ((allMsgs as any).rows ?? allMsgs as any);
+
+      // Cloudinary se saari media delete karo (background mein)
+      mediaRows
+        .filter((m: any) => m.media_url && m.type !== "text" && m.type !== "voice")
+        .forEach((m: any) => {
+          deleteFromCloudinary(m.media_url).catch(err =>
+            console.error("[clear chat] Cloudinary cleanup error:", err)
+          );
+        });
+
+      // DB se saare messages delete karo
+      await db.execute(sql`DELETE FROM direct_messages WHERE chat_id = ${chatId}`);
+
+      res.json({ success: true, chatId });
+
+      // WebSocket: dono users ko batao
+      try {
+        const otherUserId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
+        [wsClients.get(String(userId)), wsClients.get(String(otherUserId))].forEach(ws => {
+          if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({ type: "clear_chat", chatId }));
+          }
+        });
+      } catch (wsErr) {
+        console.error("[clear chat] WebSocket error:", wsErr);
+      }
+
+    } catch (err: any) {
+      console.error("[clear chat] Error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: err.message || "Clear failed" });
+      }
+    }
+  });
 
   app.post("/api/direct-chats/:id/typing", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
@@ -1230,14 +1177,14 @@ res.json({ success: true, id: messageId });
   });
 
   app.get("/api/ads/:placement", isAuthenticated, async (req, res) => {
-  try {
-    const placement = req.params.placement as string;
-    const adsList = await storage.getAdsByPlacement(placement);
-    res.json(adsList);
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
+    try {
+      const placement = req.params.placement as string;
+      const adsList = await storage.getAdsByPlacement(placement);
+      res.json(adsList);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   // ══════════════════════════════════════════════════════════════════════════
   // AI / GEMINI ROUTES
@@ -1276,4 +1223,4 @@ res.json({ success: true, id: messageId });
   });
 
   return httpServer;
- }
+}

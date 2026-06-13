@@ -1,6 +1,7 @@
 import express from 'express';
 import { db } from '../db';
 import { messages, users } from '../../shared/schema';
+import { directMessages } from '../../shared/models/chat';
 import { eq, or, and, desc } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth';
 import { canSendDM } from '../middleware/privacy';
@@ -146,8 +147,8 @@ router.delete('/:messageId', authMiddleware, async (req, res) => {
 
     // Only allow sender to delete their own messages
     const [message] = await db.select()
-      .from(messages)
-      .where(eq(messages.id, messageId))
+      .from(directMessages)
+      .where(eq(directMessages.id, messageId))
       .limit(1);
 
     if (!message) {
@@ -158,7 +159,7 @@ router.delete('/:messageId', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Can only delete your own messages' });
     }
 
-    await db.delete(messages).where(eq(messages.id, messageId));
+    await db.delete(directMessages).where(eq(directMessages.id, messageId));
 
     res.json({ message: 'Message deleted successfully' });
   } catch (error) {
