@@ -558,7 +558,7 @@ const matchesUserGoal = (post: any) => {
           </div>
         </div>
 
-      {/* ── MAIN FEED ── */}
+        {/* ── MAIN FEED ── */}
         <div className="mt-1">
           {isLoading ? (
             Array(3).fill(0).map((_, i) => (
@@ -581,6 +581,7 @@ const matchesUserGoal = (post: any) => {
           ) : (
             posts?.filter((post) => {
               if (!matchesUserGoal(post)) return false;
+
               if (activeCategory === "All") return true;
               if (activeCategory === "Trending") return (post.likesCount ?? 0) >= 0;
               if (activeCategory === "Reels") return post.type === "reel" || post.type === "video";
@@ -594,31 +595,47 @@ const matchesUserGoal = (post: any) => {
             }).map((post, index) => {
               const isVideo = isVideoPost(post);
               const isPhoto = isPhotoPost(post);
+              // YouTube-style sizing: Videos are landscape (16:9), Photos are portrait (3:4)
               const aspectClass = isVideo ? "aspect-video" : "aspect-[3/4]";
               return (
                 <div key={post.id} className="mb-1 group cursor-pointer rounded-3xl overflow-hidden border border-white/5">
+                  {/* Thumbnail / media */}
                   <div className={`relative w-full ${aspectClass} bg-zinc-900 overflow-hidden rounded-3xl border border-white/5`}>
-                    <div className="absolute inset-0 flex items-center justify-center"
-                      style={{ background: `linear-gradient(135deg, hsl(${(post.id * 47) % 360}, 40%, 14%), hsl(${(post.id * 47 + 120) % 360}, 50%, 20%))` }}>
-                      {isPhoto ? <Image className="w-12 h-12 text-white/15" /> : <Film className="w-12 h-12 text-white/15" />}
+                    {/* Background gradient */}
+                    <div
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{ background: `linear-gradient(135deg, hsl(${(post.id * 47) % 360}, 40%, 14%), hsl(${(post.id * 47 + 120) % 360}, 50%, 20%))` }}
+                    >
+                      {isPhoto
+                        ? <Image className="w-12 h-12 text-white/15" />
+                        : <Film className="w-12 h-12 text-white/15" />}
                     </div>
+
+                    {/* Media: real video if available, else thumbnail */}
                     {isVideo && (post as any).videoUrl ? (
-                      <VideoPlayer
-                        src={(post as any).videoUrl}
-                        poster={post.imageUrl && !post.imageUrl.startsWith("blob:") ? post.imageUrl : undefined}
-                        loop
-                        songTitle={(post as any).songTitle}
-                        songArtist={(post as any).songArtist}
-                        songColor={(post as any).songColor}
-                        className="absolute inset-0 w-full h-full"
-                        precacheSrc={posts?.filter(p => p.type === "video" && (p as any).videoUrl)?.[posts?.filter(p => p.type === "video" && (p as any).videoUrl).indexOf(post) + 1]?.videoUrl ?? null}
-                      />
+                     <VideoPlayer
+                      src={(post as any).videoUrl}
+                      poster={post.imageUrl && !post.imageUrl.startsWith("blob:") ? post.imageUrl : undefined}
+                     loop
+                     songTitle={(post as any).songTitle}
+                     songArtist={(post as any).songArtist}
+                     songColor={(post as any).songColor}
+                     className="absolute inset-0 w-full h-full"
+                     // Ye add karo:
+                     precacheSrc={posts?.filter(p => p.type === "video" && (p as any).videoUrl)?.[
+                     posts?.filter(p => p.type === "video" && (p as any).videoUrl).indexOf(post) + 1
+                     ]?.videoUrl ?? null}
+                    />
                     ) : post.imageUrl && !post.imageUrl.startsWith("blob:") ? (
-                      <img src={post.imageUrl} alt=""
+                      <img
+                        src={post.imageUrl}
+                        alt=""
                         className={`absolute inset-0 w-full h-full ${isPhoto ? "object-contain" : "object-cover"} group-hover:scale-[1.02] transition-transform duration-300`}
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
                     ) : null}
+
+                    {/* Video with no file: show play overlay on thumbnail */}
                     {isVideo && !(post as any).videoUrl && (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm">
@@ -626,34 +643,54 @@ const matchesUserGoal = (post: any) => {
                         </div>
                       </div>
                     )}
+
+                    {/* Photo: no play button, but show full image */}
                     {isPhoto && post.imageUrl && !post.imageUrl.startsWith("blob:") && (
                       <div className="absolute bottom-2 left-2 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
                         <Image className="w-2.5 h-2.5" /> Photo
                       </div>
                     )}
+
+                    {/* LIVE badge */}
                     {post.type === "live" && (
                       <div className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded flex items-center gap-1">
                         <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE
                       </div>
                     )}
+
+                    {/* Reel badge */}
                     {post.type === "reel" && (
                       <div className="absolute top-2 left-2 flex items-center gap-0.5 bg-black/60 text-pink-400 text-[8px] font-black px-1.5 py-0.5 rounded-md">
                         <Play className="w-2 h-2 fill-current" /> REEL
                       </div>
                     )}
                   </div>
+
+                  {/* Info row */}
                   <div className="flex gap-3 px-3 py-3">
-                    <button className="shrink-0" onClick={() => navigate(`/profile/${post.userId}`)} data-testid={`avatar-user-${post.userId}`}>
+                    <button
+                      className="shrink-0"
+                      onClick={() => navigate(`/profile/${post.userId}`)}
+                      data-testid={`avatar-user-${post.userId}`}
+                    >
                       <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-800">
-                        <img src={post.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user?.firstName}`} className="w-full h-full object-cover" />
+                        <img
+                          src={post.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user?.firstName}`}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                     </button>
+
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-white leading-snug line-clamp-2 mb-1">
                         {post.caption || `${post.user?.firstName}'s ${post.type === "live" ? "Live Stream" : post.type === "reel" ? "Reel" : post.type === "story" ? "Story" : "Post"}`}
                       </p>
                       <div className="flex items-center gap-1 text-[11px] text-zinc-500">
-                        <button className="flex items-center gap-1 hover:text-white transition-colors" onClick={() => navigate(`/profile/${post.userId}`)} data-testid={`link-user-${post.userId}`}>
+                        <button
+                          className="flex items-center gap-1 hover:text-white transition-colors"
+                          onClick={() => navigate(`/profile/${post.userId}`)}
+                          data-testid={`link-user-${post.userId}`}
+                        >
                           @{(post.user as any)?.username || post.user?.firstName?.toLowerCase()}
                           {post.user?.isCelebrity && <CheckCircle2 className="w-3 h-3 text-blue-400 fill-blue-400" />}
                         </button>
@@ -662,30 +699,47 @@ const matchesUserGoal = (post: any) => {
                         <span>·</span>
                         <span>{formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}</span>
                       </div>
+
+                      {/* Actions */}
                       <div className="flex items-center gap-3 mt-2">
-                        <button data-testid={`button-like-${post.id}`} onClick={() => likeMutation.mutate(post.id)}
-                          className={`flex items-center gap-1 text-[11px] font-semibold transition-colors ${post.hasLiked ? "text-red-400" : "text-zinc-500 hover:text-white"}`}>
+                        <button
+                          data-testid={`button-like-${post.id}`}
+                          onClick={() => likeMutation.mutate(post.id)}
+                          className={`flex items-center gap-1 text-[11px] font-semibold transition-colors ${post.hasLiked ? "text-red-400" : "text-zinc-500 hover:text-white"}`}
+                        >
                           <ThumbsUp className={`w-3.5 h-3.5 ${post.hasLiked ? "fill-current" : ""}`} />
                           {post.likesCount > 0 ? post.likesCount : "Like"}
                         </button>
-                        <button data-testid={`button-comment-${post.id}`} onClick={() => setOpenCommentPostId(post.id)}
-                          className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-white transition-colors">
+                        <button
+                          data-testid={`button-comment-${post.id}`}
+                          onClick={() => setOpenCommentPostId(post.id)}
+                          className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-white transition-colors"
+                        >
                           <MessageSquare className="w-3.5 h-3.5" />
                           {post.commentsCount > 0 ? post.commentsCount : "Comment"}
                         </button>
-                        <button data-testid={`button-share-${post.id}`} onClick={() => sharePost(post)}
-                          className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-white transition-colors">
+                        <button
+                          data-testid={`button-share-${post.id}`}
+                          onClick={() => sharePost(post)}
+                          className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-white transition-colors"
+                        >
                           <Share2 className="w-3.5 h-3.5" />
                           Share
                         </button>
                       </div>
                     </div>
-                    <button data-testid={`button-post-menu-${post.id}`} onClick={() => setActionMenuPost(post)}
-                      className="shrink-0 text-zinc-600 hover:text-white transition-colors self-start mt-0.5 w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10">
+
+                    <button
+                      data-testid={`button-post-menu-${post.id}`}
+                      onClick={() => setActionMenuPost(post)}
+                      className="shrink-0 text-zinc-600 hover:text-white transition-colors self-start mt-0.5 w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10"
+                    >
                       <MoreVertical className="w-4 h-4" />
                     </button>
                   </div>
+
                   <div className="h-px bg-white/5 mx-3" />
+
                   {index === 1 && (
                     <div className="mx-3 my-2">
                       <BannerAd placement="feed" />
@@ -696,3 +750,50 @@ const matchesUserGoal = (post: any) => {
             })
           )}
         </div>
+      </main>
+
+      <BottomNav />
+
+      {/* Comments Drawer */}
+      {openCommentPostId !== null && (
+        <CommentsDrawer
+          postId={openCommentPostId}
+          open={openCommentPostId !== null}
+          onClose={() => setOpenCommentPostId(null)}
+        />
+      )}
+
+      {/* Post Action Menu */}
+      {actionMenuPost && (
+        <PostActionMenu
+          post={actionMenuPost}
+          isOwner={actionMenuPost.userId === user?.id}
+          onClose={() => setActionMenuPost(null)}
+        />
+      )}
+
+      {/* Live Stream Viewer */}
+      {livePost && (
+        <LiveStreamViewer post={livePost} onClose={() => setLivePost(null)} />
+      )}
+
+      {/* Post Viewer Modal */}
+      {viewingPost && (
+        <PostViewerModal
+          post={viewingPost}
+          onClose={() => setViewingPost(null)}
+          allPosts={posts?.filter(p => p.type === viewingPost.type) ?? []}
+        />
+      )}
+
+      {/* Story Viewer */}
+      {viewingStoryIdx !== null && (
+        <StoryViewer
+          stories={(posts?.filter(p => p.type === "story") ?? []) as any}
+          initialIndex={viewingStoryIdx}
+          onClose={() => setViewingStoryIdx(null)}
+        />
+      )}
+    </div>
+  );
+}
