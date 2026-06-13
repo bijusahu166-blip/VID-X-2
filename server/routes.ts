@@ -1122,6 +1122,7 @@ app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => 
   const msgRow = ((msgRows as any).rows ?? msgRows as any)[0];
 
   await storage.deleteMessage(messageId);
+res.json({ success: true, id: messageId });
 
   // WebSocket: broadcast delete to both users
   if (msgRow) {
