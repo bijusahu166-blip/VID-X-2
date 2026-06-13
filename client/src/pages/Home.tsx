@@ -560,13 +560,19 @@ const matchesUserGoal = (post: any) => {
 
         {/* ── MAIN FEED ── */}
         <div className="mt-1">
-          {posts?.length === 0 ? (
+        {isLoading ? (
+  Array(3).fill(0).map((_, i) => (
+    <div key={i} className="mb-4">
+      <Skeleton className="w-full h-52 rounded-none" />
+    </div>
+  ))
+) : posts?.length === 0 ? (
   <div className="text-center py-20 text-zinc-600">
     <Play className="w-12 h-12 mx-auto mb-3 opacity-20" />
     <p className="text-sm">No posts yet. Be the first!</p>
   </div>
 ) : (
-          
+            
             <div className="text-center py-20 text-zinc-600">
               <Play className="w-12 h-12 mx-auto mb-3 opacity-20" />
               <p className="text-sm">No posts yet. Be the first!</p>
