@@ -272,6 +272,8 @@ function OtherUserProfile({ userId }: { userId: string }) {
               >
                 {post.imageUrl && !post.imageUrl.startsWith("blob:") ? (
                   <img src={post.imageUrl} alt="" className="w-full h-full object-cover group-active:opacity-80 transition-opacity" />
+                  ) : (post as any).videoUrl ? (
+  <video src={(post as any).videoUrl} className="w-full h-full object-cover" muted />
                 ) : (
                   <div
                     className="w-full h-full flex items-center justify-center p-2"
