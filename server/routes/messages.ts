@@ -155,10 +155,6 @@ router.delete('/:messageId', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Message not found' });
     }
 
-    if (message.senderId !== userId) {
-      return res.status(403).json({ error: 'Can only delete your own messages' });
-    }
-
     await db.delete(directMessages).where(eq(directMessages.id, messageId));
 
     res.json({ message: 'Message deleted successfully' });
