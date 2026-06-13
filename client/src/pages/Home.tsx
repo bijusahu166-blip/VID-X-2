@@ -560,7 +560,7 @@ const matchesUserGoal = (post: any) => {
 
         {/* ── MAIN FEED ── */}
         <div className="mt-1">
-        {isLoading ? (
+     {isLoading ? (
   Array(3).fill(0).map((_, i) => (
     <div key={i} className="mb-4">
       <Skeleton className="w-full h-52 rounded-none" />
@@ -572,26 +572,20 @@ const matchesUserGoal = (post: any) => {
     <p className="text-sm">No posts yet. Be the first!</p>
   </div>
 ) : (
-            
-            <div className="text-center py-20 text-zinc-600">
-              <Play className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p className="text-sm">No posts yet. Be the first!</p>
-            </div>
-          ) : (
-            posts?.filter((post) => {
-              if (!matchesUserGoal(post)) return false;
-
-              if (activeCategory === "All") return true;
-              if (activeCategory === "Trending") return (post.likesCount ?? 0) >= 0;
-              if (activeCategory === "Reels") return post.type === "reel" || post.type === "video";
-              if (activeCategory === "Music") return post.caption?.toLowerCase().includes("music") || post.caption?.toLowerCase().includes("song");
-              if (activeCategory === "Gaming") return post.caption?.toLowerCase().includes("gaming") || post.caption?.toLowerCase().includes("game");
-              if (activeCategory === "Food") return post.caption?.toLowerCase().includes("food") || post.caption?.toLowerCase().includes("eat");
-              if (activeCategory === "Travel") return post.caption?.toLowerCase().includes("travel") || post.caption?.toLowerCase().includes("trip");
-              if (activeCategory === "Tech") return post.caption?.toLowerCase().includes("tech") || post.caption?.toLowerCase().includes("code");
-              if (activeCategory === "World") return post.type === "post";
-              return true;
-            }).map((post, index) => {
+  posts?.filter((post) => {
+    if (!matchesUserGoal(post)) return false;
+    if (activeCategory === "All") return true;
+    if (activeCategory === "Trending") return (post.likesCount ?? 0) >= 0;
+    if (activeCategory === "Reels") return post.type === "reel" || post.type === "video";
+    if (activeCategory === "Music") return post.caption?.toLowerCase().includes("music");
+    if (activeCategory === "Gaming") return post.caption?.toLowerCase().includes("gaming");
+    if (activeCategory === "Food") return post.caption?.toLowerCase().includes("food");
+    if (activeCategory === "Travel") return post.caption?.toLowerCase().includes("travel");
+    if (activeCategory === "Tech") return post.caption?.toLowerCase().includes("tech");
+    if (activeCategory === "World") return post.type === "post";
+    return true;
+  }).map((post, index) => (
+)}
               const isVideo = isVideoPost(post);
               const isPhoto = isPhotoPost(post);
               // YouTube-style sizing: Videos are landscape (16:9), Photos are portrait (3:4)
