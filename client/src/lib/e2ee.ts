@@ -25,7 +25,7 @@ async function deriveKey(userId1: string, userId2: string): Promise<CryptoKey> {
   // Derive AES-256-GCM key
   const salt = encoder.encode(`litlink:${cacheKey}:salt`);
   const key = await crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt, iterations: 100_000, hash: "SHA-256" },
+    { name: "PBKDF2", salt, iterations: 1_000, hash: "SHA-256" },
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     false,
