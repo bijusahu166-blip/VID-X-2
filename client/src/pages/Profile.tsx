@@ -541,6 +541,49 @@ export default function Profile() {
 
                       {/* Section: How you use LITLink */}
                       <div>
+                        {/* Section: Notifications */}
+<div>
+  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">🔔 Notifications</p>
+  <div className="grid grid-cols-3 gap-2">
+    {[
+      { icon: Zap, label: "Push Alerts", color: "#fbbf24", panel: "PushAlerts" },
+      { icon: MessageSquare, label: "DM Alerts", color: "#34d399", panel: "DMAlerts" },
+      { icon: Heart, label: "Like Alerts", color: "#f472b6", panel: "LikeAlerts" },
+    ].map((s) => (
+      <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
+        className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+          <s.icon className="w-6 h-6" style={{ color: s.color }} />
+        </div>
+        <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
+      </button>
+    ))}
+  </div>
+</div>
+
+{/* Section: Account */}
+<div>
+  
+  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">⚙️ Account</p>
+  <div className="grid grid-cols-3 gap-2">
+    {[
+      { icon: KeyRound, label: "Password", color: "#60a5fa", panel: "ChangePassword" },
+      { icon: AtSign, label: "Email", color: "#a78bfa", panel: "ChangeEmail" },
+      { icon: Shield, label: "2FA", color: "#34d399", panel: "TwoFactor" },
+      { icon: Activity, label: "Sessions", color: "#fb923c", panel: "ActiveSessions" },
+      { icon: Cpu, label: "Data & Storage", color: "#f472b6", panel: "DataStorage" },
+      { icon: UserX, label: "Delete Account", color: "#f87171", panel: "DeleteAccount" },
+    ].map((s) => (
+      <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
+        className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+          <s.icon className="w-6 h-6" style={{ color: s.color }} />
+        </div>
+        <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
+      </button>
+    ))}
+  </div>
+</div>
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">How you use LITLink</p>
                         <div className="grid grid-cols-3 gap-2">
                           {[
@@ -566,7 +609,6 @@ export default function Profile() {
                           {[
                             { icon: Wrench,      label: "ProTools Hub",  color: "#f59e0b", panel: "ProTools Hub" },
                             { icon: Wallet,      label: "AdPay Center",  color: "#34d399", panel: "AdPay Center" },
-                            { icon: ShieldCheck, label: "VerifyPlus",    color: "#818cf8", panel: "VerifyPlus", sub: "Subscribed" },
                           ].map((s) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
                               className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
@@ -646,6 +688,26 @@ export default function Profile() {
                         </div>
                       </div>
                       <Separator className="my-3" />
+                      <Separator className="my-3" />
+
+<button onClick={() => window.open("https://yourapp.com/privacy", "_blank")} 
+  className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 rounded-xl transition-colors">
+  <Lock className="w-4 h-4 text-zinc-400" />
+  <span className="text-sm font-semibold">Privacy Policy</span>
+</button>
+
+<button onClick={() => window.open("mailto:support@yourapp.com")}
+  className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 rounded-xl transition-colors">
+  <MessageSquare className="w-4 h-4 text-zinc-400" />
+  <span className="text-sm font-semibold">Help & Support</span>
+</button>
+
+<Separator className="my-3" />
+
+<button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
+  <LogOut className="w-4 h-4" />
+  <span className="text-sm font-semibold">Log out</span>
+</button>
                       <button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
                         <LogOut className="w-4 h-4" />
                         <span className="text-sm font-semibold">Log out</span>
@@ -900,29 +962,120 @@ export default function Profile() {
                     </div>
                   )}
 
-                  {/* ── SUB: GENERIC (ProTools Hub, ShareSync, GhostView, FriendPulse, Sharing, AdPay Center) ── */}
-                  {["ProTools Hub", "ShareSync", "GhostView", "FriendPulse", "Sharing and reuse", "AdPay Center"].includes(settingsPanel ?? "") && (
-                    <div className="p-5 space-y-4">
-                      <div className="flex flex-col items-center gap-3 py-8 text-center text-muted-foreground">
-                        <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                          <Settings className="w-7 h-7 opacity-40" />
-                        </div>
-                        <div className="text-sm font-medium">More options coming soon</div>
-                        <div className="text-[11px] opacity-60 max-w-[200px]">This feature is being built. Check back in the next update.</div>
-                      </div>
-                    </div>
-                  )}
-
-                </ScrollAreaUI>
-              </DialogContent>
-            </Dialog>
-            )}
-
-            <Button size="icon" variant="ghost" className="w-8 h-8 rounded-full text-pink-400 hover:bg-pink-400/10">
-              <Menu className="w-4 h-4" />
-            </Button>
-          </div>
+                 {settingsPanel === "ProTools Hub" && (
+  <div className="p-5 space-y-3">
+    {[
+      { icon: BarChart3, label: "Analytics", desc: "View detailed post performance" },
+      { icon: Zap, label: "Auto Schedule", desc: "Schedule posts in advance" },
+      { icon: Target, label: "Audience Insights", desc: "Know your followers better" },
+    ].map(item => (
+      <div key={item.label} className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/30">
+        <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center">
+          <item.icon className="w-4 h-4 text-amber-400" />
         </div>
+        <div>
+          <div className="text-sm font-semibold">{item.label}</div>
+          <div className="text-[11px] text-muted-foreground">{item.desc}</div>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+
+{settingsPanel === "AdPay Center" && (
+  <div className="p-5 space-y-4">
+    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+      <div className="text-2xl font-black text-emerald-400">₹0.00</div>
+      <div className="text-[11px] text-muted-foreground mt-1">Total Earnings</div>
+    </div>
+    {[
+      { label: "Payment Method", value: "Not set" },
+      { label: "Minimum Payout", value: "₹500" },
+      { label: "Next Payout", value: "—" },
+    ].map(item => (
+      <div key={item.label} className="flex justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
+        <span className="text-sm text-muted-foreground">{item.label}</span>
+        <span className="text-sm font-bold">{item.value}</span>
+      </div>
+    ))}
+  </div>
+)}
+
+{settingsPanel === "GhostView" && (
+  <div className="p-5 space-y-4">
+    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+      <div>
+        <div className="text-sm font-semibold">Ghost Mode</div>
+        <div className="text-[11px] text-muted-foreground">Hide your online status</div>
+      </div>
+      <Switch />
+    </div>
+    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+      <div>
+        <div className="text-sm font-semibold">Hide Story Views</div>
+        <div className="text-[11px] text-muted-foreground">Others won't see you viewed</div>
+      </div>
+      <Switch />
+    </div>
+  </div>
+)}
+
+{settingsPanel === "ShareSync" && (
+  <div className="p-5 space-y-4">
+    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+      <div>
+        <div className="text-sm font-semibold">Allow Resharing</div>
+        <div className="text-[11px] text-muted-foreground">Others can share your posts</div>
+      </div>
+      <Switch defaultChecked />
+    </div>
+    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+      <div>
+        <div className="text-sm font-semibold">Cross-platform Share</div>
+        <div className="text-[11px] text-muted-foreground">Share outside VID-X</div>
+      </div>
+      <Switch defaultChecked />
+    </div>
+  </div>
+)}
+
+{settingsPanel === "FriendPulse" && (
+  <div className="p-5 space-y-3">
+    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+      <div>
+        <div className="text-sm font-semibold">Show Activity Status</div>
+        <div className="text-[11px] text-muted-foreground">Friends see when you're active</div>
+      </div>
+      <Switch defaultChecked />
+    </div>
+    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+      <div>
+        <div className="text-sm font-semibold">Activity Notifications</div>
+        <div className="text-[11px] text-muted-foreground">Get notified of friend activity</div>
+      </div>
+      <Switch defaultChecked />
+    </div>
+  </div>
+)}
+
+{"Sharing and reuse" === settingsPanel && (
+  <div className="p-5 space-y-4">
+    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+      <div>
+        <div className="text-sm font-semibold">Allow Downloads</div>
+        <div className="text-[11px] text-muted-foreground">Let others download your content</div>
+      </div>
+      <Switch />
+    </div>
+    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
+      <div>
+        <div className="text-sm font-semibold">Allow Remixing</div>
+        <div className="text-[11px] text-muted-foreground">Others can create remixes</div>
+      </div>
+      <Switch />
+    </div>
+  </div>
+)}
 
         {/* Rank badge top-center */}
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border"
