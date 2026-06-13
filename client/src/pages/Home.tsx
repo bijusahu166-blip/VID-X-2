@@ -560,27 +560,19 @@ const matchesUserGoal = (post: any) => {
 
         {/* ── MAIN FEED ── */}
         <div className="mt-1">
-          {isLoading ? (
-            Array(3).fill(0).map((_, i) => (
-              <div key={i} className="mb-4">
-                <Skeleton className="w-full h-52 rounded-none" />
-                <div className="flex gap-3 px-3 pt-3">
-                  <Skeleton className="w-10 h-10 rounded-full shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-3 w-2/3" />
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : posts?.length === 0 ? (
+          {posts?.length === 0 ? (
+  <div className="text-center py-20 text-zinc-600">
+    <Play className="w-12 h-12 mx-auto mb-3 opacity-20" />
+    <p className="text-sm">No posts yet. Be the first!</p>
+  </div>
+) : (
+          
             <div className="text-center py-20 text-zinc-600">
               <Play className="w-12 h-12 mx-auto mb-3 opacity-20" />
               <p className="text-sm">No posts yet. Be the first!</p>
             </div>
           ) : (
             posts?.filter((post) => {
-              if (post.type === "reel") return false;
               if (!matchesUserGoal(post)) return false;
 
               if (activeCategory === "All") return true;

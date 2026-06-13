@@ -15,21 +15,12 @@ async function deriveKey(userId1: string, userId2: string): Promise<CryptoKey> {
   if (keyCache.has(cacheKey)) return keyCache.get(cacheKey)!;
 
   const encoder = new TextEncoder();
+  // ✅ PBKDF2 hata do — seedha SHA-256 se key banao
   const rawMaterial = encoder.encode(`${APP_PEPPER}:${cacheKey}`);
-
-  // Import as raw key material for PBKDF2
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw", rawMaterial, { name: "PBKDF2" }, false, ["deriveKey"]
-  );
-
-  // Derive AES-256-GCM key
-  const salt = encoder.encode(`litlink:${cacheKey}:salt`);
-  const key = await crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt, iterations: 1_000, hash: "SHA-256" },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
+  const hashBuffer = await crypto.subtle.digest("SHA-256", rawMaterial);
+  
+  const key = await crypto.subtle.importKey(
+    "raw", hashBuffer, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
   );
 
   keyCache.set(cacheKey, key);

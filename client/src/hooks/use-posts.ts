@@ -23,6 +23,9 @@ export function usePosts() {
       if (!res.ok) throw new Error("Failed to fetch posts");
       return await res.json() as EnrichedPost[];
     },
+    staleTime: 30000,
+    gcTime: 60000,
+    refetchOnWindowFocus: false,
   });
 }
 
