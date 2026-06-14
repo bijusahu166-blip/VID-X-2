@@ -245,5 +245,130 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
               <Trash2 className="w-4 h-4 text-white" />
             </button>
           )}
-
+              
           <button onClick={toggleFullscreen}
+            className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center shrink-0">
+            {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
+          </button>
+          <button onClick={e => { e.stopPropagation(); onClose(); }}
+            className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center shrink-0"
+            data-testid="button-close-story">
+            <X className="w-4 h-4 text-white" />
+          </button>
+        </div>
+
+        {/* Media */}
+        <div className="absolute inset-0" onClick={handleTap}
+          onPointerDown={() => { if (!showComments) { setPaused(true); } }}
+          onPointerUp={() => { if (!showComments) { setPaused(false); } }}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}>
+          <AnimatePresence mode="wait">
+            <motion.div key={idx} className="absolute inset-0"
+              initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.15 }}>
+              {videoUrl ? (
+                <video ref={videoRef} src={videoUrl} className="w-full h-full object-cover"
+                  autoPlay playsInline loop={false} controls={false}
+                  onTimeUpdate={() => {
+                    const vid = videoRef.current;
+                    if (!vid || !vid.duration) return;
+                    setProgress(Math.min((vid.currentTime / vid.duration) * 100, 100));
+                  }}
+                  onEnded={goNext} />
+              ) : mediaUrl && !mediaUrl.startsWith("blob:") ? (
+                <img src={mediaUrl} alt={story.caption || "Story"} className="w-full h-full object-cover" draggable={false} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center"
+                  style={{ background: `linear-gradient(160deg, hsl(${(story.id * 53) % 360}, 60%, 18%), hsl(${(story.id * 53 + 140) % 360}, 50%, 10%))` }}>
+                  <p className="text-white/60 text-lg text-center px-8">{story.caption || "✨"}</p>
+                </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Caption */}
+        {story.caption && (
+          <div className="absolute bottom-28 left-0 right-0 z-20 px-5">
+            <p className="text-white text-sm drop-shadow-lg">{story.caption}</p>
+          </div>
+        )}
+
+        {/* Bottom actions */}
+        <div className="absolute bottom-0 left-0 right-0 z-20 px-5 pb-10">
+          {showComments && (
+            <div className="mb-3 flex gap-2" onClick={e => e.stopPropagation()}>
+              <input value={commentText} onChange={e => setCommentText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && commentText.trim()) commentMutation.mutate(commentText.trim()); }}
+                placeholder="Add a comment…"
+                className="flex-1 bg-white/10 backdrop-blur border border-white/20 rounded-full px-4 py-2 text-sm text-white placeholder:text-white/50 outline-none" />
+              <button onClick={() => commentText.trim() && commentMutation.mutate(commentText.trim())}
+                className="w-9 h-9 rounded-full bg-red-500 flex items-center justify-center">
+                <Send className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-4">
+            <button onClick={handleLike}
+              className={`flex items-center gap-1.5 transition-transform active:scale-90 ${liked ? "text-red-400" : "text-white/80"}`}>
+              <Heart className={`w-7 h-7 ${liked ? "fill-red-400" : ""}`} />
+            </button>
+
+            {isMyStory && (
+              <button onClick={e => { e.stopPropagation(); setShowLikers(v => !v); setShowComments(false); }}
+                className="text-white/60 text-xs">
+                {likers?.length ?? 0} likes
+              </button>
+            )}
+
+            <button onClick={e => { e.stopPropagation(); setShowComments(v => !v); setShowLikers(false); }}
+              className="flex items-center gap-1.5 text-white/80">
+              <MessageCircle className="w-6 h-6" />
+              <span className="text-xs">{storyComments?.length ?? 0}</span>
+            </button>
+
+            <button className="text-white/80">
+              <Share2 className="w-6 h-6" />
+            </button>
+
+            <div className="flex-1" />
+            <span className="text-white/50 text-xs">{idx + 1} / {stories.length}</span>
+          </div>
+
+          {showComments && storyComments && storyComments.length > 0 && (
+            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto" onClick={e => e.stopPropagation()}>
+              {storyComments.map((c: any) => (
+                <div key={c.id} className="flex gap-2 items-start">
+                  <img src={c.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.user_id}`}
+                    className="w-6 h-6 rounded-full object-cover" alt="" />
+                  <div>
+                    <span className="text-xs font-bold text-white">{c.first_name} </span>
+                    <span className="text-xs text-white/70">{c.content}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showLikers && isMyStory && likers && (
+            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <p className="text-xs font-bold text-white/60 mb-2">❤️ Liked by</p>
+              {likers.length === 0 ? (
+                <p className="text-xs text-white/40">No likes yet</p>
+              ) : likers.map((u: any) => (
+                <div key={u.id} className="flex gap-2 items-center">
+                  <img src={u.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`}
+                    className="w-6 h-6 rounded-full object-cover" alt="" />
+                  <span className="text-xs text-white">{u.first_name} {u.last_name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
