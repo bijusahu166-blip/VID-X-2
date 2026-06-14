@@ -342,7 +342,9 @@ function PostActionMenu({
 
 export default function Home() {
   const { data: postsData, isLoading } = usePosts();
-  const posts = Array.isArray(postsData) ? postsData : [];
+const posts = Array.isArray(postsData) 
+  ? postsData.filter(p => p.type !== "story") 
+  : [];
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [activeCategory, setActiveCategory] = useState("All");
@@ -351,7 +353,13 @@ export default function Home() {
   const [livePost, setLivePost] = useState<any | null>(null);
   const [viewingPost, setViewingPost] = useState<any | null>(null);
   const [viewingStoryIdx, setViewingStoryIdx] = useState<number | null>(null);
-
+const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
+  queryKey: ["/api/stories"],
+  queryFn: () => fetch("/api/stories", { credentials: "include" }).then(r => r.json()),
+  refetchInterval: 10000,
+  staleTime: 0,
+});
+const stories = storiesData ?? [];
   const { data: liveStreams = [] } = useQuery<any[]>({
     queryKey: ["/api/live/active"],
     queryFn: () => fetch("/api/live/active", { credentials: "include" }).then(r => r.json()),
@@ -506,7 +514,7 @@ const matchesUserGoal = (post: any) => {
 
             {/* Only real stories (not live) from all users */}
             {(() => {
-              const storyList = (posts?.filter(p => p.type === "story") ?? []);
+              const storyList = stories;
               if (storyList.length === 0) {
                 return REELS.map((reel) => (
                   <div key={reel.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
@@ -787,13 +795,16 @@ const matchesUserGoal = (post: any) => {
       )}
 
       {/* Story Viewer */}
-      {viewingStoryIdx !== null && (
-        <StoryViewer
-          stories={(posts?.filter(p => p.type === "story") ?? []) as any}
-          initialIndex={viewingStoryIdx}
-          onClose={() => setViewingStoryIdx(null)}
-        />
-      )}
+    {viewingStoryIdx !== null && (
+  <StoryViewer
+    stories={stories as any}
+    initialIndex={viewingStoryIdx}
+    onClose={() => {
+      setViewingStoryIdx(null);
+      refetchStories(); // ← ye add karo
+    }}
+  />
+)}
     </div>
   );
 }
