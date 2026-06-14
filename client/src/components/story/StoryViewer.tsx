@@ -103,14 +103,18 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
   // Delete mutation
  const deleteMutation = useMutation({
   mutationFn: () => fetch(`/api/stories/${story.id}`, { 
-    method: "DELETE", credentials: "include" 
+    method: "DELETE", 
+    credentials: "include" 
   }).then(r => r.json()),
   onSuccess: () => {
     qc.invalidateQueries({ queryKey: ["/api/stories"] });
-    qc.invalidateQueries({ queryKey: ["/api/posts"] });
     qc.refetchQueries({ queryKey: ["/api/stories"] });
+    qc.invalidateQueries({ queryKey: ["/api/posts"] });
     onClose();
   },
+  onError: (err) => {
+    console.error("Delete failed:", err);
+  }
 });
 
   function getTimeAgo(dateStr: string) {
