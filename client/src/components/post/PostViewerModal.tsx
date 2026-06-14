@@ -1,4 +1,4 @@
-import { X, Heart, MessageCircle, Share2, Play, ChevronLeft, ChevronRight, Bookmark, Send, Loader2, MessageSquare } from "lucide-react";
+import { X, Heart, MessageCircle, Share2, Play, ChevronLeft, ChevronRight, Bookmark, Send, Loader2, MessageSquare, Trash2 } from "lucide-react";
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -185,7 +185,15 @@ const { data: likers } = useQuery<any[]>({
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
     },
   });
+const { user } = useAuth(); // agar nahi hai toh add karo upar
 
+const deleteMutation = useMutation({
+  mutationFn: () => apiRequest("DELETE", `/api/posts/${currentPost.id}`),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+    onClose();
+  },
+});
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/posts/${currentPost.id}/save`, {}),
     onSuccess: (data: any) => {
@@ -222,6 +230,17 @@ const { data: likers } = useQuery<any[]>({
           >
             <X className="w-4 h-4 text-white" />
           </button>
+          {/* Delete button - sirf apna post */}
+{currentPost.userId === user?.id && (
+  <button
+    onClick={() => {
+      if (confirm("Delete this post?")) deleteMutation.mutate();
+    }}
+    className="w-8 h-8 rounded-full bg-red-500/80 flex items-center justify-center shrink-0"
+  >
+    <Trash2 className="w-4 h-4 text-white" />
+  </button>
+)}
           <button
             className="flex items-center gap-2 flex-1 min-w-0"
             onClick={() => { onClose(); navigate(`/profile/${currentPost.userId}`); }}

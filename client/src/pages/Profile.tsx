@@ -355,7 +355,7 @@ export default function Profile() {
     queryFn: () => apiRequest("GET", "/api/profile/xp").then((res) => res.json()),
     retry: false,
   });
-  const myPosts = posts?.filter(p => p.userId === user?.id).slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
+  const myPosts = posts?.filter(p => p.userId === user?.id && p.type !== "story").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
 

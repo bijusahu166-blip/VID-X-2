@@ -831,8 +831,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: err.message });
     }
   });
-  
-  // Post pe kisne like kiya - list
+
+  // like 
 app.get("/api/posts/:id/likes", isAuthenticated, async (req, res) => {
   try {
     const postId = Number(req.params.id);
@@ -849,7 +849,131 @@ app.get("/api/posts/:id/likes", isAuthenticated, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+// ══════════════════════════════
+// STORY ROUTES
+// ══════════════════════════════
 
+// Stories fetch (sirf 24h wali)
+app.get("/api/stories", isAuthenticated, async (req, res) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT s.*, u.first_name, u.last_name, u.username, u.profile_image_url
+      FROM stories s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.expires_at > NOW()
+      ORDER BY s.created_at DESC
+    `);
+    const rows = (result as any).rows ?? result;
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Story create
+app.post("/api/stories", isAuthenticated, async (req, res) => {
+  try {
+    const userId = (req.session as any).userId;
+    const { mediaUrl, type, caption } = req.body;
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+    const result = await db.execute(sql`
+      INSERT INTO stories (user_id, media_url, type, caption, expires_at)
+      VALUES (${userId}, ${mediaUrl}, ${type || 'image'}, ${caption || null}, ${expiresAt})
+      RETURNING *
+    `);
+    const rows = (result as any).rows ?? result;
+    res.status(201).json(rows[0]);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Story delete (sirf apni)
+app.delete("/api/stories/:id", isAuthenticated, async (req, res) => {
+  try {
+    const userId = (req.session as any).userId;
+    const storyId = Number(req.params.id);
+    await db.execute(sql`
+      DELETE FROM stories 
+      WHERE id = ${storyId} AND user_id = ${userId}
+    `);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Story like
+app.post("/api/stories/:id/like", isAuthenticated, async (req, res) => {
+  try {
+    const userId = (req.session as any).userId;
+    const storyId = Number(req.params.id);
+    const existing = await db.execute(sql`
+      SELECT id FROM story_likes 
+      WHERE story_id = ${storyId} AND user_id = ${userId}
+      LIMIT 1
+    `);
+    const rows = (existing as any).rows ?? existing;
+    if (rows.length > 0) {
+      await db.execute(sql`DELETE FROM story_likes WHERE story_id = ${storyId} AND user_id = ${userId}`);
+      return res.json({ liked: false });
+    } else {
+      await db.execute(sql`INSERT INTO story_likes (story_id, user_id) VALUES (${storyId}, ${userId})`);
+      return res.json({ liked: true });
+    }
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Story likes list
+app.get("/api/stories/:id/likes", isAuthenticated, async (req, res) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT u.id, u.first_name, u.last_name, u.username, u.profile_image_url
+      FROM story_likes sl
+      JOIN users u ON u.id = sl.user_id
+      WHERE sl.story_id = ${Number(req.params.id)}
+    `);
+    const rows = (result as any).rows ?? result;
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Story comment
+app.post("/api/stories/:id/comment", isAuthenticated, async (req, res) => {
+  try {
+    const userId = (req.session as any).userId;
+    const storyId = Number(req.params.id);
+    const { content } = req.body;
+    await db.execute(sql`
+      INSERT INTO story_comments (story_id, user_id, content)
+      VALUES (${storyId}, ${userId}, ${content})
+    `);
+    res.status(201).json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Story comments list
+app.get("/api/stories/:id/comments", isAuthenticated, async (req, res) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT sc.*, u.first_name, u.last_name, u.username, u.profile_image_url
+      FROM story_comments sc
+      JOIN users u ON u.id = sc.user_id
+      WHERE sc.story_id = ${Number(req.params.id)}
+      ORDER BY sc.created_at ASC
+    `);
+    const rows = (result as any).rows ?? result;
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
   // ══════════════════════════════════════════════════════════════════════════
   // NOTIFICATION ROUTES
