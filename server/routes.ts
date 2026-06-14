@@ -831,6 +831,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: err.message });
     }
   });
+  
+  // Post pe kisne like kiya - list
+app.get("/api/posts/:id/likes", isAuthenticated, async (req, res) => {
+  try {
+    const postId = Number(req.params.id);
+    const result = await db.execute(sql`
+      SELECT u.id, u.first_name, u.last_name, u.username, u.profile_image_url
+      FROM likes l
+      JOIN users u ON u.id = l.user_id
+      WHERE l.post_id = ${postId}
+      ORDER BY l.id DESC
+    `);
+    const rows = (result as any).rows ?? result;
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
   // ══════════════════════════════════════════════════════════════════════════
   // NOTIFICATION ROUTES

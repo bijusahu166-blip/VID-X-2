@@ -152,7 +152,13 @@ export function PostViewerModal({ post: initialPost, onClose, allPosts }: PostVi
   const [currentPost, setCurrentPost] = useState(initialPost);
   const [, navigate] = useLocation();
   const [showComments, setShowComments] = useState(false);
+const [showLikers, setShowLikers] = useState(false);
 
+const { data: likers } = useQuery<any[]>({
+  queryKey: ["/api/posts", currentPost.id, "likes"],
+  queryFn: () => fetch(`/api/posts/${currentPost.id}/likes`, { credentials: "include" }).then(r => r.json()),
+  enabled: showLikers,
+});
   const idx = allPosts?.findIndex(p => p.id === currentPost.id) ?? -1;
   const hasPrev = idx > 0;
   const hasNext = allPosts && idx < allPosts.length - 1;
@@ -284,7 +290,9 @@ export function PostViewerModal({ post: initialPost, onClose, allPosts }: PostVi
               data-testid={`button-like-${currentPost.id}`}
             >
               <Heart className={`w-5 h-5 ${liked ? "fill-red-500" : ""}`} />
-              <span className="text-xs font-bold">{likeCount}</span>
+              <button onClick={() => setShowLikers(true)} className="text-xs font-bold underline-offset-2 hover:underline">
+  {likeCount} {likeCount === 1 ? "like" : "likes"}
+</button>
             </button>
 
             {/* Comment */}
@@ -361,6 +369,49 @@ export function PostViewerModal({ post: initialPost, onClose, allPosts }: PostVi
         open={showComments}
         onClose={() => setShowComments(false)}
       />
+      {/* Likers Sheet */}
+{showLikers && (
+  <div className="fixed inset-0 z-[200] flex items-end" onClick={() => setShowLikers(false)}>
+    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+    <div className="relative w-full max-w-md mx-auto rounded-t-3xl bg-zinc-950 border-t border-zinc-800 flex flex-col" style={{ maxHeight: "60vh" }}>
+      <div className="flex justify-center pt-3 pb-2">
+        <div className="w-10 h-1 rounded-full bg-zinc-700" />
+      </div>
+      <div className="flex items-center justify-between px-4 pb-3 border-b border-zinc-800">
+        <span className="text-sm font-black text-white">
+          ❤️ Liked by {likers?.length ?? 0} people
+        </span>
+        <button onClick={() => setShowLikers(false)} className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center">
+          <X className="w-3.5 h-3.5 text-zinc-400" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {!likers?.length ? (
+          <div className="text-center py-10">
+            <Heart className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+            <p className="text-sm text-zinc-500">No likes yet</p>
+          </div>
+        ) : (
+          likers.map((u: any) => (
+            <div key={u.id} className="flex items-center gap-3">
+              <img
+                src={u.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.id}`}
+                className="w-9 h-9 rounded-full object-cover border border-white/10"
+                alt=""
+              />
+              <div>
+                <p className="text-sm font-bold text-white">
+                  {u.first_name} {u.last_name}
+                </p>
+                <p className="text-[11px] text-zinc-500">@{u.username || u.first_name?.toLowerCase()}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </AnimatePresence>
   );
 }
