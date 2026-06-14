@@ -101,15 +101,17 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
   });
 
   // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: () => fetch(`/api/stories/${story.id}`, { 
-      method: "DELETE", credentials: "include" 
-    }).then(r => r.json()),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/stories"] });
-      onClose();
-    },
-  });
+ const deleteMutation = useMutation({
+  mutationFn: () => fetch(`/api/stories/${story.id}`, { 
+    method: "DELETE", credentials: "include" 
+  }).then(r => r.json()),
+  onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["/api/stories"] });
+    qc.invalidateQueries({ queryKey: ["/api/posts"] });
+    qc.refetchQueries({ queryKey: ["/api/stories"] });
+    onClose();
+  },
+});
 
   function getTimeAgo(dateStr: string) {
     const diff = Date.now() - new Date(dateStr).getTime();

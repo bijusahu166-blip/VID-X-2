@@ -190,8 +190,9 @@ const { user } = useAuth(); // agar nahi hai toh add karo upar
 const deleteMutation = useMutation({
   mutationFn: () => apiRequest("DELETE", `/api/posts/${currentPost.id}`),
   onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
-    onClose();
+  queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+  queryClient.refetchQueries({ queryKey: ["/api/posts"] });
+  onClose();
   },
 });
   const saveMutation = useMutation({
