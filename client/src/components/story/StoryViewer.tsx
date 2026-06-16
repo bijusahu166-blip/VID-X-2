@@ -102,7 +102,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
 
   // Delete mutation
  const deleteMutation = useMutation({
-  mutationFn: () => fetch(`/api/stories/${story.id}`, { 
+  mutationFn: () => fetch(`/api/posts/${story.id}`, { 
     method: "DELETE", 
     credentials: "include" 
   }).then(r => r.json()),
