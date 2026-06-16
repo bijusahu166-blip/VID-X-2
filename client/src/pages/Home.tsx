@@ -361,6 +361,8 @@ const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
   refetchInterval: 10000,
   staleTime: 0,
 });
+const stories = storiesData ?? [];
+
   const { data: allBooks = [] } = useQuery<any[]>({
   queryKey: ["/api/books"],
   queryFn: () => fetch("/api/books", { credentials: "include" }).then(r => r.json()),
