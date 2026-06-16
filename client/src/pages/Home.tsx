@@ -355,16 +355,12 @@ const posts = Array.isArray(postsData)
   const [viewingStoryIdx, setViewingStoryIdx] = useState<number | null>(null);
 const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
   queryKey: ["/api/stories"],
-  queryFn: () => fetch("/api/stories", { credentials: "include" }).then(r => r.json()),
+  queryFn: () => fetch("/api/posts", { credentials: "include" })
+    .then(r => r.json())
+    .then(data => Array.isArray(data) ? data.filter((p: any) => p.type === "story") : []),
   refetchInterval: 10000,
   staleTime: 0,
 });
-const stories = storiesData ?? [];
-  const { data: liveStreams = [] } = useQuery<any[]>({
-    queryKey: ["/api/live/active"],
-    queryFn: () => fetch("/api/live/active", { credentials: "include" }).then(r => r.json()),
-    refetchInterval: 15000,
-  });
   const { data: allBooks = [] } = useQuery<any[]>({
   queryKey: ["/api/books"],
   queryFn: () => fetch("/api/books", { credentials: "include" }).then(r => r.json()),
