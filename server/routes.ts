@@ -1387,7 +1387,51 @@ try {
   // ══════════════════════════════════════════════════════════════════════════
   // AI / GEMINI ROUTES
   // ══════════════════════════════════════════════════════════════════════════
+app.get("/api/audio-proxy", async (req, res) => {
+    try {
+      const targetUrl = req.query.url as string;
+      if (!targetUrl) return res.status(400).json({ message: "Missing url parameter" });
 
+      const allowedHost = "www.soundhelix.com";
+      const parsed = new URL(targetUrl);
+      if (parsed.hostname !== allowedHost) {
+        return res.status(403).json({ message: "URL not allowed" });
+      }
+
+      const upstream = await fetch(targetUrl);
+      if (!upstream.ok || !upstream.body) {
+        return res.status(502).json({ message: "Failed to fetch audio source" });
+      }
+
+      res.set("Content-Type", upstream.headers.get("content-type") || "audio/mpeg");
+      res.set("Cache-Control", "public, max-age=86400");
+      if (upstream.headers.get("content-length")) {
+        res.set("Content-Length", upstream.headers.get("content-length")!);
+      }
+
+      const reader = (upstream.body as any).getReader
+        ? (upstream.body as any).getReader()
+        : null;
+
+      if (reader) {
+        const pump = async () => {
+          const { done, value } = await reader.read();
+          if (done) { res.end(); return; }
+          res.write(Buffer.from(value));
+          pump();
+        };
+        pump();
+      } else {
+        (upstream.body as any).pipe(res);
+      }
+    } catch (err: any) {
+      console.error("[audio-proxy] Error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Audio proxy failed" });
+      }
+    }
+  });
+  
   app.post("/api/translate", isAuthenticated, async (req, res) => {
     const { text, targetLang } = req.body;
     if (!text) return res.status(400).json({ message: "text required" });
