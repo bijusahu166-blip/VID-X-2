@@ -65,7 +65,6 @@ export function BottomNav() {
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
-                  <span className="text-[9px] font-semibold leading-none relative">{item.label}</span>
                 </div>
               </Link>
             );
