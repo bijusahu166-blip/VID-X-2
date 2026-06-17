@@ -327,8 +327,13 @@ export default function Reels() {
   const scrollTimeoutRef = useRef<number | null>(null);
 
   const { data: allPosts, isLoading } = useQuery<ReelPost[]>({ queryKey: ["/api/posts"] });
-  const reels = (allPosts ?? []).filter(p => p.type === "reel");
-  
+const reels = (allPosts ?? [])
+  .filter(p => p.type === "reel")
+  .sort((a, b) => {
+    const scoreA = (a.likesCount ?? 0) * 2 + (a.commentsCount ?? 0) * 3;
+    const scoreB = (b.likesCount ?? 0) * 2 + (b.commentsCount ?? 0) * 3;
+    return scoreB - scoreA;
+  });  
   const userGoal = localStorage.getItem("user_goal") || "";
   const allowedSubjects = getGoalSubjects(userGoal);
   
