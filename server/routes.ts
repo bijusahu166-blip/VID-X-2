@@ -116,7 +116,44 @@ async function uploadToCloudinary(
     stream.end(buffer);
   });
 }
+// For large video buffers (>50MB), use Cloudinary's chunked upload_large
+// instead of upload_stream — avoids 413 errors from proxies/load balancers
+// by sending the buffer to Cloudinary in 6MB chunks rather than one big request.
+async function uploadLargeVideoToCloudinary(
+  buffer: Buffer,
+  folder: string
+): Promise<{ url: string; publicId: string; format: string; bytes: number }> {
+  return new Promise((resolve, reject) => {
+    const fs = require("fs");
+    const os = require("os");
+    const path = require("path");
+    // Write buffer to a temp file — upload_large needs a file path or readable stream
+    const tempPath = path.join(os.tmpdir(), `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`);
+    fs.writeFileSync(tempPath, buffer);
 
+    cloudinary.uploader.upload_large(
+      tempPath,
+      {
+        resource_type: "video",
+        folder,
+        public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        overwrite: false,
+        chunk_size: 6 * 1024 * 1024, // 6MB chunks sent to Cloudinary
+      },
+      (error: any, result: any) => {
+        // Clean up temp file regardless of success/failure
+        try { fs.unlinkSync(tempPath); } catch {}
+        if (error) return reject(error);
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+          format: result.format,
+          bytes: result.bytes,
+        });
+      }
+    );
+  });
+}
 // --- CLOUDINARY DELETE HELPER ---
 async function deleteFromCloudinary(mediaUrl: string): Promise<void> {
   try {
@@ -202,7 +239,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No video file received. Field name: 'video'" });
       try {
-        const result = await uploadToCloudinary(req.file.buffer, "video", "vid-x/videos");
+        const result = await uploadLargeVideoToCloudinary(req.file.buffer, "vid-x/videos");
         res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
       } catch (err: any) {
         res.status(500).json({ message: `Video upload failed: ${err.message}` });
@@ -1431,7 +1468,7 @@ app.get("/api/audio-proxy", async (req, res) => {
       }
     }
   });
-  
+
   app.post("/api/translate", isAuthenticated, async (req, res) => {
     const { text, targetLang } = req.body;
     if (!text) return res.status(400).json({ message: "text required" });
