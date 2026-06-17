@@ -326,7 +326,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
- // Max video upload size: 400 MB
+
+  app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { uploadId, totalChunks, originalName } = req.body;
+      if (!uploadId || !totalChunks || !originalName)
+        return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
+      const total = Number(totalChunks);
+
+      const chunkMap = inMemoryChunks.get(uploadId);
+      if (!chunkMap) {
+        return res.status(400).json({ message: "Upload session expired or not found. Please retry the upload." });
+      }
+      for (let i = 0; i < total; i++) {
+        if (!chunkMap.has(i)) {
+          return res.status(400).json({ message: `Missing chunk ${i}. Please retry the upload.` });
+        }
+      }// Max video upload size: 400 MB
   const MAX_VIDEO_UPLOAD_BYTES = 400 * 1024 * 1024;
 
   const chunkUpload = multer({
@@ -334,8 +350,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per chunk max (client sends 1MB chunks)
   });
 
-  // In-memory chunk store — avoids Render's ephemeral/limited disk entirely.
-  const inMemoryChunks = new Map<string, Map<number, Buffer>>();
+  const chunksDir = path.join(process.cwd(), "uploads", "chunks");
+  if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
+
+  // Track byte totals + timestamps only (no buffers in memory — chunks go straight to disk)
   const uploadByteTotals = new Map<string, number>();
   const uploadTimestamps = new Map<string, number>();
   const CHUNK_TTL_MS = 30 * 60 * 1000;
@@ -344,9 +362,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = Date.now();
     for (const [id, ts] of uploadTimestamps.entries()) {
       if (now - ts > CHUNK_TTL_MS) {
-        inMemoryChunks.delete(id);
         uploadByteTotals.delete(id);
         uploadTimestamps.delete(id);
+        try {
+          const dir = path.join(chunksDir, id);
+          if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+        } catch {}
       }
     }
   }
@@ -364,7 +385,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
         const currentTotal = (uploadByteTotals.get(uploadId) ?? 0) + req.file.buffer.length;
         if (currentTotal > MAX_VIDEO_UPLOAD_BYTES) {
-          inMemoryChunks.delete(uploadId);
+          const dir = path.join(chunksDir, uploadId);
+          try { if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true }); } catch {}
           uploadByteTotals.delete(uploadId);
           uploadTimestamps.delete(uploadId);
           return res.status(413).json({ message: `Video exceeds the 400 MB upload limit.` });
@@ -372,8 +394,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         uploadByteTotals.set(uploadId, currentTotal);
         uploadTimestamps.set(uploadId, Date.now());
 
-        if (!inMemoryChunks.has(uploadId)) inMemoryChunks.set(uploadId, new Map());
-        inMemoryChunks.get(uploadId)!.set(idx, req.file.buffer);
+        // Write each chunk straight to disk — never held in memory beyond this request
+        const dir = path.join(chunksDir, uploadId);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, String(idx)), req.file.buffer);
 
         res.json({ success: true, chunkIndex: idx });
       } catch (err: any) {
@@ -388,16 +412,69 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!uploadId || !totalChunks || !originalName)
         return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
       const total = Number(totalChunks);
+      const dir = path.join(chunksDir, uploadId);
 
-      const chunkMap = inMemoryChunks.get(uploadId);
-      if (!chunkMap) {
+      if (!fs.existsSync(dir)) {
         return res.status(400).json({ message: "Upload session expired or not found. Please retry the upload." });
       }
       for (let i = 0; i < total; i++) {
-        if (!chunkMap.has(i)) {
+        if (!fs.existsSync(path.join(dir, String(i)))) {
           return res.status(400).json({ message: `Missing chunk ${i}. Please retry the upload.` });
         }
       }
+
+      // Stream chunks directly into a single file on disk — never load the whole
+      // video into memory. This keeps RAM usage flat even for 300-400MB uploads
+      // on Render's 512MB free tier.
+      const finalPath = path.join(chunksDir, `${uploadId}-final.mp4`);
+      const writeStream = fs.createWriteStream(finalPath);
+      for (let i = 0; i < total; i++) {
+        const chunkPath = path.join(dir, String(i));
+        const data = fs.readFileSync(chunkPath);
+        writeStream.write(data);
+        // Free the chunk file immediately after writing it to the final file
+        try { fs.unlinkSync(chunkPath); } catch {}
+      }
+      await new Promise<void>((resolve, reject) => {
+        writeStream.end((err: any) => err ? reject(err) : resolve());
+      });
+      try { fs.rmdirSync(dir); } catch {}
+
+      uploadByteTotals.delete(uploadId);
+      uploadTimestamps.delete(uploadId);
+
+      const stats = fs.statSync(finalPath);
+      if (stats.size > MAX_VIDEO_UPLOAD_BYTES) {
+        try { fs.unlinkSync(finalPath); } catch {}
+        return res.status(413).json({ message: `Video exceeds the 400 MB upload limit.` });
+      }
+
+      // Upload directly from disk using Cloudinary's chunked upload_large —
+      // no buffer is created, Cloudinary's SDK streams the file itself.
+      const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
+        cloudinary.uploader.upload_large(
+          finalPath,
+          {
+            resource_type: "video",
+            folder: "vid-x/videos",
+            public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            overwrite: false,
+            chunk_size: 6 * 1024 * 1024,
+          },
+          (error: any, result: any) => {
+            try { fs.unlinkSync(finalPath); } catch {}
+            if (error) return reject(error);
+            resolve({ url: result.secure_url, publicId: result.public_id });
+          }
+        );
+      });
+
+      res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
+    } catch (err: any) {
+      res.status(500).json({ message: `Finalize failed: ${err.message}` });
+    }
+  });
+  
       const buffers: Buffer[] = [];
       for (let i = 0; i < total; i++) buffers.push(chunkMap.get(i)!);
       const fullBuffer = Buffer.concat(buffers);
