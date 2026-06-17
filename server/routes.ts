@@ -289,9 +289,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  const chunkUpload = multer({ storage: multer.memoryStorage() });
-  const chunksDir = path.join(process.cwd(), "uploads", "chunks");
-  if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
+ // Max video upload size: 400 MB
+  const MAX_VIDEO_UPLOAD_BYTES = 400 * 1024 * 1024;
+
+  const chunkUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per chunk max (client sends 1MB chunks)
+  });
+
+  // In-memory chunk store — avoids Render's ephemeral/limited disk entirely.
+  const inMemoryChunks = new Map<string, Map<number, Buffer>>();
+  const uploadByteTotals = new Map<string, number>();
+  const uploadTimestamps = new Map<string, number>();
+  const CHUNK_TTL_MS = 30 * 60 * 1000;
+
+  function cleanupStaleUploads() {
+    const now = Date.now();
+    for (const [id, ts] of uploadTimestamps.entries()) {
+      if (now - ts > CHUNK_TTL_MS) {
+        inMemoryChunks.delete(id);
+        uploadByteTotals.delete(id);
+        uploadTimestamps.delete(id);
+      }
+    }
+  }
+  setInterval(cleanupStaleUploads, 5 * 60 * 1000);
 
   app.post("/api/upload/chunk", isAuthenticated, (req: any, res: any) => {
     chunkUpload.single("chunk")(req, res, async (err: any) => {
@@ -302,8 +324,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (!uploadId || chunkIndex === undefined || !totalChunks)
           return res.status(400).json({ message: "Missing uploadId, chunkIndex, or totalChunks" });
         const idx = Number(chunkIndex);
-        const chunkPath = path.join(chunksDir, `${uploadId}-${idx}`);
-        fs.writeFileSync(chunkPath, req.file.buffer);
+
+        const currentTotal = (uploadByteTotals.get(uploadId) ?? 0) + req.file.buffer.length;
+        if (currentTotal > MAX_VIDEO_UPLOAD_BYTES) {
+          inMemoryChunks.delete(uploadId);
+          uploadByteTotals.delete(uploadId);
+          uploadTimestamps.delete(uploadId);
+          return res.status(413).json({ message: `Video exceeds the 400 MB upload limit.` });
+        }
+        uploadByteTotals.set(uploadId, currentTotal);
+        uploadTimestamps.set(uploadId, Date.now());
+
+        if (!inMemoryChunks.has(uploadId)) inMemoryChunks.set(uploadId, new Map());
+        inMemoryChunks.get(uploadId)!.set(idx, req.file.buffer);
+
         res.json({ success: true, chunkIndex: idx });
       } catch (err: any) {
         res.status(500).json({ message: `Chunk save failed: ${err.message}` });
@@ -317,17 +351,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!uploadId || !totalChunks || !originalName)
         return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
       const total = Number(totalChunks);
+
+      const chunkMap = inMemoryChunks.get(uploadId);
+      if (!chunkMap) {
+        return res.status(400).json({ message: "Upload session expired or not found. Please retry the upload." });
+      }
       for (let i = 0; i < total; i++) {
-        const chunkPath = path.join(chunksDir, `${uploadId}-${i}`);
-        if (!fs.existsSync(chunkPath))
+        if (!chunkMap.has(i)) {
           return res.status(400).json({ message: `Missing chunk ${i}. Please retry the upload.` });
+        }
       }
       const buffers: Buffer[] = [];
-      for (let i = 0; i < total; i++) buffers.push(fs.readFileSync(path.join(chunksDir, `${uploadId}-${i}`)));
+      for (let i = 0; i < total; i++) buffers.push(chunkMap.get(i)!);
       const fullBuffer = Buffer.concat(buffers);
-      for (let i = 0; i < total; i++) {
-        try { fs.unlinkSync(path.join(chunksDir, `${uploadId}-${i}`)); } catch {}
+
+      inMemoryChunks.delete(uploadId);
+      uploadByteTotals.delete(uploadId);
+      uploadTimestamps.delete(uploadId);
+
+      if (fullBuffer.length > MAX_VIDEO_UPLOAD_BYTES) {
+        return res.status(413).json({ message: `Video exceeds the 400 MB upload limit.` });
       }
+
       const result = await uploadToCloudinary(fullBuffer, "video", "vid-x/videos");
       res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
     } catch (err: any) {

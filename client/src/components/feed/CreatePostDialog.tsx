@@ -523,13 +523,30 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
     setCameraMode(true);
   };
 
-  const MAX_VIDEO_SIZE_GB = 2;
-  const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_GB * 1024 * 1024 * 1024;
-
+ const MAX_VIDEO_SIZE_MB = 400;
+const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
+const MAX_VIDEO_DURATION_SECONDS = 60;
   const formatFileSize = (bytes: number) => {
     if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
     return `${(bytes / 1024).toFixed(0)} KB`;
+  };
+
+ const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(video.duration || 0);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(0); // If we can't read duration, let it pass rather than block upload
+      };
+    });
   };
 
   const handleReelVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -538,7 +555,17 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
     if (file.size > MAX_VIDEO_SIZE_BYTES) {
       toast({
         title: "Video too large",
-        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_GB} GB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB.`,
+        variant: "destructive",
+      });
+      e.target.value = "";
+      return;
+    }
+    const duration = await getVideoDuration(file);
+    if (duration > MAX_VIDEO_DURATION_SECONDS) {
+      toast({
+        title: "Video too long",
+        description: `Your video is ${Math.round(duration)}s. Maximum allowed is ${MAX_VIDEO_DURATION_SECONDS}s. Please trim it shorter.`,
         variant: "destructive",
       });
       e.target.value = "";
@@ -656,7 +683,7 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
     if (file.size > MAX_VIDEO_SIZE_BYTES) {
       toast({
         title: "Video too large",
-        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_GB} GB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
         variant: "destructive",
       });
       e.target.value = "";
@@ -769,7 +796,7 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
       if (videoFile.size > MAX_VIDEO_SIZE_BYTES) {
         toast({
           title: "Video too large",
-          description: `Your video is ${formatFileSize(videoFile.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_GB} GB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+          description: `Your video is ${formatFileSize(videoFile.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
           variant: "destructive",
         });
         return;
