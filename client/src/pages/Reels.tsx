@@ -12,7 +12,7 @@ import { toCloudinaryVideoUrl } from "@/lib/utils";
 import { getGoalSubjects } from "@/lib/goal-subjects";
 import { Share } from "@capacitor/share";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useLocation } from "wouter";
 
 interface ReelPost {
   id: number;
@@ -40,7 +40,7 @@ function ReelCard({
   onToggleSound: () => void 
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const navigate = useNavigate();
+  const [,_navigate] = useLocation();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [showComments, setShowComments] = useState(false);
