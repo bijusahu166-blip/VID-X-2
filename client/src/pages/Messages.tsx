@@ -578,6 +578,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   const [disappearing, setDisappearing] = useState(false);
   const [theme, setTheme] = useState<string>(chat.theme || "noir");
   const [decryptedContents, setDecryptedContents] = useState<Record<number, string>>({});
+  const decryptedIdsRef = useRef<Set<number>>(new Set());
   // ✅ NEW: Fullscreen viewer state
   const [fullscreenMedia, setFullscreenMedia] = useState<{ url: string; type: "image" | "video" } | null>(null);
   const voiceRec = useVoiceRecorder();
@@ -631,22 +632,26 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     }
   }, [text]);
 
-  useEffect(() => {
-    if (!messages.length || !currentUserId || !partnerId) return;
-    const decryptAll = async () => {
-      const results: Record<number, string> = {};
-      await Promise.all(messages.map(async (msg) => {
-        if (msg.type !== "text" || !msg.content) return;
-        if (isEncrypted(msg.content)) {
-          const sId = msg.senderId;
-          const rId = sId === currentUserId ? partnerId : currentUserId;
-          results[msg.id] = await decryptMessage(msg.content, sId, rId);
-        }
-      }));
-      setDecryptedContents(prev => ({ ...prev, ...results }));
-    };
-    decryptAll();
-  }, [messages, currentUserId, partnerId]);
+ useEffect(() => {
+  if (!messages.length || !currentUserId || !partnerId) return;
+  const toDecrypt = messages.filter(msg =>
+    msg.type === "text" && msg.content && isEncrypted(msg.content) && !decryptedIdsRef.current.has(msg.id)
+  );
+  if (!toDecrypt.length) return;
+
+  toDecrypt.forEach(async (msg) => {
+    const sId = msg.senderId;
+    const rId = sId === currentUserId ? partnerId : currentUserId;
+    try {
+      const plain = await decryptMessage(msg.content!, sId, rId);
+      decryptedIdsRef.current.add(msg.id);
+      setDecryptedContents(prev => ({ ...prev, [msg.id]: plain }));
+    } catch {
+      decryptedIdsRef.current.add(msg.id);
+      setDecryptedContents(prev => ({ ...prev, [msg.id]: "🔒 Unable to decrypt" }));
+    }
+  });
+}, [messages, currentUserId, partnerId]);
 
   const notifyTyping = useCallback(() => {
     apiRequest("POST", `/api/direct-chats/${chat.id}/typing`, {}).catch(() => { });
