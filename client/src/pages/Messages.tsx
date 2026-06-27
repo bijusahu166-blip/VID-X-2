@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { playSend, playReceive } from "@/lib/sounds";
 import { encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
-import { captureRejectionSymbol } from "node:stream";
+import { supabase } from "@/lib/supabase";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DirectMessage {
@@ -158,8 +158,11 @@ function useChatSocket(
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     wsRef.current = ws;
 
-    ws.onopen = () => ws.send(JSON.stringify({ type: "register", userId: currentUserId }));
-
+   ws.onopen = async () => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  ws.send(JSON.stringify({ type: "register", token }));
+};
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
@@ -319,9 +322,11 @@ function ChatList({
   pendingOpenChatId?: number | null;
 }) {
   const { user } = useAuth();
+  const currentUserId: string = (user as any)?.claims?.sub ?? (user as any)?.id ?? "";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [showNewChat, setShowNewChat] = useState(false);
+  const [decryptedPreviews, setDecryptedPreviews] = useState<Record<number, string>>({});
   const { toast } = useToast();
 
   const { data: chats = [], isLoading } = useQuery<ChatContact[]>({
@@ -351,6 +356,29 @@ function ChatList({
       if (data?.id) onOpenChat(data);
     },
   });
+
+  useEffect(() => {
+  if (!chats.length || !currentUserId) return;
+  const decryptAll = async () => {
+    const results: Record<number, string> = {};
+    await Promise.all(chats.map(async (chat) => {
+      const last = chat.lastMsg;
+      if (!last || last.type !== "text" || !last.content) return;
+      if (isEncrypted(last.content)) {
+        const partnerId = chat.otherUser?.id ?? "";
+        const sId = last.senderId;
+        const rId = sId === currentUserId ? partnerId : currentUserId;
+        try {
+          results[chat.id] = await decryptMessage(last.content, sId, rId);
+        } catch {
+          results[chat.id] = "🔒 Message";
+        }
+      }
+    }));
+    setDecryptedPreviews(prev => ({ ...prev, ...results }));
+  };
+  decryptAll();
+}, [chats, currentUserId]);
 
   useEffect(() => {
     apiRequest("POST", "/api/status/online", {}).catch(() => { });
@@ -504,12 +532,14 @@ function ChatList({
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-zinc-400 truncate leading-relaxed">
-                        {last?.type === "voice" ? "🎤 Voice message"
-                          : last?.type === "image" ? "📷 Photo"
-                          : last?.type === "video" ? "🎥 Video"
-                          : last?.type === "poll" ? "📊 Poll"
-                          : last?.content || "Start a conversation"}
-                      </p>
+  {last?.type === "voice" ? "🎤 Voice message"
+    : last?.type === "image" ? "📷 Photo"
+    : last?.type === "video" ? "🎥 Video"
+    : last?.type === "poll" ? "📊 Poll"
+    : last?.content
+      ? (decryptedPreviews[chat.id] || (isEncrypted(last.content) ? "🔒 Decrypting..." : last.content))
+      : "Start a conversation"}
+</p>
                       {chat.unread > 0 && (
                         <span className="ml-2 min-w-[20px] h-5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[11px] font-bold flex items-center justify-center px-1.5 shrink-0 shadow-sm shadow-violet-500/30">
                           {chat.unread}
@@ -733,7 +763,9 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
       return;
     }
     try {
-      const res: any = await apiRequest("POST", "/api/translate", { text: msg.content, targetLang: "English" });
+const res: any = await apiRequest("POST", "/api/translate", { 
+  text: decryptedContents[msg.id] || msg.content, targetLang: "English" 
+});
       setTranslatedTexts(p => ({ ...p, [msg.id]: res.translated }));
     } catch { }
   };

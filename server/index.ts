@@ -152,7 +152,7 @@ app.use(compression());
 import session from 'express-session';
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'meri-secret-key-123',
+secret: process.env.SESSION_SECRET!,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -175,14 +175,14 @@ app.use(paginationMiddleware);
 
 app.use(
   express.json({
-    limit: "50mb",
+    limit: "300mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false, limit: "50mb" }));
+app.use(express.urlencoded({ extended: false, limit: "300mb" }));
 
 // ── Rate Limiting ────────────────────────────────────────────────────────────
 app.use("/api/auth", authLimiter);
