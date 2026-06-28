@@ -526,51 +526,56 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/auth/forgot-password", async (req, res) => {
-    try {
-      const { email } = req.body as { email?: string };
-      if (!email) return res.status(400).json({ message: "Email required" });
-      const found = await db.select({ id: users.id }).from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
-      if (!found.length) return res.status(404).json({ message: "No account found" });
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiry = new Date(Date.now() + 10 * 60 * 1000);
-      await db.execute(sql`
-        INSERT INTO otp_tokens (email, otp, expires_at)
-        VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
-        ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
-      `);
-      const nodemailer = await import("nodemailer");
-      const transporter = nodemailer.default.createTransport({
-        host: process.env.SMTP_HOST || "smtp.gmail.com",
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: false,
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      });
-      await transporter.sendMail({
-        from: `"VID-X" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject: "Your VID-X Password Reset Code",
-        html: `
-          <div style="background:#1a1a1a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #ff2d55;">
-            <h1 style="background:linear-gradient(90deg,#ff2d55,#ff6b9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:32px;font-weight:900;margin:0 0 8px;">VID-X</h1>
-            <p style="color:#9b9b9b;font-size:14px;">The next generation social platform</p>
-            <hr style="border:1px solid #2a2a2a;margin:20px 0;">
-            <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
-            <div style="background:linear-gradient(90deg,#ff2d55,#f97316);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
-              <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
-            </div>
-            <p style="color:#ff6b9d;font-size:13px;">⏱ Valid for 10 minutes only</p>
-            <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
-            <p style="color:#ff2d55;font-weight:bold;margin-top:20px;">— VID-X Team</p>
+ app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body as { email?: string };
+    if (!email) return res.status(400).json({ message: "Email required" });
+    
+    const found = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email.toLowerCase().trim()))
+      .limit(1);
+    if (!found.length) return res.status(404).json({ message: "No account found" });
+    
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+    
+    await db.execute(sql`
+      INSERT INTO otp_tokens (email, otp, expires_at)
+      VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
+      ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
+    `);
+
+    // Resend se email bhejo
+    const { Resend } = await import("resend");
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    await resend.emails.send({
+      from: "VID-X <onboarding@resend.dev>",
+      to: email,
+      subject: "Your VID-X Password Reset Code",
+      html: `
+        <div style="background:#1a1a1a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #ff2d55;">
+          <h1 style="background:linear-gradient(90deg,#ff2d55,#ff6b9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:32px;font-weight:900;margin:0 0 8px;">VID-X</h1>
+          <p style="color:#9b9b9b;font-size:14px;">The next generation social platform</p>
+          <hr style="border:1px solid #2a2a2a;margin:20px 0;">
+          <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
+          <div style="background:linear-gradient(90deg,#ff2d55,#f97316);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
+            <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
           </div>
-        `,
-      });
-      res.json({ message: "OTP sent" });
-    } catch (err: any) {
-      console.error("[forgot-password]", err.message);
-      res.status(500).json({ message: err.message || "Failed to send OTP" });
-    }
-  });
+          <p style="color:#ff6b9d;font-size:13px;">⏱ Valid for 10 minutes only</p>
+          <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
+          <p style="color:#ff2d55;font-weight:bold;margin-top:20px;">— VID-X Team</p>
+        </div>
+      `,
+    });
+
+    res.json({ message: "OTP sent" });
+  } catch (err: any) {
+    console.error("[forgot-password]", err.message);
+    res.status(500).json({ message: err.message || "Failed to send OTP" });
+  }
+});
 
   app.post("/api/auth/verify-reset-otp", async (req, res) => {
     try {
