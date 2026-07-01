@@ -1009,10 +1009,15 @@ export default function Profile() {
           <Crown className="w-3 h-3" />
           {rank}
         </div>
-        <div className="absolute top-3 right-3 flex items-center gap-1 bg-yellow-500/15 border border-yellow-500/40 rounded-full px-2 py-1 text-[10px] font-black text-yellow-200">
+       <div className="absolute top-3 right-3 flex items-center gap-1 bg-yellow-500/15 border border-yellow-500/40 rounded-full px-2 py-1 text-[10px] font-black text-yellow-200">
           <span>💰</span>
           {currentProfileUser?.coins ?? 0}
         </div>
+      </div>
+
+      {/* ══ AVATAR CARD (overlapping banner) ══ */}
+      <div className="relative z-10 -mt-16 px-4">
+        <div className="relative rounded-2xl overflow-hidden border border-white/10"
           style={{
             background: "linear-gradient(145deg, rgba(15,15,30,0.97) 0%, rgba(10,10,20,0.99) 100%)",
             boxShadow: "0 0 40px rgba(96,165,250,0.15), 0 0 80px rgba(168,85,247,0.1), inset 0 1px 0 rgba(255,255,255,0.05)",
