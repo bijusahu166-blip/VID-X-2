@@ -505,7 +505,7 @@ export default function Jobs() {
         <button className="back-btn" onClick={() => setLocationState("/")}>
           ← Back
         </button>
-        <div className="nav-logo">🎬 VID-X Jobs</div>
+        <div className="nav-logo">🎬 Vampire Jobs</div>
         <div className="nav-tabs">
           <button
             className={`nav-tab ${currentScreen === "browse" ? "active" : ""}`}
@@ -608,7 +608,7 @@ export default function Jobs() {
             <div className="field">
               <label>Company Name *</label>
               <input
-                placeholder="e.g. VID-X Studios"
+                placeholder="e.g. Vampire Studios"
                 value={postForm.company}
                 onChange={(e) => setPostForm({ ...postForm, company: e.target.value })}
               />
@@ -843,7 +843,7 @@ export default function Jobs() {
                     <label>Cover Note</label>
                     <textarea
                       rows={4}
-                      placeholder="VID-X ko kyun hire karna chahiye aapko? 2-3 lines mein likho..."
+                      placeholder="Vampire ko kyun hire karna chahiye aapko? 2-3 lines mein likho..."
                       value={applyForm.note}
                       onChange={(e) => setApplyForm({ ...applyForm, note: e.target.value })}
                     />

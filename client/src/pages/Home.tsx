@@ -151,7 +151,7 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
 
 async function sharePost(post: any) {
   const url = `${window.location.origin}/post/${post.id}`;
-  const title = post.caption || "Check this out on VID-X";
+  const title = post.caption || "Check this out on Vampire";
   if (navigator.share) {
     try {
       await navigator.share({ title, text: title, url });
@@ -316,7 +316,7 @@ function PostActionMenu({
               <CheckCheck className="w-7 h-7 text-green-400" />
             </div>
             <h3 className="text-lg font-black text-white mb-1">Report Submitted</h3>
-            <p className="text-sm text-zinc-500 mb-5">Thank you for helping keep VID-X safe. Our team will review this content.</p>
+            <p className="text-sm text-zinc-500 mb-5">Thank you for helping keep Vampire safe. Our team will review this content.</p>
             <button onClick={onClose} className="w-full h-11 rounded-xl bg-zinc-800 text-white font-bold text-sm hover:bg-zinc-700 transition-colors">
               Done
             </button>

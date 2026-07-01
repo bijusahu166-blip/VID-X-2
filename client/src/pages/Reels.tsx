@@ -150,12 +150,12 @@ function ReelCard({
   const handleShare = async () => {
     try {
       await Share.share({
-        title: 'Check this on VID-X',
+        title: 'Check this on Vampire',
         text: reel.caption || 'Watch this!',
         url: window.location.href,
       });
     } catch {
-      navigator.share?.({ title: 'VID-X', url: window.location.href });
+      navigator.share?.({ title: 'Vampire', url: window.location.href });
     }
   };
 

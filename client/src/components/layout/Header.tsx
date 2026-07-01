@@ -49,7 +49,7 @@ export function Header() {
 
           {/* Left: Logo */}
           <div className="flex items-center gap-2">
-            <img src={logoSrc} alt="VID-X" className="w-8 h-8 rounded-lg object-cover" />
+            <img src={logoSrc} alt="Vampire" className="w-8 h-8 rounded-lg object-cover" />
             <h1
               className="font-display text-[22px] leading-none font-black"
               style={{
@@ -58,7 +58,7 @@ export function Header() {
                 WebkitTextFillColor: "transparent",
               }}
             >
-              VID-X
+              Vampire
             </h1>
           </div>
 

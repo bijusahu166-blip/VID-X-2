@@ -693,17 +693,6 @@ export default function Profile() {
                           </div>
                           <Switch defaultChecked />
                         </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Ad Frequency</Label>
-                          <RadioGroup defaultValue="medium" className="grid grid-cols-3 gap-2">
-                            {["Low", "Med", "High"].map((level) => (
-                              <div key={level} className="flex items-center gap-2 bg-muted/50 px-3 py-2.5 rounded-xl cursor-pointer">
-                                <RadioGroupItem value={level.toLowerCase()} id={level.toLowerCase()} />
-                                <Label htmlFor={level.toLowerCase()} className="cursor-pointer text-sm">{level}</Label>
-                              </div>
-                            ))}
-                          </RadioGroup>
-                        </div>
                       </div>
                      <Separator className="my-3" />
 
@@ -713,7 +702,7 @@ export default function Profile() {
   <span className="text-sm font-semibold">Privacy Policy</span>
 </button>
 
-<button onClick={() => window.open("mailto:support@yourapp.com")}
+<button onClick={() => window.open("mailto:vampireoffical00@gmail.com")}
   className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 rounded-xl transition-colors">
   <MessageSquare className="w-4 h-4 text-zinc-400" />
   <span className="text-sm font-semibold">Help & Support</span>
@@ -725,10 +714,6 @@ export default function Profile() {
   <LogOut className="w-4 h-4" />
   <span className="text-sm font-semibold">Log out</span>
 </button>
-                      <button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
-                        <LogOut className="w-4 h-4" />
-                        <span className="text-sm font-semibold">Log out</span>
-                      </button>
                     </div>
                   )}
 
@@ -814,23 +799,64 @@ export default function Profile() {
                     </div>
                   )}
 
-                  {/* ── SUB: INSIGHTX ── */}
+                  {/* ── SUB: GROW ── */}
                   {settingsPanel === "InsightX" && (
                     <div className="p-5 space-y-4">
-                      {[
-                        { label: "Profile views this week", value: "1,248", change: "+18%" },
-                        { label: "Post impressions", value: "8,490", change: "+7%" },
-                        { label: "Follower growth", value: "+124", change: "this month" },
-                        { label: "Avg. engagement rate", value: "4.2%", change: "above average" },
-                      ].map((item) => (
-                        <div key={item.label} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
-                          <span className="text-sm text-muted-foreground">{item.label}</span>
-                          <div className="text-right">
-                            <div className="text-sm font-bold">{item.value}</div>
-                            <div className="text-[10px] text-green-400">{item.change}</div>
+                      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400">Grow</p>
+                            <h3 className="text-base font-bold text-white">Live growth pulse</h3>
+                          </div>
+                          <div className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-semibold text-emerald-300">● Live</div>
+                        </div>
+                        <div className="h-24 rounded-xl bg-zinc-950/70 p-3">
+                          <div className="flex h-full items-end gap-2">
+                            {[42, 58, 49, 72, 68, 84, 91].map((height, index) => (
+                              <div key={index} className="flex-1 rounded-t-full bg-gradient-to-t from-emerald-500 to-lime-400" style={{ height: `${height}%` }} />
+                            ))}
                           </div>
                         </div>
-                      ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { label: "Views", value: "12.4K", change: "+18%" },
+                          { label: "Likes", value: "3.2K", change: "+9%" },
+                          { label: "Followers", value: "1.2K", change: "+24%" },
+                          { label: "Engagement", value: "6.8%", change: "+2.1%" },
+                        ].map((item) => (
+                          <div key={item.label} className="rounded-xl border border-white/10 bg-zinc-900/70 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{item.label}</p>
+                            <p className="mt-1 text-lg font-black text-white">{item.value}</p>
+                            <p className="text-[11px] text-emerald-400">{item.change}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-sm font-semibold text-white">Content performance</p>
+                          <p className="text-[11px] text-zinc-500">Today</p>
+                        </div>
+                        <div className="space-y-2">
+                          {[
+                            { type: "Photos", count: 24, percent: "72%" },
+                            { type: "Videos", count: 11, percent: "21%" },
+                            { type: "Live", count: 3, percent: "7%" },
+                          ].map((item) => (
+                            <div key={item.type}>
+                              <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-400">
+                                <span>{item.type}</span>
+                                <span>{item.count} · {item.percent}</span>
+                              </div>
+                              <div className="h-2 rounded-full bg-zinc-800">
+                                <div className="h-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400" style={{ width: item.percent }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
 
