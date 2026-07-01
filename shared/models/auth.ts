@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, timestamp, varchar, boolean } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, timestamp, varchar, boolean, integer } from "drizzle-orm/pg-core";
 
 // Session storage table.
 export const sessions = pgTable(
@@ -44,6 +44,7 @@ export const users = pgTable("users", {
   encryptMessages: boolean("encrypt_messages").default(true),
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   twoFactorSecret: varchar("two_factor_secret"),
+  coins: integer("coins").default(0),
   blockedUsers: jsonb("blocked_users").default([]), // Array of user IDs
   mutedUsers: jsonb("muted_users").default([]), // Array of user IDs
   closeFriends: jsonb("close_friends").default([]), // Array of user IDs

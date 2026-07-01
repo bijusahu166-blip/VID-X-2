@@ -636,28 +636,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // POST ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId;
-      const allPosts = await storage.getAllPosts();
-      const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
-        .where(and(eq(pendingBlocks.blockedUserId, userId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
-      const blockedPostIds = new Set(blockedPosts.map(b => b.postId));
-      const filteredPosts = allPosts.filter(post => !blockedPostIds.has(post.id));
-      const enrichedPosts = await Promise.all(filteredPosts.map(async (post) => {
-        const user = await authStorage.getUser(post.userId);
-        const likesCount = await storage.getLikesCount(post.id);
-        const comms = await storage.getComments(post.id);
-        const hasLiked = await storage.hasLiked(post.id, userId);
-        const savedCheck = await db.select().from(savedPosts)
-          .where(and(eq(savedPosts.userId, userId), eq(savedPosts.postId, post.id))).limit(1);
-        return { ...post, user, likesCount, commentsCount: comms.length, hasLiked, hasSaved: savedCheck.length > 0 };
-      }));
-      res.json(enrichedPosts);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+ app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
+  try {
+    const sessionUserId = (req.session as any).userId;
+    const filterUserId = req.query.userId as string | undefined;   // ✅ naya
+
+    let allPosts = await storage.getAllPosts();
+
+    if (filterUserId) {
+      allPosts = allPosts.filter(post => String(post.userId) === String(filterUserId));   // ✅ naya
     }
-  });
+
+    const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
+      .where(and(eq(pendingBlocks.blockedUserId, sessionUserId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
+    const blockedPostIds = new Set(blockedPosts.map(b => b.postId));
+    const filteredPosts = allPosts.filter(post => !blockedPostIds.has(post.id));
+
+    const enrichedPosts = await Promise.all(filteredPosts.map(async (post) => {
+      const user = await authStorage.getUser(post.userId);
+      const likesCount = await storage.getLikesCount(post.id);
+      const comms = await storage.getComments(post.id);
+      const hasLiked = await storage.hasLiked(post.id, sessionUserId);
+      const savedCheck = await db.select().from(savedPosts)
+        .where(and(eq(savedPosts.userId, sessionUserId), eq(savedPosts.postId, post.id))).limit(1);
+      return { ...post, user, likesCount, commentsCount: comms.length, hasLiked, hasSaved: savedCheck.length > 0 };
+    }));
+    res.json(enrichedPosts);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
   app.post(api.posts.create.path, isAuthenticated, async (req, res) => {
     try {
@@ -810,8 +818,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const postId = Number(req.params.id);
       await db.execute(sql`UPDATE posts SET viewer_count = viewer_count + 1 WHERE id = ${postId}`);
-      const row = await db.execute(sql`SELECT viewer_count FROM posts WHERE id = ${postId}`);
-      const viewerCount = parseInt(((row as any).rows?.[0] ?? (row as any)[0])?.viewer_count ?? "0");
+      const row = await db.execute(sql`SELECT viewer_count, user_id FROM posts WHERE id = ${postId}`);
+      const resultRow = ((row as any).rows?.[0] ?? (row as any)[0]) || {};
+      const viewerCount = parseInt(resultRow.viewer_count ?? "0");
+      const postOwnerId = resultRow.user_id;
+      const previousCount = Math.max(viewerCount - 1, 0);
+      const previousTier = Math.floor(previousCount / 300000);
+      const currentTier = Math.floor(viewerCount / 300000);
+      if (postOwnerId && currentTier > previousTier) {
+        await db.execute(sql`UPDATE users SET coins = coins + 1 WHERE id = ${postOwnerId}`);
+      }
       res.json({ viewerCount });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -824,8 +840,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/books", isAuthenticated, async (req, res) => {
     try {
-      const type = req.query.type as string;
-      const books = await storage.getBooks(type);
+      const userId = req.query.userId as string | undefined;
+      const type = req.query.type as string | undefined;
+      const books = await storage.getBooks(userId, type);
+      res.json(books);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/books/mine", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const books = await storage.getBooks(userId);
       res.json(books);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -834,11 +861,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/books", isAuthenticated, async (req, res) => {
     try {
+      const userId = (req.session as any).userId;
       const book = await storage.createBook({
         ...req.body,
-        content: req.body.pdfUrl ? "" : (req.body.content || ""),
+        userId,
+        content: req.body.content ?? "",
       });
       res.status(201).json(book);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/books/:id", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const bookId = Number(req.params.id);
+      const deleted = await storage.deleteBook(bookId, userId);
+      if (!deleted) return res.status(404).json({ message: "Book not found or you do not have permission." });
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

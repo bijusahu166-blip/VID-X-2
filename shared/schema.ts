@@ -293,6 +293,7 @@ export const notifications = pgTable("notifications", {
 // 5. BOOKS & ADS
 export const books = pgTable("books", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
   title: text("title").notNull(),
   author: text("author"),
   subject: text("subject"),
@@ -303,6 +304,7 @@ export const books = pgTable("books", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 },
 (table) => [
+  index("IDX_books_user_id").on(table.userId),
   index("IDX_books_type").on(table.type),
   index("IDX_books_subject").on(table.subject),
   index("IDX_books_created_at").on(table.createdAt),

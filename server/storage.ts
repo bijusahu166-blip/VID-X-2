@@ -31,7 +31,8 @@ export interface IStorage {
 
   // Books
   createBook(book: InsertBook): Promise<Book>;
-  getBooks(type?: string): Promise<Book[]>;
+  getBooks(userId?: string, type?: string): Promise<Book[]>;
+  deleteBook(bookId: number, userId: string): Promise<boolean>;
 
   // Ads
   getAdsByPlacement(placement: string): Promise<Ad[]>;
@@ -157,13 +158,38 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createBook(book: InsertBook): Promise<Book> {
-    const [newBook] = await db.insert(books).values(book).returning();
+    const [newBook] = await db.insert(books).values({
+      title: book.title,
+      author: book.author,
+      subject: book.subject,
+      content: book.content ?? "",
+      imageUrl: book.imageUrl,
+      pdfUrl: book.pdfUrl,
+      type: book.type,
+      userId: book.userId,
+      createdAt: book.createdAt,
+    }).returning();
     return newBook;
   }
 
-  async getBooks(type?: string): Promise<Book[]> {
-    if (type) return db.select().from(books).where(eq(books.type, type)).orderBy(desc(books.createdAt));
+  async getBooks(userId?: string, type?: string): Promise<Book[]> {
+    if (userId && type) {
+      return db.select().from(books).where(and(eq(books.userId, userId), eq(books.type, type))).orderBy(desc(books.createdAt));
+    }
+    if (userId) {
+      return db.select().from(books).where(eq(books.userId, userId)).orderBy(desc(books.createdAt));
+    }
+    if (type) {
+      return db.select().from(books).where(eq(books.type, type)).orderBy(desc(books.createdAt));
+    }
     return db.select().from(books).orderBy(desc(books.createdAt));
+  }
+
+  async deleteBook(bookId: number, userId: string): Promise<boolean> {
+    const [book] = await db.select().from(books).where(eq(books.id, bookId));
+    if (!book || book.userId !== userId) return false;
+    await db.delete(books).where(eq(books.id, bookId));
+    return true;
   }
 
   async getAdsByPlacement(placement: string): Promise<Ad[]> {

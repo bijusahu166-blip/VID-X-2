@@ -13,7 +13,8 @@ import {
   RefreshCw, UserX, Ghost, Activity,
   MessageSquare, AtSign, MessageCircle, Share2,
   LogOut, Menu, Zap, Trophy, Flame, Shield, Sword, Target,
-  Crown, Cpu, BadgeCheck, BarChart3, Lock, Video, WifiOff, Gauge
+  Crown, Cpu, BadgeCheck, BarChart3, Lock, Video, WifiOff, Gauge,
+  MoreVertical
 } from "lucide-react";
 import { useVideoSettings, VideoQuality } from "@/contexts/VideoSettingsContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -175,7 +176,10 @@ function OtherUserProfile({ userId }: { userId: string }) {
   const u = profileData;
   const name = u ? `${u.firstName} ${u.lastName}` : "User";
   const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase();
-  const sortedUserPosts = userPosts?.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) ?? [];
+const sortedUserPosts = (userPosts ?? [])
+  .filter((p: any) => String(p.userId) === String(userId))
+  .slice()
+  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const postCount = sortedUserPosts.length;
 
   return (
@@ -192,12 +196,25 @@ function OtherUserProfile({ userId }: { userId: string }) {
       <div className="relative">
         <div className="h-36 w-full" style={{ background: "linear-gradient(135deg, #1a0030, #0d001a)" }} />
         <div className="absolute -bottom-10 left-4">
-          <div className="w-20 h-20 rounded-full border-4 border-black overflow-hidden bg-zinc-800">
-            {u?.profileImageUrl
-              ? <img src={u.profileImageUrl} className="w-full h-full object-cover" />
-              : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-pink-600 text-2xl font-black text-white">{initials}</div>
-            }
-          </div>
+         <div className="relative">
+  <div className="w-20 h-20 rounded-full border-4 border-black overflow-hidden bg-zinc-800">
+    {u?.profileImageUrl
+      ? <img src={u.profileImageUrl} className="w-full h-full object-cover" />
+      : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-pink-600 text-2xl font-black text-white">{initials}</div>
+    }
+  </div>
+  {/* ✅ NAYA: Pet overlay for other user's profile */}
+  {u?.pet && (() => {
+    try {
+      const pet = JSON.parse(u.pet);
+      return (
+        <div className="absolute -top-3 -right-3 text-xl bg-black rounded-full p-0.5 border border-white/20">
+          {pet.emoji}
+        </div>
+      );
+    } catch { return null; }
+  })()}
+</div>
         </div>
       </div>
 
@@ -323,6 +340,15 @@ export default function Profile() {
   const { toast } = useToast();
   const { dataSaver, quality, setDataSaver, setQuality } = useVideoSettings();
   const [selectedPet, setSelectedPet] = useState<{ name: string; emoji: string } | null>(null);
+  useEffect(() => {
+  if ((user as any)?.pet) {
+    try {
+      setSelectedPet(JSON.parse((user as any).pet));
+    } catch {
+      setSelectedPet(null);
+    }
+  }
+}, [(user as any)?.pet]);
   const { data: profile, error: profileError, isLoading: profileLoading } = useQuery({
     queryKey: ["/api/profile"],
     queryFn: () => apiRequest("GET", "/api/profile").then((res) => res.json()),
@@ -355,6 +381,39 @@ export default function Profile() {
     queryFn: () => apiRequest("GET", "/api/profile/xp").then((res) => res.json()),
     retry: false,
   });
+  const { data: profileBooksData = [], isLoading: booksLoading } = useQuery<any[]>({
+    queryKey: ["/api/books", params.id ? "user" : "mine", params.id],
+    queryFn: () => {
+      const url = params.id ? `/api/books?userId=${params.id}` : "/api/books/mine";
+      return apiRequest("GET", url).then((res) => res.json());
+    },
+    enabled: params.id ? true : !!user?.id,
+  });
+
+  const deleteBookMutation = useMutation({
+    mutationFn: async (bookId: number) => {
+      const res = await fetch(`/api/books/${bookId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/books", params.id ? "user" : "mine", params.id] });
+      toast({ title: "Book deleted" });
+    },
+    onError: () => {
+      toast({ title: "Delete failed", variant: "destructive" });
+    },
+  });
+
+  const handleDeleteBook = async (bookId: number) => {
+    if (!window.confirm("Delete this book? This cannot be undone.")) return;
+    deleteBookMutation.mutate(bookId);
+  };
+
+  const profileBooksArray = profileBooksData as any[];
   const myPosts = posts?.filter(p => p.userId === user?.id && p.type !== "story").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
@@ -950,11 +1009,10 @@ export default function Profile() {
           <Crown className="w-3 h-3" />
           {rank}
         </div>
-      </div>
-
-      {/* ══ AVATAR CARD (overlapping banner) ══ */}
-      <div className="relative z-10 -mt-16 px-4">
-        <div className="relative rounded-2xl overflow-hidden border border-white/10"
+        <div className="absolute top-3 right-3 flex items-center gap-1 bg-yellow-500/15 border border-yellow-500/40 rounded-full px-2 py-1 text-[10px] font-black text-yellow-200">
+          <span>💰</span>
+          {currentProfileUser?.coins ?? 0}
+        </div>
           style={{
             background: "linear-gradient(145deg, rgba(15,15,30,0.97) 0%, rgba(10,10,20,0.99) 100%)",
             boxShadow: "0 0 40px rgba(96,165,250,0.15), 0 0 80px rgba(168,85,247,0.1), inset 0 1px 0 rgba(255,255,255,0.05)",
@@ -1153,6 +1211,7 @@ export default function Profile() {
                   await apiRequest("PATCH", "/api/profile", { pet: selectedPet ? JSON.stringify(selectedPet) : null });
                   toast({ title: "Pet updated!" });
                   qc.invalidateQueries({ queryKey: ["/api/profile"] });
+                   qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
                 } catch (err: any) {
                   toast({ title: "Failed to update pet", description: err.message, variant: "destructive" });
                 }
@@ -1182,7 +1241,7 @@ export default function Profile() {
           <TabsList className="w-full grid grid-cols-4 h-10 bg-transparent border-b border-white/5 rounded-none px-4">
             {[
               { value: "posts", icon: Grid, label: "POSTS" },
-              { value: "reels", icon: Users, label: "REELS" },
+              { value: "books", icon: Users, label: "OWN BOOKS" },
               { value: "saved", icon: Bookmark, label: "SAVED" },
               { value: "history", icon: HistoryIcon, label: "LOG" },
             ].map(({ value, icon: Icon, label }) => (
@@ -1231,9 +1290,44 @@ export default function Profile() {
             )}
           </TabsContent>
 
-          <TabsContent value="reels" className="py-20 text-center">
-            <div className="text-4xl mb-3">🎬</div>
-            <p className="text-zinc-600 text-sm font-mono">NO REELS YET</p>
+          <TabsContent value="books" className="py-6">
+            {booksLoading ? (
+              <div className="grid grid-cols-3 gap-0.5">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <div key={idx} className="aspect-square bg-zinc-900 animate-pulse" />
+                ))}
+              </div>
+            ) : profileBooksArray.length === 0 ? (
+              <div className="py-20 text-center">
+                <div className="text-4xl mb-3">📚</div>
+                <p className="text-zinc-600 text-sm font-mono">NO BOOKS YET</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 px-3">
+                {profileBooksArray.map((book: any) => (
+                  <div key={book.id} className="rounded-2xl overflow-hidden border border-white/10 bg-zinc-950 relative group">
+                    <button
+                      onClick={() => handleDeleteBook(book.id)}
+                      className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white hover:bg-black/80"
+                      aria-label="Delete book"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {book.imageUrl ? (
+                      <img src={book.imageUrl} alt={book.title} className="w-full h-40 object-cover" />
+                    ) : (
+                      <div className="w-full h-40 bg-gradient-to-br from-violet-900 to-pink-900 flex items-center justify-center text-white text-sm font-bold text-center p-4">
+                        {book.title}
+                      </div>
+                    )}
+                    <div className="p-3 space-y-2">
+                      <div className="text-sm font-bold text-white line-clamp-2">{book.title}</div>
+                      <div className="text-[11px] text-zinc-500">{book.author || "Unknown author"}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="saved" className="py-20 text-center">
