@@ -363,9 +363,14 @@ const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
 });
 const stories = storiesData ?? [];
 
-  const { data: allBooks = [] } = useQuery<any[]>({
+const { data: allBooks = [] } = useQuery<any[]>({
   queryKey: ["/api/books"],
-  queryFn: () => fetch("/api/books", { credentials: "include" }).then(r => r.json()),
+  queryFn: async () => {
+    const res = await fetch("/api/books", { credentials: "include" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
 });
 
 const userGoal = (user as any)?.goal || localStorage.getItem("user_goal") || "";
