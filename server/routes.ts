@@ -314,12 +314,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
     res.header("Access-Control-Allow-Origin", "*");
-    bookUpload.single("pdf")(req, res, async (err: any) => {
+    bookUpload.fields([{ name: "pdf", maxCount: 1 }, { name: "file", maxCount: 1 }])(req, res, async (err: any) => {
       if (err) return res.status(400).json({ message: err.message || "File rejected" });
-      if (!req.file) return res.status(400).json({ message: "No file received" });
+      const uploadedFile = req.files?.pdf?.[0] || req.files?.file?.[0];
+      if (!uploadedFile) return res.status(400).json({ message: "No file received" });
       try {
-        const result = await uploadToCloudinary(req.file.buffer, "auto", "vid-x-books");
-        res.json({ pdfUrl: result.url });
+        const isPdf = uploadedFile.originalname?.toLowerCase().endsWith(".pdf") || uploadedFile.mimetype === "application/pdf" || uploadedFile.mimetype === "application/x-pdf";
+        const result = await uploadToCloudinary(uploadedFile.buffer, isPdf ? "raw" : "auto", "vid-x-books");
+        res.json({ pdfUrl: result.url, url: result.url });
       } catch (err: any) {
         res.status(500).json({ message: `Upload failed: ${err.message}` });
       }
@@ -1298,7 +1300,7 @@ try {
         }
       }
     } catch (e) {
-      console.error("[direct-chat message] background error:", e);
+     console.error("[ direct-chat message] background error:", e);
     }
   });
 

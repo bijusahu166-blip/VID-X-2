@@ -657,6 +657,17 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     apiRequest("POST", `/api/direct-chats/${chat.id}/typing`, {}).catch(() => { });
   }, [chat.id]);
 
+  const focusComposer = useCallback(() => {
+    window.setTimeout(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(textareaRef.current.value.length, textareaRef.current.value.length);
+    }, 40);
+  }, []);
+
+  useEffect(() => {
+    focusComposer();
+  }, [chat.id, focusComposer]);
+
   useEffect(() => {
     const last = messages[messages.length - 1];
     if (!last || last.senderId === currentUserId || last.type !== "text") { setSmartReplies([]); return; }
@@ -700,17 +711,20 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   });
 
   const handleSend = async () => {
-    if (!text.trim()) return;
-    const encrypted = await encryptMessage(text, currentUserId, partnerId);
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const encrypted = await encryptMessage(trimmed, currentUserId, partnerId);
     sendMsg.mutate({ content: encrypted, type: "text", replyToId: replyTo?.id, expiresInSeconds: disappearing ? 30 : undefined });
     setText("");
     playSend();
+    focusComposer();
   };
 
   const handleVoice = async () => {
     if (voiceRec.recording) {
       const url = await voiceRec.stop();
       if (url) sendMsg.mutate({ content: "Voice message", type: "voice", mediaUrl: url });
+      focusComposer();
     } else {
       voiceRec.start();
     }

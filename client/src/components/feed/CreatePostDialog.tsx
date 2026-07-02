@@ -25,6 +25,7 @@ import type { AREffect } from "@/lib/arEffects";
 import filterIconSrc from "@assets/image_1774511462472.png";
 import heroIconSrc from "@assets/image_1774512160722.png";
 import { SongPicker, type Song } from "@/components/shared/SongPicker";
+import { compressVideo } from "@/lib/compressvideo";
 
 type UploadType = "post" | "video" | "reel" | "story" | "job" | "editing";
 
@@ -384,6 +385,8 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
   // Video upload state
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressProgress, setCompressProgress] = useState(0);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const reelVideoInputRef = useRef<HTMLInputElement>(null);
@@ -792,6 +795,27 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
     }
 
     if (videoFile) {
+      // Compress large videos before upload
+      if (videoFile.size > 100 * 1024 * 1024) {
+        setIsCompressing(true);
+        setCompressProgress(0);
+        toast({ title: "Compressing video... please wait" });
+        try {
+          videoFile = await compressVideo(videoFile, 95, (pct: number) => {
+            setCompressProgress(pct);
+          });
+          toast({ title: `Compressed to ${(videoFile?.size ?? 0 / (1024 * 1024)).toFixed(1)}MB ✅` });
+        } catch {
+          toast({ title: "Compression failed, uploading original", variant: "destructive" });
+        } finally {
+          setIsCompressing(false);
+        }
+      }
+
+      if (!videoFile) {
+        return;
+      }
+
       // Guard: reject oversized files before even starting the upload
       if (videoFile.size > MAX_VIDEO_SIZE_BYTES) {
         toast({
@@ -991,6 +1015,8 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
       setLivePostId(null);
       setIsUploadingVideo(false);
       setUploadProgress(0);
+      setIsCompressing(false);
+      setCompressProgress(0);
     }, 300);
   };
 
@@ -1204,14 +1230,22 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
                   ↑ Tap the area above to select a video file first
                 </p>
               )}
-              <button type="submit" disabled={!videoTitle || !selectedFile || createPost.isPending || isReadingFile || isUploadingVideo}
+              <button type="submit" disabled={!videoTitle || !selectedFile || createPost.isPending || isReadingFile || isUploadingVideo || isCompressing}
                 className="w-full h-12 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 relative overflow-hidden"
                 style={{
                   background: (videoTitle && selectedFile) ? "linear-gradient(135deg, #ef4444, #f97316)" : "rgba(255,255,255,0.05)",
                   boxShadow: (videoTitle && selectedFile) ? "0 0 20px rgba(239,68,68,0.4)" : "none",
                   color: "white",
                 }}>
-                {isUploadingVideo && (
+                {isCompressing ? (
+                  <>
+                    <div className="absolute inset-y-0 left-0 bg-yellow-500/30 transition-all duration-300" style={{ width: `${compressProgress}%` }} />
+                    <div className="relative z-10 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-xs">Compressing… {compressProgress}%</span>
+                    </div>
+                  </>
+                ) : isUploadingVideo ? (
                   <>
                     <div
                       className="absolute inset-y-0 left-0 bg-white/20 transition-all duration-300"
@@ -1222,8 +1256,8 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
                       <span className="text-xs">Uploading… {uploadProgress}%</span>
                     </div>
                   </>
-                )}
-                {!isUploadingVideo && (isReadingFile ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating thumbnail…</> : createPost.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</> : <><Upload className="w-4 h-4" /> Publish Video</>)}
+                ) : null}
+                {!isCompressing && !isUploadingVideo && (isReadingFile ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating thumbnail…</> : createPost.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</> : <><Upload className="w-4 h-4" /> Publish Video</>)}
               </button>
             </form>
           )}
@@ -1790,8 +1824,15 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
                 />
               </div>
 
-              <Button type="submit" className="w-full h-11 rounded-xl font-bold bg-gradient-to-r from-primary to-accent relative overflow-hidden" disabled={createPost.isPending || isUploadingVideo}>
-                {isUploadingVideo ? (
+              <Button type="submit" className="w-full h-11 rounded-xl font-bold bg-gradient-to-r from-primary to-accent relative overflow-hidden" disabled={createPost.isPending || isUploadingVideo || isCompressing}>
+                {isCompressing ? (
+                  <>
+                    <div className="absolute inset-y-0 left-0 bg-yellow-500/30 transition-all duration-300" style={{ width: `${compressProgress}%` }} />
+                    <span className="relative z-10 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Compressing… {compressProgress}%
+                    </span>
+                  </>
+                ) : isUploadingVideo ? (
                   <>
                     <div className="absolute inset-y-0 left-0 bg-white/20 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
                     <span className="relative z-10 flex items-center gap-2">

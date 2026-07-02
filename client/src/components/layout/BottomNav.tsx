@@ -27,8 +27,8 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}
+      className="fixed left-0 right-0 z-50"
+      style={{ bottom: "4px", paddingBottom: "max(env(safe-area-inset-bottom, 0px), 10px)" }}
     >
       {/* Floating pill */}
       <div className="mx-3 mt-1">

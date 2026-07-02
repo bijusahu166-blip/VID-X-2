@@ -38,7 +38,7 @@ export function Header() {
       <header
         className="fixed left-0 right-0 z-50 w-full h-14"
         style={{
-          top: "var(--top-bar-h)",
+          top: "calc(var(--top-bar-h) - 4px)",
           background: "rgba(0,0,0,0.92)",
           backdropFilter: "blur(16px)",
           WebkitBackdropFilter: "blur(16px)",

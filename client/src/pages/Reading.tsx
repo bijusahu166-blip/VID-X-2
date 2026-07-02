@@ -82,8 +82,10 @@ export default function Reading() {
     if (!file) return;
     if (!uploadTitle) setUploadTitle(file.name.replace(/\.[^.]+$/, "").replace(/_/g, " "));
 
-    // ✅ Sirf extension se check karo — Android pe mimetype reliable nahi hota
-    const isPdf = file.name.toLowerCase().endsWith(".pdf");
+    // ✅ Android/phone pe mimetype kabhi-kabhi galat aata hai — name + mime dono check karo
+    const name = file.name.toLowerCase();
+    const mime = file.type?.toLowerCase() || "";
+    const isPdf = name.endsWith(".pdf") || mime === "application/pdf" || mime === "application/x-pdf" || mime === "application/octet-stream";
 
     if (isPdf) {
       setIsUploadingPdf(true);
@@ -91,6 +93,7 @@ export default function Reading() {
       try {
         const formData = new FormData();
         formData.append("pdf", file);
+        formData.append("file", file);
         const res = await fetch("/api/upload/book-pdf", {
           method: "POST",
           credentials: "include",
