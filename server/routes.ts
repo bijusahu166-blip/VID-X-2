@@ -6,7 +6,7 @@ import { setupAuth, registerAuthRoutes, registerSmsOtpRoutes, isAuthenticated } 
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { api } from "@shared/routes";
-import { users, posts, comments, savedPosts, reports, notifications, conversations, messages, pendingBlocks } from "@shared/schema";
+import { users, posts, comments, savedPosts, reports, notifications, conversations, messages, pendingBlocks, blocks } from "@shared/schema";
 import { db } from "./db";
 import { sql, eq, desc, and } from "drizzle-orm";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -228,224 +228,235 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.use('/api/messages', messagesRoutes.default);
 
   seed().catch(console.error);
-// ══════════════════════════════════════════════════════════════════════════
-// UPLOAD ROUTES
-// ══════════════════════════════════════════════════════════════════════════
 
-const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB
-
-const chunkUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 },
-});
-
-const chunksDir = path.join(process.cwd(), "uploads", "chunks");
-if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
-
-const uploadByteTotals = new Map<string, number>();
-const uploadTimestamps = new Map<string, number>();
-const CHUNK_TTL_MS = 30 * 60 * 1000;
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, ts] of uploadTimestamps.entries()) {
-    if (now - ts > CHUNK_TTL_MS) {
-      uploadByteTotals.delete(id);
-      uploadTimestamps.delete(id);
-      try {
-        const dir = path.join(chunksDir, id);
-        if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
-      } catch {}
-    }
+  // ══════════════════════════════════════════════════════════════════════════
+  // BLOCK HELPER (moved above all routes so every route below can use it)
+  // ══════════════════════════════════════════════════════════════════════════
+  async function isBlockedEitherWay(userA: string, userB: string) {
+    const rows = await db.select().from(blocks).where(
+      sql`(${blocks.blockerId} = ${userA} AND ${blocks.blockedId} = ${userB})
+       OR (${blocks.blockerId} = ${userB} AND ${blocks.blockedId} = ${userA})`
+    ).limit(1);
+    return rows.length > 0;
   }
-}, 5 * 60 * 1000);
 
-app.post("/api/upload/video", isAuthenticated, (req: any, res: any) => {
-  anyUpload.single("video")(req, res, async (err: any) => {
-    if (err) return res.status(400).json({ message: err.message });
-    if (!req.file) return res.status(400).json({ message: "No video file received" });
-    try {
-      const result = await uploadLargeVideoToCloudinary(req.file.buffer, "vid-x/videos");
-      res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
-    } catch (err: any) {
-      res.status(500).json({ message: `Video upload failed: ${err.message}` });
-    }
+  // ══════════════════════════════════════════════════════════════════════════
+  // UPLOAD ROUTES
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB
+
+  const chunkUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 },
   });
-});
 
-app.post("/api/upload/image", isAuthenticated, (req: any, res: any) => {
-  anyUpload.single("image")(req, res, async (err: any) => {
-    if (err) return res.status(400).json({ message: err.message });
-    if (!req.file) return res.status(400).json({ message: "No image file received" });
-    try {
-      const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/images");
-      res.json({ success: true, url: result.url, imageUrl: result.url, publicId: result.publicId });
-    } catch (err: any) {
-      res.status(500).json({ message: `Image upload failed: ${err.message}` });
+  const chunksDir = path.join(process.cwd(), "uploads", "chunks");
+  if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
+
+  const uploadByteTotals = new Map<string, number>();
+  const uploadTimestamps = new Map<string, number>();
+  const CHUNK_TTL_MS = 30 * 60 * 1000;
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, ts] of uploadTimestamps.entries()) {
+      if (now - ts > CHUNK_TTL_MS) {
+        uploadByteTotals.delete(id);
+        uploadTimestamps.delete(id);
+        try {
+          const dir = path.join(chunksDir, id);
+          if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+        } catch {}
+      }
     }
+  }, 5 * 60 * 1000);
+
+  app.post("/api/upload/video", isAuthenticated, (req: any, res: any) => {
+    anyUpload.single("video")(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message });
+      if (!req.file) return res.status(400).json({ message: "No video file received" });
+      try {
+        const result = await uploadLargeVideoToCloudinary(req.file.buffer, "vid-x/videos");
+        res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
+      } catch (err: any) {
+        res.status(500).json({ message: `Video upload failed: ${err.message}` });
+      }
+    });
   });
-});
 
-app.post("/api/upload/profile-image", isAuthenticated, (req: any, res: any) => {
-  anyUpload.single("image")(req, res, async (err: any) => {
-    if (err) return res.status(400).json({ message: err.message });
-    if (!req.file) return res.status(400).json({ message: "No image received" });
-    try {
-      const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/profiles");
-      res.json({ success: true, url: result.url, imageUrl: result.url, profileImageUrl: result.url, publicId: result.publicId });
-    } catch (err: any) {
-      res.status(500).json({ message: `Profile image upload failed: ${err.message}` });
-    }
+  app.post("/api/upload/image", isAuthenticated, (req: any, res: any) => {
+    anyUpload.single("image")(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message });
+      if (!req.file) return res.status(400).json({ message: "No image file received" });
+      try {
+        const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/images");
+        res.json({ success: true, url: result.url, imageUrl: result.url, publicId: result.publicId });
+      } catch (err: any) {
+        res.status(500).json({ message: `Image upload failed: ${err.message}` });
+      }
+    });
   });
-});
 
-app.post("/api/upload/pdf", isAuthenticated, (req: any, res: any) => {
-  anyUpload.single("pdf")(req, res, async (err: any) => {
-    if (err) return res.status(400).json({ message: err.message });
-    if (!req.file) return res.status(400).json({ message: "No PDF received" });
-    try {
-      const result = await uploadToCloudinary(req.file.buffer, "raw", "vid-x/pdfs");
-      res.json({ success: true, url: result.url, pdfUrl: result.url, publicId: result.publicId });
-    } catch (err: any) {
-      res.status(500).json({ message: `PDF upload failed: ${err.message}` });
-    }
+  app.post("/api/upload/profile-image", isAuthenticated, (req: any, res: any) => {
+    anyUpload.single("image")(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message });
+      if (!req.file) return res.status(400).json({ message: "No image received" });
+      try {
+        const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/profiles");
+        res.json({ success: true, url: result.url, imageUrl: result.url, profileImageUrl: result.url, publicId: result.publicId });
+      } catch (err: any) {
+        res.status(500).json({ message: `Profile image upload failed: ${err.message}` });
+      }
+    });
   });
-});
 
-app.post("/api/upload/file", isAuthenticated, (req: any, res: any) => {
-  anyUpload.single("file")(req, res, async (err: any) => {
-    if (err) return res.status(400).json({ message: err.message });
-    if (!req.file) return res.status(400).json({ message: "No file received" });
-    try {
-      const mime = req.file.mimetype;
-      const isVideo = mime.startsWith("video/");
-      const isImage = mime.startsWith("image/");
-      const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
-      const folder = isVideo ? "vid-x/videos" : isImage ? "vid-x/images" : "vid-x/files";
-      const result = await uploadToCloudinary(req.file.buffer, resourceType, folder);
-      res.json({
-        success: true, url: result.url,
-        videoUrl: isVideo ? result.url : undefined,
-        imageUrl: isImage ? result.url : undefined,
-        pdfUrl: (!isVideo && !isImage) ? result.url : undefined,
-        publicId: result.publicId, type: resourceType,
-      });
-    } catch (err: any) {
-      res.status(500).json({ message: `Upload failed: ${err.message}` });
-    }
+  app.post("/api/upload/pdf", isAuthenticated, (req: any, res: any) => {
+    anyUpload.single("pdf")(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message });
+      if (!req.file) return res.status(400).json({ message: "No PDF received" });
+      try {
+        const result = await uploadToCloudinary(req.file.buffer, "raw", "vid-x/pdfs");
+        res.json({ success: true, url: result.url, pdfUrl: result.url, publicId: result.publicId });
+      } catch (err: any) {
+        res.status(500).json({ message: `PDF upload failed: ${err.message}` });
+      }
+    });
   });
-});
 
-app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  bookUpload.fields([{ name: "pdf", maxCount: 1 }, { name: "file", maxCount: 1 }])(req, res, async (err: any) => {
-    if (err) return res.status(400).json({ message: err.message || "File rejected" });
-    const uploadedFile = (req as any).files?.pdf?.[0] || (req as any).files?.file?.[0];
-    if (!uploadedFile) return res.status(400).json({ message: "No file received" });
-    try {
-      const isPdf = uploadedFile.originalname?.toLowerCase().endsWith(".pdf") ||
-        uploadedFile.mimetype === "application/pdf";
-      const result = await uploadToCloudinary(uploadedFile.buffer, isPdf ? "raw" : "auto", "vid-x-books");
-      res.json({ pdfUrl: result.url, url: result.url });
-    } catch (err: any) {
-      res.status(500).json({ message: `Upload failed: ${err.message}` });
-    }
+  app.post("/api/upload/file", isAuthenticated, (req: any, res: any) => {
+    anyUpload.single("file")(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message });
+      if (!req.file) return res.status(400).json({ message: "No file received" });
+      try {
+        const mime = req.file.mimetype;
+        const isVideo = mime.startsWith("video/");
+        const isImage = mime.startsWith("image/");
+        const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
+        const folder = isVideo ? "vid-x/videos" : isImage ? "vid-x/images" : "vid-x/files";
+        const result = await uploadToCloudinary(req.file.buffer, resourceType, folder);
+        res.json({
+          success: true, url: result.url,
+          videoUrl: isVideo ? result.url : undefined,
+          imageUrl: isImage ? result.url : undefined,
+          pdfUrl: (!isVideo && !isImage) ? result.url : undefined,
+          publicId: result.publicId, type: resourceType,
+        });
+      } catch (err: any) {
+        res.status(500).json({ message: `Upload failed: ${err.message}` });
+      }
+    });
   });
-});
 
-app.post("/api/upload/chunk", isAuthenticated, (req: any, res: any) => {
-  chunkUpload.single("chunk")(req, res, async (err: any) => {
-    if (err) return res.status(400).json({ message: err.message });
-    if (!req.file) return res.status(400).json({ message: "No chunk received" });
-    try {
-      const { uploadId, chunkIndex, totalChunks } = req.body;
-      if (!uploadId || chunkIndex === undefined || !totalChunks)
-        return res.status(400).json({ message: "Missing uploadId, chunkIndex, or totalChunks" });
-      const idx = Number(chunkIndex);
+  app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    bookUpload.fields([{ name: "pdf", maxCount: 1 }, { name: "file", maxCount: 1 }])(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message || "File rejected" });
+      const uploadedFile = (req as any).files?.pdf?.[0] || (req as any).files?.file?.[0];
+      if (!uploadedFile) return res.status(400).json({ message: "No file received" });
+      try {
+        const isPdf = uploadedFile.originalname?.toLowerCase().endsWith(".pdf") ||
+          uploadedFile.mimetype === "application/pdf";
+        const result = await uploadToCloudinary(uploadedFile.buffer, isPdf ? "raw" : "auto", "vid-x-books");
+        res.json({ pdfUrl: result.url, url: result.url });
+      } catch (err: any) {
+        res.status(500).json({ message: `Upload failed: ${err.message}` });
+      }
+    });
+  });
 
-      const currentTotal = (uploadByteTotals.get(uploadId) ?? 0) + req.file.buffer.length;
-      if (currentTotal > MAX_VIDEO_UPLOAD_BYTES) {
+  app.post("/api/upload/chunk", isAuthenticated, (req: any, res: any) => {
+    chunkUpload.single("chunk")(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message });
+      if (!req.file) return res.status(400).json({ message: "No chunk received" });
+      try {
+        const { uploadId, chunkIndex, totalChunks } = req.body;
+        if (!uploadId || chunkIndex === undefined || !totalChunks)
+          return res.status(400).json({ message: "Missing uploadId, chunkIndex, or totalChunks" });
+        const idx = Number(chunkIndex);
+
+        const currentTotal = (uploadByteTotals.get(uploadId) ?? 0) + req.file.buffer.length;
+        if (currentTotal > MAX_VIDEO_UPLOAD_BYTES) {
+          const dir = path.join(chunksDir, uploadId);
+          try { if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+          uploadByteTotals.delete(uploadId);
+          uploadTimestamps.delete(uploadId);
+          return res.status(413).json({ message: "Video exceeds the 100 MB upload limit." });
+        }
+        uploadByteTotals.set(uploadId, currentTotal);
+        uploadTimestamps.set(uploadId, Date.now());
+
         const dir = path.join(chunksDir, uploadId);
-        try { if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-        uploadByteTotals.delete(uploadId);
-        uploadTimestamps.delete(uploadId);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, String(idx)), req.file.buffer);
+
+        res.json({ success: true, chunkIndex: idx });
+      } catch (err: any) {
+        res.status(500).json({ message: `Chunk save failed: ${err.message}` });
+      }
+    });
+  });
+
+  app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { uploadId, totalChunks, originalName } = req.body;
+      if (!uploadId || !totalChunks || !originalName)
+        return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
+      const total = Number(totalChunks);
+      const dir = path.join(chunksDir, uploadId);
+
+      if (!fs.existsSync(dir))
+        return res.status(400).json({ message: "Upload session expired. Please retry." });
+
+      for (let i = 0; i < total; i++) {
+        if (!fs.existsSync(path.join(dir, String(i))))
+          return res.status(400).json({ message: `Missing chunk ${i}. Please retry.` });
+      }
+
+      const finalPath = path.join(chunksDir, `${uploadId}-final.mp4`);
+      const writeStream = fs.createWriteStream(finalPath);
+      for (let i = 0; i < total; i++) {
+        const chunkPath = path.join(dir, String(i));
+        const data = fs.readFileSync(chunkPath);
+        writeStream.write(data);
+        try { fs.unlinkSync(chunkPath); } catch {}
+      }
+      await new Promise<void>((resolve, reject) => {
+        writeStream.end((err: any) => err ? reject(err) : resolve());
+      });
+      try { fs.rmdirSync(dir); } catch {}
+
+      uploadByteTotals.delete(uploadId);
+      uploadTimestamps.delete(uploadId);
+
+      const stats = fs.statSync(finalPath);
+      if (stats.size > MAX_VIDEO_UPLOAD_BYTES) {
+        try { fs.unlinkSync(finalPath); } catch {}
         return res.status(413).json({ message: "Video exceeds the 100 MB upload limit." });
       }
-      uploadByteTotals.set(uploadId, currentTotal);
-      uploadTimestamps.set(uploadId, Date.now());
+      const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
+        cloudinary.uploader.upload_large(
+          finalPath,
+          {
+            resource_type: "video",
+            folder: "vid-x/videos",
+            public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            overwrite: false,
+            chunk_size: 6 * 1024 * 1024,
+          },
+          (error: any, result: any) => {
+            try { fs.unlinkSync(finalPath); } catch {}
+            if (error) return reject(error);
+            resolve({ url: result.secure_url, publicId: result.public_id });
+          }
+        );
+      });
 
-      const dir = path.join(chunksDir, uploadId);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, String(idx)), req.file.buffer);
-
-      res.json({ success: true, chunkIndex: idx });
+      res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
     } catch (err: any) {
-      res.status(500).json({ message: `Chunk save failed: ${err.message}` });
+      res.status(500).json({ message: `Finalize failed: ${err.message}` });
     }
   });
-});
-
-app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => {
-  try {
-    const { uploadId, totalChunks, originalName } = req.body;
-    if (!uploadId || !totalChunks || !originalName)
-      return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
-    const total = Number(totalChunks);
-    const dir = path.join(chunksDir, uploadId);
-
-    if (!fs.existsSync(dir))
-      return res.status(400).json({ message: "Upload session expired. Please retry." });
-
-    for (let i = 0; i < total; i++) {
-      if (!fs.existsSync(path.join(dir, String(i))))
-        return res.status(400).json({ message: `Missing chunk ${i}. Please retry.` });
-    }
-
-    const finalPath = path.join(chunksDir, `${uploadId}-final.mp4`);
-    const writeStream = fs.createWriteStream(finalPath);
-    for (let i = 0; i < total; i++) {
-      const chunkPath = path.join(dir, String(i));
-      const data = fs.readFileSync(chunkPath);
-      writeStream.write(data);
-      try { fs.unlinkSync(chunkPath); } catch {}
-    }
-    await new Promise<void>((resolve, reject) => {
-      writeStream.end((err: any) => err ? reject(err) : resolve());
-    });
-    try { fs.rmdirSync(dir); } catch {}
-
-    uploadByteTotals.delete(uploadId);
-    uploadTimestamps.delete(uploadId);
-
-    const stats = fs.statSync(finalPath);
-    if (stats.size > MAX_VIDEO_UPLOAD_BYTES) {
-      try { fs.unlinkSync(finalPath); } catch {}
-      return res.status(413).json({ message: "Video exceeds the 100 MB upload limit." });
-    }
-const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
-      cloudinary.uploader.upload_large(
-        finalPath,
-        {
-          resource_type: "video",
-          folder: "vampire/videos",
-          public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          overwrite: false,
-          chunk_size: 6 * 1024 * 1024,
-        },
-        (error: any, result: any) => {
-          try { fs.unlinkSync(finalPath); } catch {}
-          if (error) return reject(error);
-          resolve({ url: result.secure_url, publicId: result.public_id });
-        }
-      );
-    });
-    
-    res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
-  } catch (err: any) {
-    res.status(500).json({ message: `Finalize failed: ${err.message}` });
-  }
-});
-
 
   // ══════════════════════════════════════════════════════════════════════════
   // AUTH ROUTES
@@ -479,56 +490,56 @@ const result = await new Promise<{ url: string; publicId: string }>((resolve, re
     }
   });
 
- app.post("/api/auth/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body as { email?: string };
-    if (!email) return res.status(400).json({ message: "Email required" });
-    
-    const found = await db.select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
-      .limit(1);
-    if (!found.length) return res.status(404).json({ message: "No account found" });
-    
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = new Date(Date.now() + 10 * 60 * 1000);
-    
-    await db.execute(sql`
-      INSERT INTO otp_tokens (email, otp, expires_at)
-      VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
-      ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
-    `);
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body as { email?: string };
+      if (!email) return res.status(400).json({ message: "Email required" });
 
-    // Resend se email bhejo
-    const { Resend } = await import("resend");
-    const resend = new Resend(process.env.RESEND_API_KEY);
+      const found = await db.select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email.toLowerCase().trim()))
+        .limit(1);
+      if (!found.length) return res.status(404).json({ message: "No account found" });
 
-    await resend.emails.send({
-      from: "VID-X <onboarding@resend.dev>",
-      to: email,
-      subject: "Your VID-X Password Reset Code",
-      html: `
-        <div style="background:#1a1a1a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #ff2d55;">
-          <h1 style="background:linear-gradient(90deg,#ff2d55,#ff6b9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:32px;font-weight:900;margin:0 0 8px;">VID-X</h1>
-          <p style="color:#9b9b9b;font-size:14px;">The next generation social platform</p>
-          <hr style="border:1px solid #2a2a2a;margin:20px 0;">
-          <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
-          <div style="background:linear-gradient(90deg,#ff2d55,#f97316);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
-            <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiry = new Date(Date.now() + 10 * 60 * 1000);
+
+      await db.execute(sql`
+        INSERT INTO otp_tokens (email, otp, expires_at)
+        VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
+        ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
+      `);
+
+      // Resend se email bhejo
+      const { Resend } = await import("resend");
+      const resend = new Resend(process.env.RESEND_API_KEY);
+
+      await resend.emails.send({
+        from: "VID-X <onboarding@resend.dev>",
+        to: email,
+        subject: "Your VID-X Password Reset Code",
+        html: `
+          <div style="background:#1a1a1a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #ff2d55;">
+            <h1 style="background:linear-gradient(90deg,#ff2d55,#ff6b9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:32px;font-weight:900;margin:0 0 8px;">VID-X</h1>
+            <p style="color:#9b9b9b;font-size:14px;">The next generation social platform</p>
+            <hr style="border:1px solid #2a2a2a;margin:20px 0;">
+            <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
+            <div style="background:linear-gradient(90deg,#ff2d55,#f97316);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
+              <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
+            </div>
+            <p style="color:#ff6b9d;font-size:13px;">⏱ Valid for 10 minutes only</p>
+            <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
+            <p style="color:#ff2d55;font-weight:bold;margin-top:20px;">— VID-X Team</p>
           </div>
-          <p style="color:#ff6b9d;font-size:13px;">⏱ Valid for 10 minutes only</p>
-          <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
-          <p style="color:#ff2d55;font-weight:bold;margin-top:20px;">— VID-X Team</p>
-        </div>
-      `,
-    });
+        `,
+      });
 
-    res.json({ message: "OTP sent" });
-  } catch (err: any) {
-    console.error("[forgot-password]", err.message);
-    res.status(500).json({ message: err.message || "Failed to send OTP" });
-  }
-});
+      res.json({ message: "OTP sent" });
+    } catch (err: any) {
+      console.error("[forgot-password]", err.message);
+      res.status(500).json({ message: err.message || "Failed to send OTP" });
+    }
+  });
 
   app.post("/api/auth/verify-reset-otp", async (req, res) => {
     try {
@@ -589,36 +600,47 @@ const result = await new Promise<{ url: string; publicId: string }>((resolve, re
   // POST ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
- app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
-  try {
-    const sessionUserId = (req.session as any).userId;
-    const filterUserId = req.query.userId as string | undefined;   // ✅ naya
+  app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
+    try {
+      const sessionUserId = (req.session as any).userId;
+      const filterUserId = req.query.userId as string | undefined;
 
-    let allPosts = await storage.getAllPosts();
+      let allPosts = await storage.getAllPosts();
 
-    if (filterUserId) {
-      allPosts = allPosts.filter(post => String(post.userId) === String(filterUserId));   // ✅ naya
+      if (filterUserId) {
+        allPosts = allPosts.filter(post => String(post.userId) === String(filterUserId));
+      }
+
+      const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
+        .where(and(eq(pendingBlocks.blockedUserId, sessionUserId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
+      const blockedPostIds = new Set(blockedPosts.map(b => b.postId));
+      const filteredPosts = allPosts.filter(post => !blockedPostIds.has(post.id));
+
+      // Users me se jo maine block kiye ya jinhone mujhe block kiya, unke posts hataao
+      const myBlockRows = await db.execute(sql`
+        SELECT blocked_id, blocker_id FROM blocks
+        WHERE blocker_id = ${sessionUserId} OR blocked_id = ${sessionUserId}
+      `);
+      const relatedIds = new Set<string>();
+      ((myBlockRows as any).rows ?? myBlockRows).forEach((r: any) => {
+        relatedIds.add(r.blocker_id === sessionUserId ? r.blocked_id : r.blocker_id);
+      });
+      const finalFilteredPosts = filteredPosts.filter(post => !relatedIds.has(String(post.userId)));
+
+      const enrichedPosts = await Promise.all(finalFilteredPosts.map(async (post) => {
+        const user = await authStorage.getUser(post.userId);
+        const likesCount = await storage.getLikesCount(post.id);
+        const comms = await storage.getComments(post.id);
+        const hasLiked = await storage.hasLiked(post.id, sessionUserId);
+        const savedCheck = await db.select().from(savedPosts)
+          .where(and(eq(savedPosts.userId, sessionUserId), eq(savedPosts.postId, post.id))).limit(1);
+        return { ...post, user, likesCount, commentsCount: comms.length, hasLiked, hasSaved: savedCheck.length > 0 };
+      }));
+      res.json(enrichedPosts);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
     }
-
-    const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
-      .where(and(eq(pendingBlocks.blockedUserId, sessionUserId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
-    const blockedPostIds = new Set(blockedPosts.map(b => b.postId));
-    const filteredPosts = allPosts.filter(post => !blockedPostIds.has(post.id));
-
-    const enrichedPosts = await Promise.all(filteredPosts.map(async (post) => {
-      const user = await authStorage.getUser(post.userId);
-      const likesCount = await storage.getLikesCount(post.id);
-      const comms = await storage.getComments(post.id);
-      const hasLiked = await storage.hasLiked(post.id, sessionUserId);
-      const savedCheck = await db.select().from(savedPosts)
-        .where(and(eq(savedPosts.userId, sessionUserId), eq(savedPosts.postId, post.id))).limit(1);
-      return { ...post, user, likesCount, commentsCount: comms.length, hasLiked, hasSaved: savedCheck.length > 0 };
-    }));
-    res.json(enrichedPosts);
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  });
 
   app.post(api.posts.create.path, isAuthenticated, async (req, res) => {
     try {
@@ -839,6 +861,90 @@ const result = await new Promise<{ url: string; publicId: string }>((resolve, re
   });
 
   // ══════════════════════════════════════════════════════════════════════════
+  // BLOCK ROUTES
+  // ══════════════════════════════════════════════════════════════════════════
+
+  app.post("/api/users/:id/block", isAuthenticated, async (req: any, res) => {
+    try {
+      const blockerId = req.session.userId;
+      const blockedId = req.params.id;
+      if (blockerId === blockedId) return res.status(400).json({ message: "Cannot block yourself" });
+
+      await db.insert(blocks).values({ blockerId, blockedId, reason: req.body?.reason })
+        .onConflictDoNothing();
+
+      // dono taraf follow relation hata do
+      await db.execute(sql`
+        DELETE FROM follows
+        WHERE (follower_id = ${blockerId} AND following_id = ${blockedId})
+           OR (follower_id = ${blockedId} AND following_id = ${blockerId})
+      `);
+
+      res.json({ blocked: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/users/:id/block", isAuthenticated, async (req: any, res) => {
+    try {
+      const blockerId = req.session.userId;
+      const blockedId = req.params.id;
+      await db.execute(sql`DELETE FROM blocks WHERE blocker_id = ${blockerId} AND blocked_id = ${blockedId}`);
+      res.json({ blocked: false });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/users/:id/block-status", isAuthenticated, async (req: any, res) => {
+    try {
+      const me = req.session.userId;
+      const otherId = req.params.id;
+      const iBlocked = await db.select().from(blocks)
+        .where(and(eq(blocks.blockerId, me), eq(blocks.blockedId, otherId))).limit(1);
+      const blockedMe = await db.select().from(blocks)
+        .where(and(eq(blocks.blockerId, otherId), eq(blocks.blockedId, me))).limit(1);
+      res.json({ blocked: iBlocked.length > 0, blockedByOther: blockedMe.length > 0 });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/users/blocked", isAuthenticated, async (req: any, res) => {
+    try {
+      const me = req.session.userId;
+      const rows = await db.execute(sql`
+        SELECT u.id, u.first_name, u.last_name, u.username, u.profile_image_url
+        FROM blocks b JOIN users u ON u.id = b.blocked_id
+        WHERE b.blocker_id = ${me}
+        ORDER BY b.created_at DESC
+      `);
+      const list = (rows as any).rows ?? rows;
+      res.json(list.map((u: any) => ({
+        id: u.id, firstName: u.first_name, lastName: u.last_name,
+        username: u.username, profileImageUrl: u.profile_image_url,
+      })));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/users/:id/report", isAuthenticated, async (req: any, res) => {
+    try {
+      const reporterId = req.session.userId;
+      const reportedUserId = req.params.id;
+      const { reason, details } = req.body;
+      if (!reason) return res.status(400).json({ message: "Reason required" });
+      if (reporterId === reportedUserId) return res.status(400).json({ message: "Cannot report yourself" });
+      await db.insert(reports).values({ reporterId, reportedUserId, reason, description: details });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
   // USER ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -927,6 +1033,58 @@ const result = await new Promise<{ url: string; publicId: string }>((resolve, re
     }
   });
 
+  app.delete("/api/account", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { password } = req.body;
+      const existing = await authStorage.getUser(userId);
+      if (!existing) return res.status(404).json({ message: "User not found" });
+
+      const bcrypt = await import("bcryptjs");
+      const valid = await bcrypt.compare(password || "", (existing as any).password || "");
+      if (!valid) return res.status(401).json({ message: "Incorrect password" });
+
+      // Cloudinary cleanup ke liye media urls nikaal lo (delete se pehle)
+      const userPosts = await db.select({ imageUrl: posts.imageUrl, videoUrl: posts.videoUrl })
+        .from(posts).where(eq(posts.userId, userId));
+
+      await db.execute(sql`DELETE FROM likes WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM comments WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM saved_posts WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM story_likes WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM story_comments WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM stories WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM notifications WHERE user_id = ${userId} OR from_user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM follows WHERE follower_id = ${userId} OR following_id = ${userId}`);
+      await db.execute(sql`DELETE FROM blocks WHERE blocker_id = ${userId} OR blocked_id = ${userId}`);
+      await db.execute(sql`DELETE FROM pending_blocks WHERE reported_user_id = ${userId} OR blocked_user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM reports WHERE reporter_id = ${userId} OR reported_user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM history WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM group_members WHERE user_id = ${userId}`);
+
+      const chatRows = await db.execute(sql`SELECT id FROM direct_chats WHERE user1_id = ${userId} OR user2_id = ${userId}`);
+      for (const r of ((chatRows as any).rows ?? chatRows)) {
+        await db.execute(sql`DELETE FROM direct_messages WHERE chat_id = ${r.id}`);
+      }
+      await db.execute(sql`DELETE FROM direct_chats WHERE user1_id = ${userId} OR user2_id = ${userId}`);
+
+      await db.execute(sql`DELETE FROM posts WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM books WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
+
+      userPosts.forEach((p: any) => {
+        if (p.imageUrl) deleteFromCloudinary(p.imageUrl).catch(() => {});
+        if (p.videoUrl) deleteFromCloudinary(p.videoUrl).catch(() => {});
+      });
+
+      req.session.destroy(() => {});
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[delete account] Error:", err);
+      res.status(500).json({ message: err.message || "Failed to delete account" });
+    }
+  });
+
   // ══════════════════════════════════════════════════════════════════════════
   // FOLLOW ROUTES
   // ══════════════════════════════════════════════════════════════════════════
@@ -936,6 +1094,9 @@ const result = await new Promise<{ url: string; publicId: string }>((resolve, re
       const followerId = req.session.userId;
       const followingId = req.params.id;
       if (followerId === followingId) return res.status(400).json({ message: "Cannot follow yourself" });
+      if (await isBlockedEitherWay(followerId, followingId)) {
+        return res.status(403).json({ message: "You can't follow this account" });
+      }
       await db.execute(sql`INSERT INTO follows (follower_id, following_id) VALUES (${followerId}, ${followingId}) ON CONFLICT DO NOTHING`);
       const follower = await authStorage.getUser(followerId);
       await db.insert(notifications).values({
@@ -990,148 +1151,141 @@ const result = await new Promise<{ url: string; publicId: string }>((resolve, re
     }
   });
 
-  // like 
-app.get("/api/posts/:id/likes", isAuthenticated, async (req, res) => {
-  try {
-    const postId = Number(req.params.id);
-    const result = await db.execute(sql`
-      SELECT u.id, u.first_name, u.last_name, u.username, u.profile_image_url
-      FROM likes l
-      JOIN users u ON u.id = l.user_id
-      WHERE l.post_id = ${postId}
-      ORDER BY l.id DESC
-    `);
-    const rows = (result as any).rows ?? result;
-    res.json(rows);
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
-// ══════════════════════════════
-// STORY ROUTES
-// ══════════════════════════════
-
-// Stories fetch (sirf 24h wali)
-app.get("/api/stories", isAuthenticated, async (req, res) => {
-  try {
-    const result = await db.execute(sql`
-      SELECT s.*, u.first_name, u.last_name, u.username, u.profile_image_url
-      FROM stories s
-      JOIN users u ON u.id = s.user_id
-      WHERE s.expires_at > NOW()
-      ORDER BY s.created_at DESC
-    `);
-    const rows = (result as any).rows ?? result;
-    res.json(rows);
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Story create
-app.post("/api/stories", isAuthenticated, async (req, res) => {
-  try {
-    const userId = (req.session as any).userId;
-    const { mediaUrl, type, caption } = req.body;
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
-    const result = await db.execute(sql`
-      INSERT INTO stories (user_id, media_url, type, caption, expires_at)
-      VALUES (${userId}, ${mediaUrl}, ${type || 'image'}, ${caption || null}, ${expiresAt})
-      RETURNING *
-    `);
-    const rows = (result as any).rows ?? result;
-    res.status(201).json(rows[0]);
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Story delete (sirf apni)
-app.delete("/api/stories/:id", isAuthenticated, async (req, res) => {
-  try {
-    const userId = (req.session as any).userId;
-    const storyId = Number(req.params.id);
-    await db.execute(sql`
-      DELETE FROM stories 
-      WHERE id = ${storyId} AND user_id = ${userId}
-    `);
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Story like
-app.post("/api/stories/:id/like", isAuthenticated, async (req, res) => {
-  try {
-    const userId = (req.session as any).userId;
-    const storyId = Number(req.params.id);
-    const existing = await db.execute(sql`
-      SELECT id FROM story_likes 
-      WHERE story_id = ${storyId} AND user_id = ${userId}
-      LIMIT 1
-    `);
-    const rows = (existing as any).rows ?? existing;
-    if (rows.length > 0) {
-      await db.execute(sql`DELETE FROM story_likes WHERE story_id = ${storyId} AND user_id = ${userId}`);
-      return res.json({ liked: false });
-    } else {
-      await db.execute(sql`INSERT INTO story_likes (story_id, user_id) VALUES (${storyId}, ${userId})`);
-      return res.json({ liked: true });
+  app.get("/api/posts/:id/likes", isAuthenticated, async (req, res) => {
+    try {
+      const postId = Number(req.params.id);
+      const result = await db.execute(sql`
+        SELECT u.id, u.first_name, u.last_name, u.username, u.profile_image_url
+        FROM likes l
+        JOIN users u ON u.id = l.user_id
+        WHERE l.post_id = ${postId}
+        ORDER BY l.id DESC
+      `);
+      const rows = (result as any).rows ?? result;
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
     }
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  });
 
-// Story likes list
-app.get("/api/stories/:id/likes", isAuthenticated, async (req, res) => {
-  try {
-    const result = await db.execute(sql`
-      SELECT u.id, u.first_name, u.last_name, u.username, u.profile_image_url
-      FROM story_likes sl
-      JOIN users u ON u.id = sl.user_id
-      WHERE sl.story_id = ${Number(req.params.id)}
-    `);
-    const rows = (result as any).rows ?? result;
-    res.json(rows);
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  // ══════════════════════════════════════════════════════════════════════════
+  // STORY ROUTES
+  // ══════════════════════════════════════════════════════════════════════════
 
-// Story comment
-app.post("/api/stories/:id/comment", isAuthenticated, async (req, res) => {
-  try {
-    const userId = (req.session as any).userId;
-    const storyId = Number(req.params.id);
-    const { content } = req.body;
-    await db.execute(sql`
-      INSERT INTO story_comments (story_id, user_id, content)
-      VALUES (${storyId}, ${userId}, ${content})
-    `);
-    res.status(201).json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  app.get("/api/stories", isAuthenticated, async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT s.*, u.first_name, u.last_name, u.username, u.profile_image_url
+        FROM stories s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.expires_at > NOW()
+        ORDER BY s.created_at DESC
+      `);
+      const rows = (result as any).rows ?? result;
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
-// Story comments list
-app.get("/api/stories/:id/comments", isAuthenticated, async (req, res) => {
-  try {
-    const result = await db.execute(sql`
-      SELECT sc.*, u.first_name, u.last_name, u.username, u.profile_image_url
-      FROM story_comments sc
-      JOIN users u ON u.id = sc.user_id
-      WHERE sc.story_id = ${Number(req.params.id)}
-      ORDER BY sc.created_at ASC
-    `);
-    const rows = (result as any).rows ?? result;
-    res.json(rows);
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  app.post("/api/stories", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const { mediaUrl, type, caption } = req.body;
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+      const result = await db.execute(sql`
+        INSERT INTO stories (user_id, media_url, type, caption, expires_at)
+        VALUES (${userId}, ${mediaUrl}, ${type || 'image'}, ${caption || null}, ${expiresAt})
+        RETURNING *
+      `);
+      const rows = (result as any).rows ?? result;
+      res.status(201).json(rows[0]);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/stories/:id", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const storyId = Number(req.params.id);
+      await db.execute(sql`
+        DELETE FROM stories 
+        WHERE id = ${storyId} AND user_id = ${userId}
+      `);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/stories/:id/like", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const storyId = Number(req.params.id);
+      const existing = await db.execute(sql`
+        SELECT id FROM story_likes 
+        WHERE story_id = ${storyId} AND user_id = ${userId}
+        LIMIT 1
+      `);
+      const rows = (existing as any).rows ?? existing;
+      if (rows.length > 0) {
+        await db.execute(sql`DELETE FROM story_likes WHERE story_id = ${storyId} AND user_id = ${userId}`);
+        return res.json({ liked: false });
+      } else {
+        await db.execute(sql`INSERT INTO story_likes (story_id, user_id) VALUES (${storyId}, ${userId})`);
+        return res.json({ liked: true });
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/stories/:id/likes", isAuthenticated, async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT u.id, u.first_name, u.last_name, u.username, u.profile_image_url
+        FROM story_likes sl
+        JOIN users u ON u.id = sl.user_id
+        WHERE sl.story_id = ${Number(req.params.id)}
+      `);
+      const rows = (result as any).rows ?? result;
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/stories/:id/comment", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const storyId = Number(req.params.id);
+      const { content } = req.body;
+      await db.execute(sql`
+        INSERT INTO story_comments (story_id, user_id, content)
+        VALUES (${storyId}, ${userId}, ${content})
+      `);
+      res.status(201).json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/stories/:id/comments", isAuthenticated, async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT sc.*, u.first_name, u.last_name, u.username, u.profile_image_url
+        FROM story_comments sc
+        JOIN users u ON u.id = sc.user_id
+        WHERE sc.story_id = ${Number(req.params.id)}
+        ORDER BY sc.created_at ASC
+      `);
+      const rows = (result as any).rows ?? result;
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   // ══════════════════════════════════════════════════════════════════════════
   // NOTIFICATION ROUTES
@@ -1177,26 +1331,37 @@ app.get("/api/stories/:id/comments", isAuthenticated, async (req, res) => {
   // ══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/direct-chats", isAuthenticated, async (req, res) => {
-    const userId = (req.session as any).userId;
-    const chats = await storage.getDirectChats(userId);
-    const enriched = await Promise.all(chats.map(async chat => {
-      const otherId = chat.user1Id === userId ? chat.user2Id : chat.user1Id;
-      const otherUser = await authStorage.getUser(otherId);
-      const msgs = await storage.getDirectMessages(chat.id);
-      const lastMsg = msgs[msgs.length - 1] ?? null;
-      const unread = msgs.filter(m => m.senderId !== userId && !m.readAt).length;
-      const onlineStatus = await storage.getOnlineStatus(otherId);
-      return { ...chat, otherUser, lastMsg, unread, isOnline: onlineStatus.isOnline, lastSeen: onlineStatus.lastSeen };
-    }));
-    res.json(enriched);
+    try {
+      const userId = (req.session as any).userId;
+      const chats = await storage.getDirectChats(userId);
+      const enriched = await Promise.all(chats.map(async chat => {
+        const otherId = chat.user1Id === userId ? chat.user2Id : chat.user1Id;
+        const otherUser = await authStorage.getUser(otherId);
+        const msgs = await storage.getDirectMessages(chat.id);
+        const lastMsg = msgs[msgs.length - 1] ?? null;
+        const unread = msgs.filter(m => m.senderId !== userId && !m.readAt).length;
+        const onlineStatus = await storage.getOnlineStatus(otherId);
+        return { ...chat, otherUser, lastMsg, unread, isOnline: onlineStatus.isOnline, lastSeen: onlineStatus.lastSeen };
+      }));
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
-  app.post("/api/direct-chats", isAuthenticated, async (req, res) => {
-    const userId = (req.session as any).userId;
-    const { otherUserId } = req.body;
-    if (!otherUserId) return res.status(400).json({ message: "otherUserId required" });
-    const chat = await storage.getOrCreateDirectChat(userId, otherUserId);
-    res.json(chat);
+  app.post("/api/direct-chats", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { otherUserId } = req.body;
+      if (!otherUserId) return res.status(400).json({ message: "otherUserId required" });
+      if (await isBlockedEitherWay(userId, otherUserId)) {
+        return res.status(403).json({ message: "You can't message this user" });
+      }
+      const chat = await storage.getOrCreateDirectChat(userId, otherUserId);
+      res.json(chat);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   app.patch("/api/direct-chats/:id/theme", isAuthenticated, async (req, res) => {
@@ -1204,9 +1369,25 @@ app.get("/api/stories/:id/comments", isAuthenticated, async (req, res) => {
     res.json({ ok: true });
   });
 
-  app.get("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
-    const msgs = await storage.getDirectMessages(Number(req.params.id));
-    res.json(msgs);
+  app.get("/api/direct-chats/:id/messages", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const chatId = Number(req.params.id);
+
+      const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
+      const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
+      if (chatRow) {
+        const other = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
+        if (await isBlockedEitherWay(userId, other)) {
+          return res.status(403).json({ message: "You can't message this user" });
+        }
+      }
+
+      const msgs = await storage.getDirectMessages(chatId);
+      res.json(msgs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   app.post("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
@@ -1214,6 +1395,16 @@ app.get("/api/stories/:id/comments", isAuthenticated, async (req, res) => {
     const chatId = Number(req.params.id);
     const { content, type, mediaUrl, metadata, replyToId, expiresInSeconds } = req.body;
     const expiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : undefined;
+
+    // Block check pehle — reuse yehi chatRow niche notification ke liye bhi
+    const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
+    const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
+    if (chatRow) {
+      const other = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
+      if (await isBlockedEitherWay(userId, other)) {
+        return res.status(403).json({ message: "You can't message this user" });
+      }
+    }
 
     const msg = await storage.sendDirectMessage({
       chatId, senderId: userId, content,
@@ -1224,22 +1415,20 @@ app.get("/api/stories/:id/comments", isAuthenticated, async (req, res) => {
     res.status(201).json(msg);
 
     try {
-      const chatRows = await db.execute(sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId}`);
-      const chatRow = ((chatRows as any).rows ?? chatRows as any)[0];
       if (chatRow) {
         const recipientId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
         const sender = await authStorage.getUser(userId);
-    let preview = "";
-try {
-  const parsed = JSON.parse(content ?? "");
-  if (parsed?.e2e) {
-    preview = "sent you a message"; // encrypted msg ka preview
-  } else {
-    preview = (content ?? "").slice(0, 50);
-  }
-} catch {
-  preview = (content ?? "").slice(0, 50);
-}
+        let preview = "";
+        try {
+          const parsed = JSON.parse(content ?? "");
+          if (parsed?.e2e) {
+            preview = "sent you a message"; // encrypted msg ka preview
+          } else {
+            preview = (content ?? "").slice(0, 50);
+          }
+        } catch {
+          preview = (content ?? "").slice(0, 50);
+        }
         await db.execute(sql`
           INSERT INTO notifications (user_id, from_user_id, type, message)
           VALUES (${recipientId}, ${userId}, 'message',
@@ -1251,7 +1440,7 @@ try {
         }
       }
     } catch (e) {
-     console.error("[ direct-chat message] background error:", e);
+      console.error("[ direct-chat message] background error:", e);
     }
   });
 
@@ -1275,15 +1464,13 @@ try {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ✅ FIX 1: Single message delete — res.json() sirf ek baar
-  // Cloudinary se bhi media delete hoga
+  // Single message delete — res.json() sirf ek baar, Cloudinary se bhi media delete hoga
   // ══════════════════════════════════════════════════════════════════════════
   app.delete("/api/messages/:id", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
     const messageId = Number(req.params.id);
 
     try {
-      // Message fetch karo (chatId + mediaUrl ke liye)
       const msgRows = await db.execute(
         sql`SELECT * FROM direct_messages WHERE id = ${messageId} LIMIT 1`
       );
@@ -1293,20 +1480,16 @@ try {
         return res.status(404).json({ message: "Message not found" });
       }
 
-      // Cloudinary se media delete karo (agar image/video hai)
       if (msgRow.media_url && msgRow.type !== "text" && msgRow.type !== "voice") {
         deleteFromCloudinary(msgRow.media_url).catch(err =>
           console.error("[delete message] Cloudinary cleanup error:", err)
         );
       }
 
-      // DB se delete karo
       await storage.deleteMessage(messageId);
 
-      // ✅ SIRF EK BAAR res.json() — yahi bug tha
       res.json({ success: true, id: messageId });
 
-      // Background: WebSocket broadcast (response already sent hai)
       try {
         const chatRows = await db.execute(
           sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${msgRow.chat_id} LIMIT 1`
@@ -1337,15 +1520,13 @@ try {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ✅ FIX 2: Clear all chat — naya route (pehle exist nahi tha)
-  // Cloudinary se saari media bhi delete hogi
+  // Clear all chat — Cloudinary se saari media bhi delete hogi
   // ══════════════════════════════════════════════════════════════════════════
   app.delete("/api/direct-chats/:id/messages", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
     const chatId = Number(req.params.id);
 
     try {
-      // Verify: current user is part of this chat
       const chatRows = await db.execute(
         sql`SELECT user1_id, user2_id FROM direct_chats WHERE id = ${chatId} LIMIT 1`
       );
@@ -1359,13 +1540,11 @@ try {
         return res.status(403).json({ message: "Not authorized" });
       }
 
-      // Saare media files fetch karo Cloudinary cleanup ke liye
       const allMsgs = await db.execute(
         sql`SELECT media_url, type FROM direct_messages WHERE chat_id = ${chatId} AND media_url IS NOT NULL`
       );
       const mediaRows = ((allMsgs as any).rows ?? allMsgs as any);
 
-      // Cloudinary se saari media delete karo (background mein)
       mediaRows
         .filter((m: any) => m.media_url && m.type !== "text" && m.type !== "voice")
         .forEach((m: any) => {
@@ -1374,12 +1553,10 @@ try {
           );
         });
 
-      // DB se saare messages delete karo
       await db.execute(sql`DELETE FROM direct_messages WHERE chat_id = ${chatId}`);
 
       res.json({ success: true, chatId });
 
-      // WebSocket: dono users ko batao
       try {
         const otherUserId = chatRow.user1_id === userId ? chatRow.user2_id : chatRow.user1_id;
         [wsClients.get(String(userId)), wsClients.get(String(otherUserId))].forEach(ws => {
@@ -1500,7 +1677,8 @@ try {
   // ══════════════════════════════════════════════════════════════════════════
   // AI / GEMINI ROUTES
   // ══════════════════════════════════════════════════════════════════════════
-app.get("/api/audio-proxy", async (req, res) => {
+
+  app.get("/api/audio-proxy", async (req, res) => {
     try {
       const targetUrl = req.query.url as string;
       if (!targetUrl) return res.status(400).json({ message: "Missing url parameter" });

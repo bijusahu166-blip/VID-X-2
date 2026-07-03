@@ -14,7 +14,7 @@ import {
   MessageSquare, AtSign, MessageCircle, Share2,
   LogOut, Menu, Zap, Trophy, Flame, Shield, Sword, Target,
   Crown, Cpu, BadgeCheck, BarChart3, Lock, Video, WifiOff, Gauge,
-  MoreVertical
+  MoreVertical, Flag, Trash2, Copy, Link as LinkIcon, X
 } from "lucide-react";
 import { useVideoSettings, VideoQuality } from "@/contexts/VideoSettingsContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -84,6 +84,294 @@ function fmtN(n: number | undefined): string {
   return n.toString();
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// Shared dropdown menu primitive (lightweight, no extra deps)
+// ══════════════════════════════════════════════════════════════════════════
+function DropdownMenu({
+  open,
+  onClose,
+  items,
+}: {
+  open: boolean;
+  onClose: () => void;
+  items: { icon: any; label: string; onClick: () => void; danger?: boolean }[];
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-10 z-50 w-56 rounded-2xl border border-white/10 bg-zinc-900/98 backdrop-blur-xl shadow-2xl overflow-hidden py-1.5"
+      style={{ boxShadow: "0 10px 40px rgba(0,0,0,0.6)" }}
+    >
+      {items.map((item, i) => (
+        <button
+          key={i}
+          onClick={() => { item.onClick(); onClose(); }}
+          className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-white/5 ${
+            item.danger ? "text-red-400" : "text-zinc-200"
+          }`}
+        >
+          <item.icon className="w-4 h-4 shrink-0" />
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Report User dialog
+// ══════════════════════════════════════════════════════════════════════════
+const REPORT_REASONS = [
+  "Spam",
+  "Nudity or sexual content",
+  "Hate speech or symbols",
+  "Bullying or harassment",
+  "Fake account / impersonation",
+  "Violence or dangerous content",
+  "Something else",
+];
+
+function ReportUserDialog({
+  open,
+  onOpenChange,
+  targetUserId,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  targetUserId: string;
+}) {
+  const { toast } = useToast();
+  const [reason, setReason] = useState<string | null>(null);
+  const [details, setDetails] = useState("");
+
+  const reportMutation = useMutation({
+    mutationFn: () =>
+      fetch(`/api/users/${targetUserId}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason, details }),
+      }).then((r) => {
+        if (!r.ok) throw new Error("Report failed");
+        return r.json();
+      }),
+    onSuccess: () => {
+      toast({ title: "Report submitted", description: "Thanks — our team will review this account." });
+      onOpenChange(false);
+      setReason(null);
+      setDetails("");
+    },
+    onError: () => toast({ title: "Couldn't submit report", variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md bg-card border border-border/40 shadow-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Flag className="w-4 h-4 text-red-400" /> Report User</DialogTitle>
+          <DialogDescription>Tell us what's wrong. Your report is anonymous.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5 max-h-64 overflow-y-auto">
+          {REPORT_REASONS.map((r) => (
+            <button
+              key={r}
+              onClick={() => setReason(r)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm text-left transition-colors ${
+                reason === r ? "border-red-400/60 bg-red-400/10 text-white" : "border-white/10 hover:bg-white/5 text-zinc-300"
+              }`}
+            >
+              {r}
+              {reason === r && <div className="w-2 h-2 rounded-full bg-red-400 shrink-0" />}
+            </button>
+          ))}
+        </div>
+        {reason === "Something else" && (
+          <Textarea
+            value={details}
+            onChange={(e) => setDetails(e.target.value)}
+            placeholder="Add a few details (optional)"
+            rows={3}
+            className="bg-white/5 border-white/10 rounded-xl text-sm"
+          />
+        )}
+        <Button
+          className="w-full bg-red-500 hover:bg-red-600"
+          disabled={!reason || reportMutation.isPending}
+          onClick={() => reportMutation.mutate()}
+        >
+          {reportMutation.isPending ? "Submitting…" : "Submit Report"}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Blocked Accounts dialog (real API-backed, used from own profile menu)
+// ══════════════════════════════════════════════════════════════════════════
+function BlockedAccountsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const { data: blocked, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/users/blocked"],
+    queryFn: () => fetch("/api/users/blocked", { credentials: "include" }).then((r) => r.json()),
+    enabled: open,
+  });
+
+  const unblockMutation = useMutation({
+    mutationFn: (userId: string) =>
+      fetch(`/api/users/${userId}/block`, { method: "DELETE", credentials: "include" }).then((r) => {
+        if (!r.ok) throw new Error("Unblock failed");
+        return r.json();
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/users/blocked"] });
+      toast({ title: "Unblocked" });
+    },
+    onError: () => toast({ title: "Couldn't unblock", variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md bg-card border border-border/40 shadow-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><UserX className="w-4 h-4 text-red-400" /> Blocked Accounts</DialogTitle>
+          <DialogDescription>Blocked accounts can't see your profile, posts, reels or message you.</DialogDescription>
+        </DialogHeader>
+        <ScrollAreaUI className="max-h-80">
+          <div className="space-y-2 pr-2">
+            {isLoading ? (
+              Array(3).fill(0).map((_, i) => <div key={i} className="h-14 rounded-xl bg-white/5 animate-pulse" />)
+            ) : !blocked || blocked.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">You haven't blocked anyone.</p>
+            ) : (
+              blocked.map((u: any) => (
+                <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar className="w-8 h-8">
+                      <AvatarImage src={u.profileImageUrl || undefined} />
+                      <AvatarFallback>{u.firstName?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium truncate">@{u.username || u.firstName}</span>
+                  </div>
+                  <button
+                    onClick={() => unblockMutation.mutate(u.id)}
+                    disabled={unblockMutation.isPending}
+                    className="text-[11px] text-blue-400 font-semibold px-3 py-1 rounded-full border border-blue-400/30 hover:bg-blue-400/10 transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    Unblock
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollAreaUI>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Remove Account dialog
+// ══════════════════════════════════════════════════════════════════════════
+function RemoveAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { toast } = useToast();
+  const [confirmText, setConfirmText] = useState("");
+  const [password, setPassword] = useState("");
+
+  const removeMutation = useMutation({
+    mutationFn: () =>
+      fetch("/api/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password }),
+      }).then((r) => {
+        if (!r.ok) throw new Error("Delete failed");
+        return r.json();
+      }),
+    onSuccess: () => {
+      toast({ title: "Account deleted", description: "Sorry to see you go." });
+      window.location.href = "/";
+    },
+    onError: () => toast({ title: "Couldn't delete account", description: "Check your password and try again.", variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md bg-card border border-border/40 shadow-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-400"><Trash2 className="w-4 h-4" /> Remove Account</DialogTitle>
+          <DialogDescription>This permanently deletes your profile, posts, reels, messages and followers. This cannot be undone.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Confirm your password</Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className="bg-white/5 border-white/10 rounded-xl h-11"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Type DELETE to confirm</Label>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
+              placeholder="DELETE"
+              className="bg-white/5 border-white/10 rounded-xl h-11 font-mono"
+            />
+          </div>
+        </div>
+        <Button
+          className="w-full bg-red-500 hover:bg-red-600"
+          disabled={confirmText !== "DELETE" || !password || removeMutation.isPending}
+          onClick={() => removeMutation.mutate()}
+        >
+          {removeMutation.isPending ? "Deleting…" : "Permanently Delete My Account"}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Share Profile helper
+// ══════════════════════════════════════════════════════════════════════════
+async function shareProfile(username: string, toast: (opts: any) => void) {
+  const url = `${window.location.origin}/profile/${username}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: `${username} on LITLink`, url });
+      return;
+    } catch {
+      // user cancelled share sheet — fall through to clipboard
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast({ title: "Link copied!", description: url });
+  } catch {
+    toast({ title: "Couldn't copy link", variant: "destructive" });
+  }
+}
+
 function OtherUserProfile({ userId }: { userId: string }) {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
@@ -107,9 +395,17 @@ function OtherUserProfile({ userId }: { userId: string }) {
     queryFn: () => fetch(`/api/users/${userId}/follow-status`, { credentials: "include" }).then(r => r.json()),
   });
 
+  const { data: blockStatus } = useQuery<{ blocked: boolean }>({
+    queryKey: ["/api/users", userId, "block-status"],
+    queryFn: () => fetch(`/api/users/${userId}/block-status`, { credentials: "include" }).then(r => r.json()),
+  });
+
   const [followLoading, setFollowLoading] = useState(false);
   const isFollowing = followStatus?.following ?? false;
+  const isBlocked = blockStatus?.blocked ?? false;
   const [viewingPost, setViewingPost] = useState<any | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Real-time follower count — update the cache instantly when the WS event fires
   useEffect(() => {
@@ -141,6 +437,34 @@ function OtherUserProfile({ userId }: { userId: string }) {
       setFollowLoading(false);
     }
   };
+
+  const blockMutation = useMutation({
+    mutationFn: () =>
+      fetch(`/api/users/${userId}/block`, { method: "POST", credentials: "include" }).then((r) => {
+        if (!r.ok) throw new Error("Block failed");
+        return r.json();
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/users", userId, "block-status"] });
+      qc.invalidateQueries({ queryKey: ["/api/users", userId, "follow-status"] });
+      qc.invalidateQueries({ queryKey: ["/api/users", userId] });
+      toast({ title: "User blocked", description: "They can no longer see your profile, posts or message you." });
+    },
+    onError: () => toast({ title: "Couldn't block user", variant: "destructive" }),
+  });
+
+  const unblockMutation = useMutation({
+    mutationFn: () =>
+      fetch(`/api/users/${userId}/block`, { method: "DELETE", credentials: "include" }).then((r) => {
+        if (!r.ok) throw new Error("Unblock failed");
+        return r.json();
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/users", userId, "block-status"] });
+      toast({ title: "User unblocked" });
+    },
+    onError: () => toast({ title: "Couldn't unblock user", variant: "destructive" }),
+  });
 
   const [msgLoading, setMsgLoading] = useState(false);
   const startMessage = async () => {
@@ -189,9 +513,47 @@ const sortedUserPosts = (userPosts ?? [])
         <button onClick={() => window.history.back()} className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center" data-testid="button-back-profile">
           <ArrowLeft className="w-4 h-4 text-white" />
         </button>
-        <span className="font-bold text-white">{name}</span>
+        <span className="font-bold text-white flex-1">{name}</span>
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center"
+            data-testid="button-other-user-menu"
+          >
+            <Menu className="w-4 h-4 text-white" />
+          </button>
+          <DropdownMenu
+            open={menuOpen}
+            onClose={() => setMenuOpen(false)}
+            items={[
+              { icon: LinkIcon, label: "Share Profile", onClick: () => shareProfile(u?.username || u?.firstName || userId, toast) },
+              isBlocked
+                ? { icon: UserX, label: "Unblock User", onClick: () => unblockMutation.mutate() }
+                : { icon: UserX, label: "Block User", onClick: () => blockMutation.mutate(), danger: true },
+              { icon: Flag, label: "Report User", onClick: () => setReportOpen(true), danger: true },
+            ]}
+          />
+        </div>
       </div>
 
+      <ReportUserDialog open={reportOpen} onOpenChange={setReportOpen} targetUserId={userId} />
+
+      {isBlocked ? (
+        <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-4">
+            <UserX className="w-7 h-7 text-red-400" />
+          </div>
+          <h2 className="text-white font-bold text-lg mb-1">You've blocked {name}</h2>
+          <p className="text-sm text-zinc-500 max-w-xs mb-5">They can't see your profile, posts, reels or message you. Their profile is hidden for you too.</p>
+          <button
+            onClick={() => unblockMutation.mutate()}
+            className="px-5 py-2 rounded-full bg-white text-black text-sm font-bold"
+          >
+            Unblock
+          </button>
+        </div>
+      ) : (
+      <>
       {/* Cover */}
       <div className="relative">
         <div className="h-36 w-full" style={{ background: "linear-gradient(135deg, #1a0030, #0d001a)" }} />
@@ -318,6 +680,8 @@ const sortedUserPosts = (userPosts ?? [])
           </div>
         )}
       </div>
+      </>
+      )}
 
       <BottomNav />
 
@@ -331,7 +695,6 @@ const sortedUserPosts = (userPosts ?? [])
     </div>
   );
 }
-
 export default function Profile() {
   const params = useParams<{ id?: string }>();
   const { user, logout, isLoading: authLoading } = useAuth();
@@ -417,6 +780,11 @@ export default function Profile() {
   const myPosts = posts?.filter(p => p.userId === user?.id && p.type !== "story").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
+
+  // ── Own-profile ☰ menu (Share Profile / Blocked Accounts / Remove Account) ──
+  const [ownMenuOpen, setOwnMenuOpen] = useState(false);
+  const [blockedDialogOpen, setBlockedDialogOpen] = useState(false);
+  const [removeAccountOpen, setRemoveAccountOpen] = useState(false);
 
   // Real-time follower count on own profile — update instantly via WS event
   useEffect(() => {
@@ -957,18 +1325,13 @@ export default function Profile() {
                   {/* ── SUB: BLOCKED ── */}
                   {settingsPanel === "BlockShield" && (
                     <div className="p-5 space-y-3">
-                      <p className="text-[11px] text-muted-foreground">Blocked accounts can't see your content or interact with you.</p>
-                      {["@spammer99", "@troll_user", "@fake_account"].map((handle) => (
-                        <div key={handle} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs">👤</div>
-                            <span className="text-sm font-medium">{handle}</span>
-                          </div>
-                          <button className="text-[11px] text-blue-400 font-semibold px-3 py-1 rounded-full border border-blue-400/30 hover:bg-blue-400/10 transition-colors">
-                            Unblock
-                          </button>
-                        </div>
-                      ))}
+                      <p className="text-[11px] text-muted-foreground">Blocked accounts can't see your content or interact with you. Manage your full list from the ☰ menu → Blocked Accounts.</p>
+                      <button
+                        onClick={() => { setSettingsPanel(null); setBlockedDialogOpen(true); }}
+                        className="w-full h-10 rounded-xl border border-white/15 text-sm font-semibold hover:bg-white/5 transition-colors"
+                      >
+                        Open Blocked Accounts
+                      </button>
                     </div>
                   )}
 
@@ -1035,9 +1398,42 @@ export default function Profile() {
             </Dialog>
             )}
 
-            <Button size="icon" variant="ghost" className="w-8 h-8 rounded-full text-pink-400 hover:bg-pink-400/10">
-              <Menu className="w-4 h-4" />
-            </Button>
+            {/* ☰ Menu — own profile: Share Profile / Blocked Accounts / Remove Account */}
+            {!params.id && (
+              <div className="relative">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="w-8 h-8 rounded-full text-pink-400 hover:bg-pink-400/10"
+                  onClick={() => setOwnMenuOpen((v) => !v)}
+                  data-testid="button-own-menu"
+                >
+                  <Menu className="w-4 h-4" />
+                </Button>
+                <DropdownMenu
+                  open={ownMenuOpen}
+                  onClose={() => setOwnMenuOpen(false)}
+                  items={[
+                    {
+                      icon: LinkIcon,
+                      label: "Share Profile",
+                      onClick: () => shareProfile((user as any)?.username || user?.firstName || String(user?.id), toast),
+                    },
+                    {
+                      icon: UserX,
+                      label: "Blocked Accounts",
+                      onClick: () => setBlockedDialogOpen(true),
+                    },
+                    {
+                      icon: Trash2,
+                      label: "Remove Account",
+                      onClick: () => setRemoveAccountOpen(true),
+                      danger: true,
+                    },
+                  ]}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -1052,6 +1448,9 @@ export default function Profile() {
           {currentProfileUser?.coins ?? 0}
         </div>
       </div>
+
+      <BlockedAccountsDialog open={blockedDialogOpen} onOpenChange={setBlockedDialogOpen} />
+      <RemoveAccountDialog open={removeAccountOpen} onOpenChange={setRemoveAccountOpen} />
 
       {/* ══ AVATAR CARD (overlapping banner) ══ */}
       <div className="relative z-10 -mt-16 px-4">
