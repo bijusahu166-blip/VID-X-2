@@ -62,7 +62,7 @@ export function FollowSuggestions({ currentUserId, onNavigate }: Props) {
           <span className="text-[13px] font-black text-white tracking-wide">🧛 People to Follow</span>
         </div>
         <button
-          onClick={() => onNavigate("/explore")}
+          onClick={() => onNavigate("/search")}
           className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5 font-semibold"
         >
           See all <ChevronRight className="w-3 h-3" />
