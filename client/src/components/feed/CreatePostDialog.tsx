@@ -833,8 +833,8 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
         // 1 MB chunks — small enough to pass through the Replit proxy without 413s.
         // Uploads 4 chunks concurrently for speed. Each chunk retries up to 3 times
         // before the entire upload is aborted.
-       const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks — kam requests
-const CONCURRENCY = 6;              // 6 parallel = faster
+       const CHUNK_SIZE = 1 * 1024 * 1024;
+const CONCURRENCY = 3              // 6 parallel = faster
 const MAX_RETRIES = 3;
         const totalChunks = Math.ceil(videoFile.size / CHUNK_SIZE);
         const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -881,14 +881,14 @@ const MAX_RETRIES = 3;
                 abortReason = `${msg} (chunk ${i + 1}/${totalChunks})`;
               } else {
                 // Brief pause before retry (100ms × attempt)
-                await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
+               await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
               }
             } catch (networkErr: any) {
               if (attempt === MAX_RETRIES - 1) {
                 aborted = true;
                 abortReason = `Network error on chunk ${i + 1}/${totalChunks}: ${networkErr?.message || "connection lost"}`;
               } else {
-                await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+               await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
               }
             }
           }

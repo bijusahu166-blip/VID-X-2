@@ -708,7 +708,7 @@ export default function Profile() {
                       </div>
                      <Separator className="my-3" />
 
-<button onClick={() => (window.location.href = "/privacy-policy.html")}
+<button onClick={() => window.open("https://vampireofficial00.github.io/privacy-policy", "_blank")}
   className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 rounded-xl transition-colors">
   <Lock className="w-4 h-4 text-zinc-400" />
   <span className="text-sm font-semibold">Privacy Policy</span>

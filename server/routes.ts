@@ -237,7 +237,7 @@ const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB
 
 const chunkUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  limits: { fileSize: 2 * 1024 * 1024 },
 });
 
 const chunksDir = path.join(process.cwd(), "uploads", "chunks");
