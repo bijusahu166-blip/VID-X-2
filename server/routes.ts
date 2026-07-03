@@ -422,30 +422,24 @@ app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => 
       try { fs.unlinkSync(finalPath); } catch {}
       return res.status(413).json({ message: "Video exceeds the 100 MB upload limit." });
     }
-
-    const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
-     cloudinary.uploader.upload_large(
-  finalPath,
-  {
-    resource_type: "video",
-    folder: "vampire/videos",
-    public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    overwrite: false,
-    chunk_size: 6 * 1024 * 1024,
-    
-  },
-       (error: any, result: any) => {
-  try { fs.unlinkSync(finalPath); } catch {}
-  if (error) return reject(error);
-  // Agar moderation ne reject kiya
- // PEHLE (galat):
-if (false) { // Replace 'false' with actual moderation check
-  return reject(new Error("Video contains inappropriate content and cannot be uploaded."));
-}
-resolve({ url: result.secure_url, publicId: result.public_id });
+const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
+      cloudinary.uploader.upload_large(
+        finalPath,
+        {
+          resource_type: "video",
+          folder: "vampire/videos",
+          public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          overwrite: false,
+          chunk_size: 6 * 1024 * 1024,
+        },
+        (error: any, result: any) => {
+          try { fs.unlinkSync(finalPath); } catch {}
+          if (error) return reject(error);
+          resolve({ url: result.secure_url, publicId: result.public_id });
+        }
       );
     });
-
+    
     res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
   } catch (err: any) {
     res.status(500).json({ message: `Finalize failed: ${err.message}` });
