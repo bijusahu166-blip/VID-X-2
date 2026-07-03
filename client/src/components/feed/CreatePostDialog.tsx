@@ -921,7 +921,13 @@ const MAX_RETRIES = 3;
         if (!finalResp.ok) {
           let msg = "Failed to assemble video";
           try { msg = (await finalResp.json()).message || msg; } catch {}
-          toast({ title: "Upload failed", description: msg, variant: "destructive" });
+          toast({ 
+  title: "Upload failed", 
+  description: msg.includes("inappropriate") 
+    ? "🚫 This video violates our community guidelines and cannot be uploaded." 
+    : msg, 
+  variant: "destructive" 
+});
           return;
         }
 
