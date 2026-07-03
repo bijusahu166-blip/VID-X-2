@@ -15,6 +15,7 @@ import path from "path";
 import fs from "fs";
 import { v2 as cloudinary } from "cloudinary";
 import { wsClients } from "./realtime";
+import { error } from "console";
 
 const GEMINI_MODEL_FALLBACKS = [
   process.env.GEMINI_MODEL || "gemini-2.0-flash",
@@ -138,16 +139,10 @@ async function uploadLargeVideoToCloudinary(
         public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         overwrite: false,
         chunk_size: 6 * 1024 * 1024,
-        // Inappropriate content block
-        tags: ["vampire-app"],
       },
       (error: any, result: any) => {
         try { fs.unlinkSync(tempPath); } catch {}
         if (error) return reject(error);
-        // Moderation check
-        if (result.moderation?.[0]?.status === "rejected") {
-          return reject(new Error("Video contains inappropriate content."));
-        }
         resolve({
           url: result.secure_url,
           publicId: result.public_id,
@@ -437,17 +432,17 @@ app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => 
     public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     overwrite: false,
     chunk_size: 6 * 1024 * 1024,
-    moderation: "aws_rek",
+    
   },
        (error: any, result: any) => {
   try { fs.unlinkSync(finalPath); } catch {}
   if (error) return reject(error);
   // Agar moderation ne reject kiya
-  if (result.moderation?.[0]?.status === "rejected") {
-    return reject(new Error("Video contains inappropriate content and cannot be uploaded."));
-  }
-  resolve({ url: result.secure_url, publicId: result.public_id });
+ // PEHLE (galat):
+if (false) { // Replace 'false' with actual moderation check
+  return reject(new Error("Video contains inappropriate content and cannot be uploaded."));
 }
+resolve({ url: result.secure_url, publicId: result.public_id });
       );
     });
 
@@ -456,6 +451,7 @@ app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => 
     res.status(500).json({ message: `Finalize failed: ${err.message}` });
   }
 });
+
 
   // ══════════════════════════════════════════════════════════════════════════
   // AUTH ROUTES
