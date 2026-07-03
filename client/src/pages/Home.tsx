@@ -1,3 +1,4 @@
+import { FollowSuggestions } from "@/components/shared/FollowSuggestions";
 import { usePosts } from "@/hooks/use-posts";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
@@ -568,7 +569,8 @@ const matchesUserGoal = (post: any) => {
             })()}
           </div>
         </div>
-
+{/* ── FOLLOW SUGGESTIONS ── */}
+<FollowSuggestions currentUserId={user?.id} onNavigate={navigate} />
         {/* ── MAIN FEED ── */}
         <div className="mt-1">
           {isLoading ? (
@@ -590,8 +592,7 @@ const matchesUserGoal = (post: any) => {
               <p className="text-sm">No posts yet. Be the first!</p>
             </div>
           ) : (
-            posts?.filter((post) => {
-              if (!matchesUserGoal(post)) return false;
+              posts?.filter((post) => {
 
               if (activeCategory === "All") return true;
               if (activeCategory === "Trending") return (post.likesCount ?? 0) >= 0;

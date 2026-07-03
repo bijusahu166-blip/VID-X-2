@@ -229,272 +229,224 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.use('/api/messages', messagesRoutes.default);
 
   seed().catch(console.error);
+// ══════════════════════════════════════════════════════════════════════════
+// UPLOAD ROUTES
+// ══════════════════════════════════════════════════════════════════════════
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // UPLOAD ROUTES
-  // ══════════════════════════════════════════════════════════════════════════
+const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB
 
-  app.post("/api/upload/video", isAuthenticated, (req: any, res: any) => {
-    anyUpload.single("video")(req, res, async (err: any) => {
-      if (err) return res.status(400).json({ message: err.message });
-      if (!req.file) return res.status(400).json({ message: "No video file received. Field name: 'video'" });
+const chunkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+});
+
+const chunksDir = path.join(process.cwd(), "uploads", "chunks");
+if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
+
+const uploadByteTotals = new Map<string, number>();
+const uploadTimestamps = new Map<string, number>();
+const CHUNK_TTL_MS = 30 * 60 * 1000;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, ts] of uploadTimestamps.entries()) {
+    if (now - ts > CHUNK_TTL_MS) {
+      uploadByteTotals.delete(id);
+      uploadTimestamps.delete(id);
       try {
-        const result = await uploadLargeVideoToCloudinary(req.file.buffer, "vid-x/videos");
-        res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
-      } catch (err: any) {
-        res.status(500).json({ message: `Video upload failed: ${err.message}` });
-      }
-    });
-  });
-
-  app.post("/api/upload/image", isAuthenticated, (req: any, res: any) => {
-    anyUpload.single("image")(req, res, async (err: any) => {
-      if (err) return res.status(400).json({ message: err.message });
-      if (!req.file) return res.status(400).json({ message: "No image file received. Field name: 'image'" });
-      try {
-        const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/images");
-        res.json({ success: true, url: result.url, imageUrl: result.url, publicId: result.publicId });
-      } catch (err: any) {
-        res.status(500).json({ message: `Image upload failed: ${err.message}` });
-      }
-    });
-  });
-
-  app.post("/api/upload/profile-image", isAuthenticated, (req: any, res: any) => {
-    anyUpload.single("image")(req, res, async (err: any) => {
-      if (err) return res.status(400).json({ message: err.message });
-      if (!req.file) return res.status(400).json({ message: "No image received. Field name: 'image'" });
-      try {
-        const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/profiles");
-        res.json({ success: true, url: result.url, imageUrl: result.url, profileImageUrl: result.url, publicId: result.publicId });
-      } catch (err: any) {
-        res.status(500).json({ message: `Profile image upload failed: ${err.message}` });
-      }
-    });
-  });
-
-  app.post("/api/upload/pdf", isAuthenticated, (req: any, res: any) => {
-    anyUpload.single("pdf")(req, res, async (err: any) => {
-      if (err) return res.status(400).json({ message: err.message });
-      if (!req.file) return res.status(400).json({ message: "No PDF received. Field name: 'pdf'" });
-      try {
-        const result = await uploadToCloudinary(req.file.buffer, "raw", "vid-x/pdfs");
-        res.json({ success: true, url: result.url, pdfUrl: result.url, publicId: result.publicId });
-      } catch (err: any) {
-        res.status(500).json({ message: `PDF upload failed: ${err.message}` });
-      }
-    });
-  });
-
-  app.post("/api/upload/file", isAuthenticated, (req: any, res: any) => {
-    anyUpload.single("file")(req, res, async (err: any) => {
-      if (err) return res.status(400).json({ message: err.message });
-      if (!req.file) return res.status(400).json({ message: "No file received. Field name: 'file'" });
-      try {
-        const mime = req.file.mimetype;
-        const isVideo = mime.startsWith("video/");
-        const isImage = mime.startsWith("image/");
-        const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
-        const folder = isVideo ? "vid-x/videos" : isImage ? "vid-x/images" : "vid-x/files";
-        const result = await uploadToCloudinary(req.file.buffer, resourceType, folder);
-        res.json({
-          success: true,
-          url: result.url,
-          videoUrl: isVideo ? result.url : undefined,
-          imageUrl: isImage ? result.url : undefined,
-          pdfUrl: (!isVideo && !isImage) ? result.url : undefined,
-          publicId: result.publicId,
-          type: resourceType,
-        });
-      } catch (err: any) {
-        res.status(500).json({ message: `Upload failed: ${err.message}` });
-      }
-    });
-  });
-
-  app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    bookUpload.fields([{ name: "pdf", maxCount: 1 }, { name: "file", maxCount: 1 }])(req, res, async (err: any) => {
-      if (err) return res.status(400).json({ message: err.message || "File rejected" });
-      const uploadedFile = req.files?.pdf?.[0] || req.files?.file?.[0];
-      if (!uploadedFile) return res.status(400).json({ message: "No file received" });
-      try {
-        const isPdf = uploadedFile.originalname?.toLowerCase().endsWith(".pdf") || uploadedFile.mimetype === "application/pdf" || uploadedFile.mimetype === "application/x-pdf";
-        const result = await uploadToCloudinary(uploadedFile.buffer, isPdf ? "raw" : "auto", "vid-x-books");
-        res.json({ pdfUrl: result.url, url: result.url });
-      } catch (err: any) {
-        res.status(500).json({ message: `Upload failed: ${err.message}` });
-      }
-    });
-  });
-
-
-  app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => {
-    try {
-      const { uploadId, totalChunks, originalName } = req.body;
-      if (!uploadId || !totalChunks || !originalName)
-        return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
-      const total = Number(totalChunks);
-
-      const chunkMap = inMemoryChunks.get(uploadId);
-      if (!chunkMap) {
-        return res.status(400).json({ message: "Upload session expired or not found. Please retry the upload." });
-      }
-      for (let i = 0; i < total; i++) {
-        if (!chunkMap.has(i)) {
-          return res.status(400).json({ message: `Missing chunk ${i}. Please retry the upload.` });
-        }
-      }// Max video upload size: 400 MB
-  const MAX_VIDEO_UPLOAD_BYTES = 400 * 1024 * 1024;
-
-  const chunkUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per chunk max (client sends 1MB chunks)
-  });
-
-  const chunksDir = path.join(process.cwd(), "uploads", "chunks");
-  if (!fs.existsSync(chunksDir)) fs.mkdirSync(chunksDir, { recursive: true });
-
-  // Track byte totals + timestamps only (no buffers in memory — chunks go straight to disk)
-  const uploadByteTotals = new Map<string, number>();
-  const uploadTimestamps = new Map<string, number>();
-  const CHUNK_TTL_MS = 30 * 60 * 1000;
-
-  function cleanupStaleUploads() {
-    const now = Date.now();
-    for (const [id, ts] of uploadTimestamps.entries()) {
-      if (now - ts > CHUNK_TTL_MS) {
-        uploadByteTotals.delete(id);
-        uploadTimestamps.delete(id);
-        try {
-          const dir = path.join(chunksDir, id);
-          if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
-        } catch {}
-      }
+        const dir = path.join(chunksDir, id);
+        if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+      } catch {}
     }
   }
-  setInterval(cleanupStaleUploads, 5 * 60 * 1000);
+}, 5 * 60 * 1000);
 
-  app.post("/api/upload/chunk", isAuthenticated, (req: any, res: any) => {
-    chunkUpload.single("chunk")(req, res, async (err: any) => {
-      if (err) return res.status(400).json({ message: err.message });
-      if (!req.file) return res.status(400).json({ message: "No chunk received" });
-      try {
-        const { uploadId, chunkIndex, totalChunks } = req.body;
-        if (!uploadId || chunkIndex === undefined || !totalChunks)
-          return res.status(400).json({ message: "Missing uploadId, chunkIndex, or totalChunks" });
-        const idx = Number(chunkIndex);
-
-        const currentTotal = (uploadByteTotals.get(uploadId) ?? 0) + req.file.buffer.length;
-        if (currentTotal > MAX_VIDEO_UPLOAD_BYTES) {
-          const dir = path.join(chunksDir, uploadId);
-          try { if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-          uploadByteTotals.delete(uploadId);
-          uploadTimestamps.delete(uploadId);
-          return res.status(413).json({ message: `Video exceeds the 400 MB upload limit.` });
-        }
-        uploadByteTotals.set(uploadId, currentTotal);
-        uploadTimestamps.set(uploadId, Date.now());
-
-        // Write each chunk straight to disk — never held in memory beyond this request
-        const dir = path.join(chunksDir, uploadId);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, String(idx)), req.file.buffer);
-
-        res.json({ success: true, chunkIndex: idx });
-      } catch (err: any) {
-        res.status(500).json({ message: `Chunk save failed: ${err.message}` });
-      }
-    });
-  });
-
-  app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => {
+app.post("/api/upload/video", isAuthenticated, (req: any, res: any) => {
+  anyUpload.single("video")(req, res, async (err: any) => {
+    if (err) return res.status(400).json({ message: err.message });
+    if (!req.file) return res.status(400).json({ message: "No video file received" });
     try {
-      const { uploadId, totalChunks, originalName } = req.body;
-      if (!uploadId || !totalChunks || !originalName)
-        return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
-      const total = Number(totalChunks);
+      const result = await uploadLargeVideoToCloudinary(req.file.buffer, "vid-x/videos");
+      res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
+    } catch (err: any) {
+      res.status(500).json({ message: `Video upload failed: ${err.message}` });
+    }
+  });
+});
+
+app.post("/api/upload/image", isAuthenticated, (req: any, res: any) => {
+  anyUpload.single("image")(req, res, async (err: any) => {
+    if (err) return res.status(400).json({ message: err.message });
+    if (!req.file) return res.status(400).json({ message: "No image file received" });
+    try {
+      const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/images");
+      res.json({ success: true, url: result.url, imageUrl: result.url, publicId: result.publicId });
+    } catch (err: any) {
+      res.status(500).json({ message: `Image upload failed: ${err.message}` });
+    }
+  });
+});
+
+app.post("/api/upload/profile-image", isAuthenticated, (req: any, res: any) => {
+  anyUpload.single("image")(req, res, async (err: any) => {
+    if (err) return res.status(400).json({ message: err.message });
+    if (!req.file) return res.status(400).json({ message: "No image received" });
+    try {
+      const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/profiles");
+      res.json({ success: true, url: result.url, imageUrl: result.url, profileImageUrl: result.url, publicId: result.publicId });
+    } catch (err: any) {
+      res.status(500).json({ message: `Profile image upload failed: ${err.message}` });
+    }
+  });
+});
+
+app.post("/api/upload/pdf", isAuthenticated, (req: any, res: any) => {
+  anyUpload.single("pdf")(req, res, async (err: any) => {
+    if (err) return res.status(400).json({ message: err.message });
+    if (!req.file) return res.status(400).json({ message: "No PDF received" });
+    try {
+      const result = await uploadToCloudinary(req.file.buffer, "raw", "vid-x/pdfs");
+      res.json({ success: true, url: result.url, pdfUrl: result.url, publicId: result.publicId });
+    } catch (err: any) {
+      res.status(500).json({ message: `PDF upload failed: ${err.message}` });
+    }
+  });
+});
+
+app.post("/api/upload/file", isAuthenticated, (req: any, res: any) => {
+  anyUpload.single("file")(req, res, async (err: any) => {
+    if (err) return res.status(400).json({ message: err.message });
+    if (!req.file) return res.status(400).json({ message: "No file received" });
+    try {
+      const mime = req.file.mimetype;
+      const isVideo = mime.startsWith("video/");
+      const isImage = mime.startsWith("image/");
+      const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
+      const folder = isVideo ? "vid-x/videos" : isImage ? "vid-x/images" : "vid-x/files";
+      const result = await uploadToCloudinary(req.file.buffer, resourceType, folder);
+      res.json({
+        success: true, url: result.url,
+        videoUrl: isVideo ? result.url : undefined,
+        imageUrl: isImage ? result.url : undefined,
+        pdfUrl: (!isVideo && !isImage) ? result.url : undefined,
+        publicId: result.publicId, type: resourceType,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: `Upload failed: ${err.message}` });
+    }
+  });
+});
+
+app.post("/api/upload/book-pdf", isAuthenticated, (req: any, res) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  bookUpload.fields([{ name: "pdf", maxCount: 1 }, { name: "file", maxCount: 1 }])(req, res, async (err: any) => {
+    if (err) return res.status(400).json({ message: err.message || "File rejected" });
+    const uploadedFile = (req as any).files?.pdf?.[0] || (req as any).files?.file?.[0];
+    if (!uploadedFile) return res.status(400).json({ message: "No file received" });
+    try {
+      const isPdf = uploadedFile.originalname?.toLowerCase().endsWith(".pdf") ||
+        uploadedFile.mimetype === "application/pdf";
+      const result = await uploadToCloudinary(uploadedFile.buffer, isPdf ? "raw" : "auto", "vid-x-books");
+      res.json({ pdfUrl: result.url, url: result.url });
+    } catch (err: any) {
+      res.status(500).json({ message: `Upload failed: ${err.message}` });
+    }
+  });
+});
+
+app.post("/api/upload/chunk", isAuthenticated, (req: any, res: any) => {
+  chunkUpload.single("chunk")(req, res, async (err: any) => {
+    if (err) return res.status(400).json({ message: err.message });
+    if (!req.file) return res.status(400).json({ message: "No chunk received" });
+    try {
+      const { uploadId, chunkIndex, totalChunks } = req.body;
+      if (!uploadId || chunkIndex === undefined || !totalChunks)
+        return res.status(400).json({ message: "Missing uploadId, chunkIndex, or totalChunks" });
+      const idx = Number(chunkIndex);
+
+      const currentTotal = (uploadByteTotals.get(uploadId) ?? 0) + req.file.buffer.length;
+      if (currentTotal > MAX_VIDEO_UPLOAD_BYTES) {
+        const dir = path.join(chunksDir, uploadId);
+        try { if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+        uploadByteTotals.delete(uploadId);
+        uploadTimestamps.delete(uploadId);
+        return res.status(413).json({ message: "Video exceeds the 100 MB upload limit." });
+      }
+      uploadByteTotals.set(uploadId, currentTotal);
+      uploadTimestamps.set(uploadId, Date.now());
+
       const dir = path.join(chunksDir, uploadId);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, String(idx)), req.file.buffer);
 
-      if (!fs.existsSync(dir)) {
-        return res.status(400).json({ message: "Upload session expired or not found. Please retry the upload." });
-      }
-      for (let i = 0; i < total; i++) {
-        if (!fs.existsSync(path.join(dir, String(i)))) {
-          return res.status(400).json({ message: `Missing chunk ${i}. Please retry the upload.` });
+      res.json({ success: true, chunkIndex: idx });
+    } catch (err: any) {
+      res.status(500).json({ message: `Chunk save failed: ${err.message}` });
+    }
+  });
+});
+
+app.post("/api/upload/finalize", isAuthenticated, async (req: any, res: any) => {
+  try {
+    const { uploadId, totalChunks, originalName } = req.body;
+    if (!uploadId || !totalChunks || !originalName)
+      return res.status(400).json({ message: "Missing uploadId, totalChunks, or originalName" });
+    const total = Number(totalChunks);
+    const dir = path.join(chunksDir, uploadId);
+
+    if (!fs.existsSync(dir))
+      return res.status(400).json({ message: "Upload session expired. Please retry." });
+
+    for (let i = 0; i < total; i++) {
+      if (!fs.existsSync(path.join(dir, String(i))))
+        return res.status(400).json({ message: `Missing chunk ${i}. Please retry.` });
+    }
+
+    const finalPath = path.join(chunksDir, `${uploadId}-final.mp4`);
+    const writeStream = fs.createWriteStream(finalPath);
+    for (let i = 0; i < total; i++) {
+      const chunkPath = path.join(dir, String(i));
+      const data = fs.readFileSync(chunkPath);
+      writeStream.write(data);
+      try { fs.unlinkSync(chunkPath); } catch {}
+    }
+    await new Promise<void>((resolve, reject) => {
+      writeStream.end((err: any) => err ? reject(err) : resolve());
+    });
+    try { fs.rmdirSync(dir); } catch {}
+
+    uploadByteTotals.delete(uploadId);
+    uploadTimestamps.delete(uploadId);
+
+    const stats = fs.statSync(finalPath);
+    if (stats.size > MAX_VIDEO_UPLOAD_BYTES) {
+      try { fs.unlinkSync(finalPath); } catch {}
+      return res.status(413).json({ message: "Video exceeds the 100 MB upload limit." });
+    }
+
+    const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
+      cloudinary.uploader.upload_large(
+        finalPath,
+        {
+          resource_type: "video",
+          folder: "vid-x/videos",
+          public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          overwrite: false,
+          chunk_size: 6 * 1024 * 1024,
+        },
+        (error: any, result: any) => {
+          try { fs.unlinkSync(finalPath); } catch {}
+          if (error) return reject(error);
+          resolve({ url: result.secure_url, publicId: result.public_id });
         }
-      }
+      );
+    });
 
-      // Stream chunks directly into a single file on disk — never load the whole
-      // video into memory. This keeps RAM usage flat even for 300-400MB uploads
-      // on Render's 512MB free tier.
-      const finalPath = path.join(chunksDir, `${uploadId}-final.mp4`);
-      const writeStream = fs.createWriteStream(finalPath);
-      for (let i = 0; i < total; i++) {
-        const chunkPath = path.join(dir, String(i));
-        const data = fs.readFileSync(chunkPath);
-        writeStream.write(data);
-        // Free the chunk file immediately after writing it to the final file
-        try { fs.unlinkSync(chunkPath); } catch {}
-      }
-      await new Promise<void>((resolve, reject) => {
-        writeStream.end((err: any) => err ? reject(err) : resolve());
-      });
-      try { fs.rmdirSync(dir); } catch {}
-
-      uploadByteTotals.delete(uploadId);
-      uploadTimestamps.delete(uploadId);
-
-      const stats = fs.statSync(finalPath);
-      if (stats.size > MAX_VIDEO_UPLOAD_BYTES) {
-        try { fs.unlinkSync(finalPath); } catch {}
-        return res.status(413).json({ message: `Video exceeds the 400 MB upload limit.` });
-      }
-
-      // Upload directly from disk using Cloudinary's chunked upload_large —
-      // no buffer is created, Cloudinary's SDK streams the file itself.
-      const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
-        cloudinary.uploader.upload_large(
-          finalPath,
-          {
-            resource_type: "video",
-            folder: "vid-x/videos",
-            public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            overwrite: false,
-            chunk_size: 6 * 1024 * 1024,
-          },
-          (error: any, result: any) => {
-            try { fs.unlinkSync(finalPath); } catch {}
-            if (error) return reject(error);
-            resolve({ url: result.secure_url, publicId: result.public_id });
-          }
-        );
-      });
-
-      res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
-    } catch (err: any) {
-      res.status(500).json({ message: `Finalize failed: ${err.message}` });
-    }
-  });
-  
-      const buffers: Buffer[] = [];
-      for (let i = 0; i < total; i++) buffers.push(chunkMap.get(i)!);
-      const fullBuffer = Buffer.concat(buffers);
-
-      inMemoryChunks.delete(uploadId);
-      uploadByteTotals.delete(uploadId);
-      uploadTimestamps.delete(uploadId);
-
-      if (fullBuffer.length > MAX_VIDEO_UPLOAD_BYTES) {
-        return res.status(413).json({ message: `Video exceeds the 400 MB upload limit.` });
-      }
-
-      const result = await uploadToCloudinary(fullBuffer, "video", "vid-x/videos");
-      res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
-    } catch (err: any) {
-      res.status(500).json({ message: `Finalize failed: ${err.message}` });
-    }
-  });
+    res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
+  } catch (err: any) {
+    res.status(500).json({ message: `Finalize failed: ${err.message}` });
+  }
+});
 
   // ══════════════════════════════════════════════════════════════════════════
   // AUTH ROUTES

@@ -481,13 +481,25 @@ export default function Profile() {
     });
   };
 
-  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => setEditAvatarUrl(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  };
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const formData = new FormData();
+    formData.append("image", file);
+    const res = await fetch("/api/upload/profile-image", {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Upload failed");
+    const data = await res.json();
+    setEditAvatarUrl(data.profileImageUrl || data.imageUrl || data.url);
+    toast({ title: "Photo uploaded! ✅" });
+  } catch (err: any) {
+    toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+  }
+};
 
   const pageError = params.id ? viewedUserError :profileError;
   const loading = authLoading || profileLoading || (params.id ? viewedUserLoading : false)

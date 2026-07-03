@@ -525,8 +525,7 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
     setCameraReady(false);
     setCameraMode(true);
   };
-
- const MAX_VIDEO_SIZE_MB = 400;
+const MAX_VIDEO_SIZE_MB = 100;
 const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
 const MAX_VIDEO_DURATION_SECONDS = 60;
   const formatFileSize = (bytes: number) => {
@@ -796,8 +795,8 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
 
     if (videoFile) {
       // Compress large videos before upload
-      if (videoFile.size > 100 * 1024 * 1024) {
-        setIsCompressing(true);
+      if (videoFile.size > 20 * 1024 * 1024) {
+      setIsCompressing(true);
         setCompressProgress(0);
         toast({ title: "Compressing video... please wait" });
         try {
@@ -834,9 +833,9 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
         // 1 MB chunks — small enough to pass through the Replit proxy without 413s.
         // Uploads 4 chunks concurrently for speed. Each chunk retries up to 3 times
         // before the entire upload is aborted.
-        const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB per chunk
-        const CONCURRENCY = 4;              // 4 parallel uploads
-        const MAX_RETRIES = 3;              // retries per chunk before giving up
+       const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks — kam requests
+const CONCURRENCY = 6;              // 6 parallel = faster
+const MAX_RETRIES = 3;
         const totalChunks = Math.ceil(videoFile.size / CHUNK_SIZE);
         const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         let completedChunks = 0;
@@ -1126,7 +1125,7 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
                     </div>
                     <div className="text-center">
                       <p className="text-sm font-semibold text-white">Tap to select video</p>
-                      <p className="text-[10px] text-zinc-500 mt-0.5">MP4, MOV, AVI up to 4GB</p>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">MP4, MOV up to 100MB · max 60 sec</p>
                     </div>
                   </label>
                 )}
