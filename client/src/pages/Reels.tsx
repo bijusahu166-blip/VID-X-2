@@ -12,7 +12,7 @@ import { toCloudinaryVideoUrl } from "@/lib/utils";
 import { getGoalSubjects } from "@/lib/goal-subjects";
 import { Share } from "@capacitor/share";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useLocation, useLocation } from "wouter";
+import { useLocation } from "wouter";
 
 interface ReelPost {
   id: number;
@@ -40,7 +40,7 @@ function ReelCard({
   onToggleSound: () => void 
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [,_navigate] = useLocation();
+  const [,navigate] = useLocation();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [showComments, setShowComments] = useState(false);
@@ -101,28 +101,46 @@ function ReelCard({
     }
   }, [isActive, isMuted, onToggleSound, reel.videoUrl]);
 
-  const likeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/posts/${reel.id}/like`, { method: "POST" });
-      return res.json();
-    },
-    onMutate: () => {
-      setLiked(!liked);
-      setLikeCount(liked ? likeCount - 1 : likeCount + 1);
+ const likeMutation = useMutation({
+  mutationFn: async () => {
+    const res = await fetch(`/api/posts/${reel.id}/like`, {
+      method: "POST",
+      credentials: "include",   //
+    });
+    if (!res.ok) throw new Error("Like failed");
+    return res.json();
+  },
+  onMutate: () => {
+    const wasLiked = liked;
+    setLiked(!wasLiked);
+    setLikeCount((c) => (wasLiked ? c - 1 : c + 1));
+    return { wasLiked };
+  },
+  onError: (_err, _vars, ctx) => {
+    if (ctx) {
+      setLiked(ctx.wasLiked);
+      setLikeCount((c) => (ctx.wasLiked ? c + 1 : c - 1));
     }
-  });
+    toast({ title: "Couldn't like post", variant: "destructive" });
+  },
+});
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/posts/${reel.id}/save`, { method: "POST" });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setSaved(data.saved);
-      toast({ title: data.saved ? "Saved to Profile" : "Removed from Profile" });
-      queryClient.invalidateQueries({ queryKey: ["/api/user/saved"] });
-    }
-  });
+  mutationFn: async () => {
+    const res = await fetch(`/api/posts/${reel.id}/save`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Save failed");
+    return res.json();
+  },
+  onSuccess: (data) => {
+    setSaved(data.saved);
+    toast({ title: data.saved ? "Saved to Profile" : "Removed from Profile" });
+    queryClient.invalidateQueries({ queryKey: ["/api/user/saved"] });
+  },
+  onError: () => toast({ title: "Couldn't save post", variant: "destructive" }),
+});
 
   const reportMutation = useMutation({
     mutationFn: async (reason: string) => {
@@ -314,8 +332,51 @@ function ReelCard({
         </p>
       </div>
 
-      {/* Sheets Container remain un-altered structurally but wrapped styling */}
-      {/* ... keeping sheets light and clean */}
+   <Sheet open={showComments} onOpenChange={setShowComments}>
+  <SheetContent side="bottom" className="h-[70vh] bg-zinc-950 border-t border-zinc-800 rounded-t-3xl flex flex-col">
+    <SheetHeader>
+      <SheetTitle className="text-white">Comments ({comments.length})</SheetTitle>
+    </SheetHeader>
+    <div className="flex-1 overflow-y-auto space-y-3 py-2 px-1">
+      {comments.length === 0 ? (
+        <p className="text-sm text-zinc-600 text-center py-8">No comments yet. Be the first!</p>
+      ) : (
+        comments.map((c: any) => (
+          <div key={c.id} className="flex gap-2">
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+              <img
+                src={c.user?.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.userId}`}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-white">
+                @{c.user?.username || c.user?.firstName || "user"}
+              </span>
+              <p className="text-sm text-zinc-300">{c.content}</p>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+    <div className="flex gap-2 items-center pt-2 border-t border-zinc-800">
+      <input
+        value={commentText}
+        onChange={(e) => setCommentText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") submitComment(); }}
+        placeholder="Add a comment…"
+        className="flex-1 bg-zinc-900 border border-zinc-700 rounded-full px-3 py-2 text-sm text-white outline-none"
+      />
+      <button
+        onClick={submitComment}
+        disabled={isSubmittingComment}
+        className="w-9 h-9 rounded-full bg-red-500 flex items-center justify-center disabled:opacity-50"
+      >
+        {isSubmittingComment ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Send className="w-4 h-4 text-white" />}
+      </button>
+    </div>
+  </SheetContent>
+</Sheet>
     </div>
   );
 }

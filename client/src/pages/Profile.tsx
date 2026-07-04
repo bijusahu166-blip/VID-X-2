@@ -226,9 +226,13 @@ function BlockedAccountsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: blocked, isLoading } = useQuery<any[]>({
+ const { data: blocked, isLoading } = useQuery<any[]>({
     queryKey: ["/api/users/blocked"],
-    queryFn: () => fetch("/api/users/blocked", { credentials: "include" }).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch("/api/users/blocked", { credentials: "include" });
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: open,
   });
 
@@ -385,9 +389,13 @@ function OtherUserProfile({ userId }: { userId: string }) {
     staleTime: 5000,
   });
 
-  const { data: userPosts, isLoading: postsLoading } = useQuery<any[]>({
+ const { data: userPosts, isLoading: postsLoading } = useQuery<any[]>({
     queryKey: ["/api/posts", "user", userId],
-    queryFn: () => fetch(`/api/posts?userId=${userId}`, { credentials: "include" }).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetch(`/api/posts?userId=${userId}`, { credentials: "include" });
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const { data: followStatus } = useQuery<{ following: boolean }>({
@@ -777,7 +785,7 @@ export default function Profile() {
   };
 
   const profileBooksArray = profileBooksData as any[];
-  const myPosts = posts?.filter(p => p.userId === user?.id && p.type !== "story").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
+  const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.type !== "story")...
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
 
@@ -1076,7 +1084,7 @@ export default function Profile() {
                       </div>
                      <Separator className="my-3" />
 
-<button onClick={() => window.open("https://vampireofficial00.github.io/privacy-policy", "_blank")}
+<button onClick={() => window.open("https://vid-x-2.onrender.com/privacy-policy.html", "_blank")}
   className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 rounded-xl transition-colors">
   <Lock className="w-4 h-4 text-zinc-400" />
   <span className="text-sm font-semibold">Privacy Policy</span>
@@ -1979,3 +1987,4 @@ export default function Profile() {
     </div>
   );
 }
+
