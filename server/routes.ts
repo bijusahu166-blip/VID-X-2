@@ -139,6 +139,10 @@ async function uploadLargeVideoToCloudinary(
         public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         overwrite: false,
         chunk_size: 6 * 1024 * 1024,
+        eager: [
+          { quality:"auto" , fetch_format:"auto"}
+        ],
+        eager_async:true,
       },
       (error: any, result: any) => {
         try { fs.unlinkSync(tempPath); } catch {}
@@ -244,11 +248,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // UPLOAD ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB
+  const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024; // 200MB
 
   const chunkUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 2 * 1024 * 1024 },
+    limits: { fileSize: 8 * 1024 * 1024 },
   });
 
   const chunksDir = path.join(process.cwd(), "uploads", "chunks");
@@ -381,7 +385,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           try { if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true }); } catch {}
           uploadByteTotals.delete(uploadId);
           uploadTimestamps.delete(uploadId);
-          return res.status(413).json({ message: "Video exceeds the 100 MB upload limit." });
+          return res.status(413).json({ message: "Video exceeds the 200 MB upload limit." });
         }
         uploadByteTotals.set(uploadId, currentTotal);
         uploadTimestamps.set(uploadId, Date.now());
