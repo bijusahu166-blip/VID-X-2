@@ -59,7 +59,17 @@ passport.deserializeUser(async (id: string, done) => {
     done(null, user[0] || null);
   } catch (err) { done(err); }
 });
-
+app.use(session({
+  secret: process.env.SESSION_SECRET!,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  }
+}));
 app.use(passport.initialize());
 app.use(passport.session());
 
