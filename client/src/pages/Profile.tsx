@@ -1097,10 +1097,35 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
 </button>
 
 <Separator className="my-3" />
-
 <button onClick={() => logout()} className="w-full flex items-center gap-3 px-5 py-3 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
   <LogOut className="w-4 h-4" />
   <span className="text-sm font-semibold">Log out</span>
+</button>
+
+<button
+  onClick={async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete your account? This cannot be undone."
+    );
+    if (!confirmed) return;
+    try {
+      const res = await fetch("/api/profile/delete", {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) {
+        logout();
+      } else {
+        alert("Failed to delete account. Please contact support.");
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    }
+  }}
+  className="w-full flex items-center gap-3 px-5 py-3 text-red-600 hover:bg-red-600/10 rounded-xl transition-colors"
+>
+  <UserX className="w-4 h-4" />
+  <span className="text-sm font-semibold">Delete Account</span>
 </button>
                     </div>
                   )}

@@ -544,7 +544,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: err.message || "Failed to send OTP" });
     }
   });
-
+app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
+  try {
+    const userId = (req.session as any).userId;
+    await db.execute(sql`DELETE FROM likes WHERE user_id = ${userId}`);
+    await db.execute(sql`DELETE FROM comments WHERE user_id = ${userId}`);
+    await db.execute(sql`DELETE FROM saved_posts WHERE user_id = ${userId}`);
+    await db.execute(sql`DELETE FROM notifications WHERE user_id = ${userId}`);
+    await db.execute(sql`DELETE FROM follows WHERE follower_id = ${userId} OR following_id = ${userId}`);
+    await db.execute(sql`DELETE FROM posts WHERE user_id = ${userId}`);
+    await db.execute(sql`DELETE FROM direct_messages WHERE sender_id = ${userId}`);
+    await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
+    (req.session as any).destroy?.();
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || "Delete failed" });
+  }
+});
   app.post("/api/auth/verify-reset-otp", async (req, res) => {
     try {
       const { email, otp } = req.body;
