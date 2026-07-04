@@ -13,16 +13,69 @@ import { errorHandler, asyncHandler } from "./middleware/errorHandler";
 import { paginationMiddleware } from "./utils/pagination";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import passport from "passport";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 const app = express();
 const httpServer = createServer(app);
-
 // ── WebRTC Signaling + Real-time Events via WebSocket ─────────────────────
 // Use noServer:true so that upgrade requests for OTHER paths (e.g. Vite's
 // /vite-hmr) are not aborted with 400 by the ws library.  We install our own
 // 'upgrade' listener that only handles the /ws path; everything else is left
 // for subsequent listeners (Vite HMR) to process.
 const wss = new WebSocketServer({ noServer: true });
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID!,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  callbackURL: "/api/auth/google/callback",
+}, async (_accessToken, _refreshToken, profile, done) => {
+  try {
+    const email = profile.emails?.[0]?.value;
+    if (!email) return done(new Error("No email from Google"));
+    let user = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (user.length === 0) {
+      const inserted = await db.insert(users).values({
+        email,
+        firstName: profile.name?.givenName || "User",
+        lastName: profile.name?.familyName || "",
+        username: email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, ""),
+        profileImageUrl: profile.photos?.[0]?.value || "",
+        password: "",
+      }).returning();
+      return done(null, inserted[0]);
+    }
+    return done(null, user[0]);
+  } catch (err) {
+    return done(err);
+  }
+}));
+
+passport.serializeUser((user: any, done) => done(null, user.id));
+passport.deserializeUser(async (id: string, done) => {
+  try {
+    const user = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    done(null, user[0] || null);
+  } catch (err) { done(err); }
+});
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+app.get("/api/auth/google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
+
+app.get("/api/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: "/" }),
+  (req: any, res) => {
+    req.session.userId = req.user.id;
+    req.session.save(() => {
+      res.redirect("/");
+    });
+  }
+);
 const randomCallQueue: string[] = []; // userIds waiting for a random match
 
 httpServer.on("upgrade", (req, socket, head) => {
