@@ -28,13 +28,18 @@ export function BottomNav() {
   return (
     <nav
       className="fixed left-0 right-0 z-50"
-      style={{ bottom: "4px", paddingBottom: "max(env(safe-area-inset-bottom, 0px), 10px)" }}
+      style={{ bottom: "0px", paddingBottom: "max(env(safe-area-inset-bottom, 0px), 16px)" }}
     >
       {/* Floating pill */}
       <div className="mx-3 mt-1">
         <div
           className="flex items-center justify-around bg-black rounded-2xl shadow-2xl border border-white/5"
-          style={{ padding: "6px 4px" }}
+          style={{
+            padding: "8px 4px",
+            background: "rgba(10,10,10,0.97"),
+            backdropeFilter: "blur(20px)",
+            boxShadow: "0 -4px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)"  
+            }}
         >
           {navItems.map((item) => {
             const Icon = item.icon;

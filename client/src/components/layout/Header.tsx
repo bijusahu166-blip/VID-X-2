@@ -30,20 +30,20 @@ export function Header() {
       */}
       <div
         className="fixed top-0 left-0 right-0 bg-black"
-        style={{ height: "var(--top-bar-h)", zIndex: 9999, minHeight: "19px" }}
+        style={{ height: "var(--top-bar-h)", zIndex: 9999, minHeight: "0px" }}
         aria-hidden="true"
       />
 
       {/* Header — sits flush below the black bar */}
       <header
         className="fixed left-0 right-0 z-50 w-full h-14"
-        style={{
-          top: "calc(var(--top-bar-h) - 4px)",
-          background: "rgba(0,0,0,0.92)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-        }}
+       style={{
+  top: "var(--top-bar-h)",
+  background: "rgba(0,0,0,0.95)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+}}
       >
         <div className="flex items-center justify-between h-full px-4 max-w-sm mx-auto">
 

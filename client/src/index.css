@@ -275,13 +275,11 @@
    * On devices with a notch/dynamic-island the safe-area-inset-top wins.
    * --header-total: full vertical space consumed by top-bar + h-14 header.
    */
-  --top-bar-h: max(env(safe-area-inset-top, 0px), 0.5cm);
+  --top-bar-h:env(safe-area-inset-top, 0px);
   --header-total: calc(3.5rem + var(--top-bar-h));
 }
-
 html, body {
-  /* Prevent content from ever going under the status bar or home indicator */
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: 0px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
