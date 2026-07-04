@@ -155,12 +155,12 @@ app.use(session({
 secret: process.env.SESSION_SECRET!,
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 din
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax'
-  }
+ cookie: {
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+}
 }));
 // ── CORS ────────────────────────────────────────────────────────────────────
 app.use(cors({

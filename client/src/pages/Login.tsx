@@ -298,7 +298,7 @@ export default function Login() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { 
-        redirectTo: "https://vid-x-2.onrender.com"
+        redirectTo:window.location.origin
       },
     });
   } catch (err: any) {
@@ -452,13 +452,15 @@ export default function Login() {
               </form>
 
               <div className="text-center text-[10px] text-zinc-500 mt-4 flex items-center justify-center gap-2">
-                <button type="button" className="text-red-400 font-semibold hover:text-red-300 transition-colors">Terms</button>
-                <span>•</span>
-                <button type="button" className="text-red-400 font-semibold hover:text-red-300 transition-colors">Privacy</button>
-                <span>•</span>
-                <button type="button" className="text-red-400 font-semibold hover:text-red-300 transition-colors">Help</button>
-              </div>
-
+               <button type="button" onClick={() => window.open("/privacy", "_self")}
+  className="text-red-400 font-semibold hover:text-red-300 transition-colors">Terms</button>
+<span>•</span>
+<button type="button" onClick={() => window.open("/privacy", "_self")}
+  className="text-red-400 font-semibold hover:text-red-300 transition-colors">Privacy</button>
+<span>•</span>
+<button type="button" onClick={() => window.open("mailto:vampireofficial00@gmail.com")}
+  className="text-red-400 font-semibold hover:text-red-300 transition-colors">Help</button>
+  </dev>
               <p className="text-center text-zinc-600 text-xs mt-5">
                 {tab === "login" ? "Don't have an account? " : "Already have an account? "}
                 <button onClick={() => { setTab(tab === "login" ? "signup" : "login"); setForm({ email: "", password: "" }); }}
