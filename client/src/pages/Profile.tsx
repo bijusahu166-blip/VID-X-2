@@ -785,7 +785,7 @@ export default function Profile() {
   };
 
   const profileBooksArray = profileBooksData as any[];
-  const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.type !== "story")...
+const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.type !== "story").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
 
