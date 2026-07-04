@@ -36,8 +36,8 @@ export function BottomNav() {
           className="flex items-center justify-around bg-black rounded-2xl shadow-2xl border border-white/5"
           style={{
             padding: "8px 4px",
-            background: "rgba(10,10,10,0.97"),
-            backdropeFilter: "blur(20px)",
+            background: "rgba(10,10,10,0.97)",
+            backdropFilter: "blur(20px)",
             boxShadow: "0 -4px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)"  
             }}
         >
