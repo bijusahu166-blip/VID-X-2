@@ -49,6 +49,7 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
+  const { toast } = useToast();   // ← add karo
 
   const { data: comments, isLoading } = useQuery<any[]>({
     queryKey: ["/api/posts", postId, "comments"],
@@ -58,14 +59,44 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
   });
 
   const addComment = useMutation({
-    mutationFn: (content: string) => apiRequest("POST", `/api/posts/${postId}/comment`, { content }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/posts", postId, "comments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+    mutationFn: async (content: string) => {
+      const res = await apiRequest("POST", `/api/posts/${postId}/comment`, { content });
+      return res.json();
+    },
+    onMutate: async (content: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/posts", postId, "comments"] });
+      const previousComments = queryClient.getQueryData<any[]>(["/api/posts", postId, "comments"]);
+
+      const optimisticComment = {
+        id: `temp-${Date.now()}`,
+        content,
+        userId: user?.id,
+        user: { firstName: user?.firstName, username: (user as any)?.username, profileImageUrl: user?.profileImageUrl },
+        createdAt: new Date().toISOString(),
+      };
+      queryClient.setQueryData<any[]>(["/api/posts", postId, "comments"], (old) => [...(old ?? []), optimisticComment]);
+      queryClient.setQueryData<any[]>(["/api/posts"], (old) =>
+        old?.map((p) => (p.id === postId ? { ...p, commentsCount: (p.commentsCount ?? 0) + 1 } : p))
+      );
+
       setText("");
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 200);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      return { previousComments };
+    },
+    onError: (_err, _content, ctx) => {
+      if (ctx?.previousComments) {
+        queryClient.setQueryData(["/api/posts", postId, "comments"], ctx.previousComments);
+      }
+      queryClient.setQueryData<any[]>(["/api/posts"], (old) =>
+        old?.map((p) => (p.id === postId ? { ...p, commentsCount: Math.max((p.commentsCount ?? 1) - 1, 0) } : p))
+      );
+      toast({ title: "Comment failed to send", variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts", postId, "comments"] });
     },
   });
+
 
   if (!open) return null;
 
@@ -388,14 +419,37 @@ const matchesUserGoal = (post: any) => {
   return allowedSubjects.some(subject => text.includes(subject));
 };
 
-  const likeMutation = useMutation({
-    mutationFn: (postId: number) => apiRequest("POST", `/api/posts/${postId}/like`),
-    onSuccess: (data: any, postId: number) => {
-      const post = posts?.find(p => p.id === postId);
-      if (data?.added) playLike(); else playUnlike();
-      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
-    },
-  });
+const likeMutation = useMutation({
+  mutationFn: async (postId: number) => {
+    const res = await apiRequest("POST", `/api/posts/${postId}/like`);
+    return res.json();
+  },
+  onMutate: async (postId: number) => {
+    await queryClient.cancelQueries({ queryKey: ["/api/posts"] });
+    const previous = queryClient.getQueryData<any[]>(["/api/posts"]);
+    queryClient.setQueryData<any[]>(["/api/posts"], (old) =>
+      old?.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              hasLiked: !p.hasLiked,
+              likesCount: p.hasLiked ? (p.likesCount ?? 1) - 1 : (p.likesCount ?? 0) + 1,
+            }
+          : p
+      )
+    );
+    return { previous };
+  },
+  onSuccess: (data: any) => {
+    if (data?.added) playLike(); else playUnlike();
+  },
+  onError: (_err, _postId, ctx) => {
+    if (ctx?.previous) queryClient.setQueryData(["/api/posts"], ctx.previous);
+  },
+  onSettled: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+  },
+});
 
   const isVideoPost = (post: any) => post.type === "video" || post.type === "live" || post.type === "reel";
   const isPhotoPost = (post: any) => post.type === "post" || post.type === "story";
