@@ -460,7 +460,7 @@ export default function Login() {
 <span>•</span>
 <button type="button" onClick={() => window.open("mailto:vampireofficial00@gmail.com")}
   className="text-red-400 font-semibold hover:text-red-300 transition-colors">Help</button>
-  </dev>
+  </div>
               <p className="text-center text-zinc-600 text-xs mt-5">
                 {tab === "login" ? "Don't have an account? " : "Already have an account? "}
                 <button onClick={() => { setTab(tab === "login" ? "signup" : "login"); setForm({ email: "", password: "" }); }}
