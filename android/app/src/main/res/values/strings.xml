@@ -4,4 +4,5 @@
     <string name="title_activity_main">VAMPIRE</string>
     <string name="package_name">com.VAMPIRE</string>
     <string name="custom_url_scheme">com.VAMPIRE</string>
+    <string name="robot_icon_content_description">Hand-drawn robot head with a crown on a rainbow gradient background</string>
 </resources>

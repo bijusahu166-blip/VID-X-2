@@ -193,9 +193,18 @@ export default function Reading() {
             <h1 className="text-2xl font-display font-bold">{selectedBook ? "Reading" : selectedArticle ? "Article" : "Books & News"}</h1>
           </div>
           {!selectedBook && !selectedArticle && activeTab === "books" && (
-            <Button onClick={() => setShowUpload(true)} size="sm" className="gap-2 rounded-full" data-testid="button-upload-book">
-              <Upload className="w-4 h-4" /> Upload
-            </Button>
+          <Button 
+  onClick={() => toast({ 
+    title: "Not Available", 
+    description: "Book upload is currently not available.",
+    variant: "destructive"
+  })} 
+  size="sm" 
+  className="gap-2 rounded-full opacity-60"
+  data-testid="button-upload-book"
+>
+  <Upload className="w-4 h-4" /> Upload
+</Button>
           )}
         </div>
 
@@ -316,8 +325,7 @@ export default function Reading() {
                     ) : (
                       <div className="col-span-2 flex flex-col items-center justify-center py-16 text-zinc-600 gap-3">
                         <BookOpen className="w-12 h-12 opacity-30" /><p className="text-sm">No books yet. Upload one to get started!</p>
-                        <button onClick={() => setShowUpload(true)} className="mt-1 text-violet-400 text-sm font-semibold hover:text-violet-300 transition-colors">+ Upload a book</button>
-                      </div>
+                       <button onClick={() => toast({ title: "Not Available", description: "Book upload is currently not available.", variant: "destructive" })} className="mt-1 text-violet-400 text-sm font-semibold hover:text-violet-300 transition-colors">+ Upload a book</button>
                     )}
                   </div>
                 );
