@@ -1084,7 +1084,7 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
                       </div>
                      <Separator className="my-3" />
 
-<button onClick={() => window.open("https://vid-x-2.onrender.com/privacy-policy.html", "_blank")}
+<button onClick={() => window.open("/privacy.html", "_blank")}
   className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 rounded-xl transition-colors">
   <Lock className="w-4 h-4 text-zinc-400" />
   <span className="text-sm font-semibold">Privacy Policy</span>
