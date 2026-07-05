@@ -326,7 +326,6 @@ export default function Reading() {
                       <div className="col-span-2 flex flex-col items-center justify-center py-16 text-zinc-600 gap-3">
                         <BookOpen className="w-12 h-12 opacity-30" /><p className="text-sm">No books yet. Upload one to get started!</p>
                        <button onClick={() => toast({ title: "Not Available", description: "Book upload is currently not available.", variant: "destructive" })} className="mt-1 text-violet-400 text-sm font-semibold hover:text-violet-300 transition-colors">+ Upload a book</button>
-                    )}
                   </div>
                 );
               })()}
