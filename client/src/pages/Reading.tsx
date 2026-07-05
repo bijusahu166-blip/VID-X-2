@@ -327,8 +327,8 @@ export default function Reading() {
                         <BookOpen className="w-12 h-12 opacity-30" /><p className="text-sm">No books yet. Upload one to get started!</p>
                        <button onClick={() => toast({ title: "Not Available", description: "Book upload is currently not available.", variant: "destructive" })} className="mt-1 text-violet-400 text-sm font-semibold hover:text-violet-300 transition-colors">+ Upload a book</button>
                   </div>
-                );
-              })()}
+                )
+                
 
               {activeTab === "news" && (() => {
                 const filtered = NEWS_ARTICLES.filter(a => (newsCategory === "All" || a.category === newsCategory) && (!searchQuery.trim() || a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.source.toLowerCase().includes(searchQuery.toLowerCase())));
