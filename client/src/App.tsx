@@ -11,6 +11,8 @@ import { VideoCallScreen } from "@/components/call/VideoCallScreen";
 import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
 import { useEffect, useRef } from "react";
 
+import VoiceRoomCreate from "@/pages/VoiceRoomCreate";
+import VoiceRoomScreen from "@/pages/VoiceRoomScreen";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
@@ -89,6 +91,8 @@ function Router() {
   return (
     <>
       <Switch>
+        <Route path="/voice-rooms/create" component={VoiceRoomCreate} />
+        <Route path="/voice-rooms/:id" component={VoiceRoomScreen} />
         <Route path="/" component={Home} />
         <Route path="/search" component={Search} />
         <Route path="/reading" component={Reading} />

@@ -1,3 +1,4 @@
+import { generateAgoraToken } from "./agora";
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -1607,7 +1608,311 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
     const typers = await storage.getTyping(Number(req.params.id), userId);
     res.json({ typers });
   });
+// ══════════════════════════════════════════════════════════════════════════
+  // AGORA VOICE TOKEN
+  // ══════════════════════════════════════════════════════════════════════════
 
+  app.post("/api/agora/token", isAuthenticated, async (req: any, res) => {
+    try {
+      const { channelName } = req.body;
+      if (!channelName) return res.status(400).json({ message: "channelName required" });
+      const userId = req.session.userId;
+      const result = generateAgoraToken(channelName, String(userId));
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Token generation failed" });
+    }
+  });
+  // ══════════════════════════════════════════════════════════════════════════
+  // COINS SYSTEM
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function getOrCreateWallet(userId: string) {
+    const existing = await db.execute(sql`SELECT * FROM coin_wallets WHERE user_id = ${userId}`);
+    const rows = (existing as any).rows ?? existing;
+    if (rows.length > 0) return rows[0];
+    await db.execute(sql`INSERT INTO coin_wallets (user_id, balance) VALUES (${userId}, 0) ON CONFLICT DO NOTHING`);
+    return { user_id: userId, balance: 0 };
+  }
+
+  async function addCoins(userId: string, amount: number, reason: string, referenceId?: string) {
+    await getOrCreateWallet(userId);
+    await db.execute(sql`
+      UPDATE coin_wallets SET balance = balance + ${amount}, updated_at = NOW()
+      WHERE user_id = ${userId}
+    `);
+    await db.execute(sql`
+      INSERT INTO coin_transactions (user_id, amount, reason, reference_id)
+      VALUES (${userId}, ${amount}, ${reason}, ${referenceId || null})
+    `);
+  }
+
+  app.get("/api/coins/balance", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const wallet = await getOrCreateWallet(userId);
+      res.json({ balance: wallet.balance });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Rewarded ad complete hone par call hoga (AdMob ke server-side verification ke baad ideally)
+  app.post("/api/coins/earn-ad", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const AD_REWARD = 20;
+      await addCoins(userId, AD_REWARD, "ad_reward");
+      const wallet = await getOrCreateWallet(userId);
+      res.json({ success: true, earned: AD_REWARD, balance: wallet.balance });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/coins/transactions", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.execute(sql`
+        SELECT * FROM coin_transactions WHERE user_id = ${userId}
+        ORDER BY created_at DESC LIMIT 50
+      `);
+      res.json((rows as any).rows ?? rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VOICE ROOMS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const FREE_JOIN_LIMIT = 3;
+  const MAX_SEATS = 12;
+
+  // Room banao (host)
+  app.post("/api/voice-rooms", isAuthenticated, async (req: any, res) => {
+    try {
+      const hostId = req.session.userId;
+      const { title, joinCost } = req.body;
+      const channelName = `room_${hostId}_${Date.now()}`;
+      const result = await db.execute(sql`
+        INSERT INTO voice_rooms (host_id, channel_name, title, join_cost)
+        VALUES (${hostId}, ${channelName}, ${title || "Voice Room"}, ${joinCost || 0})
+        RETURNING *
+      `);
+      const room = ((result as any).rows ?? result)[0];
+
+      // Host khud seat 1 pe baith jaye
+      await db.execute(sql`
+        INSERT INTO voice_room_seats (room_id, user_id, seat_number)
+        VALUES (${room.id}, ${hostId}, 1)
+      `);
+
+      res.status(201).json(room);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Active rooms list
+  app.get("/api/voice-rooms", isAuthenticated, async (_req, res) => {
+    try {
+      const rows = await db.execute(sql`
+        SELECT vr.*, u.first_name, u.last_name, u.username, u.profile_image_url,
+          (SELECT COUNT(*) FROM voice_room_seats WHERE room_id = vr.id) AS seat_count
+        FROM voice_rooms vr
+        JOIN users u ON u.id = vr.host_id
+        WHERE vr.is_active = true
+        ORDER BY vr.created_at DESC
+      `);
+      res.json((rows as any).rows ?? rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Room detail + seats
+  app.get("/api/voice-rooms/:id", isAuthenticated, async (req, res) => {
+    try {
+      const roomId = Number(req.params.id);
+      const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId}`);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room) return res.status(404).json({ message: "Room not found" });
+
+      const seatRows = await db.execute(sql`
+        SELECT s.*, u.first_name, u.last_name, u.username, u.profile_image_url
+        FROM voice_room_seats s JOIN users u ON u.id = s.user_id
+        WHERE s.room_id = ${roomId} ORDER BY s.seat_number ASC
+      `);
+      res.json({ ...room, seats: (seatRows as any).rows ?? seatRows });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Room join karo (coin deduction / free-join logic yahan hai)
+  app.post("/api/voice-rooms/:id/join", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const roomId = Number(req.params.id);
+
+      const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId} AND is_active = true`);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room) return res.status(404).json({ message: "Room not found or ended" });
+
+      // Already joined hai kya check
+      const alreadyRows = await db.execute(sql`
+        SELECT * FROM voice_room_seats WHERE room_id = ${roomId} AND user_id = ${userId}
+      `);
+      if (((alreadyRows as any).rows ?? alreadyRows).length > 0) {
+        return res.json({ success: true, alreadyJoined: true });
+      }
+
+      const seatCountRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM voice_room_seats WHERE room_id = ${roomId}`);
+      const seatCount = parseInt(((seatCountRows as any).rows ?? seatCountRows)[0]?.cnt ?? "0");
+      if (seatCount >= MAX_SEATS) return res.status(400).json({ message: "Room is full" });
+
+      let usedFree = false;
+      if (room.join_cost > 0) {
+        // Free-join count check
+        const freeRows = await db.execute(sql`SELECT * FROM voice_room_free_joins WHERE user_id = ${userId}`);
+        const freeRow = ((freeRows as any).rows ?? freeRows)[0];
+        const usedCount = freeRow?.used_count ?? 0;
+
+        if (usedCount < FREE_JOIN_LIMIT) {
+          await db.execute(sql`
+            INSERT INTO voice_room_free_joins (user_id, used_count) VALUES (${userId}, 1)
+            ON CONFLICT (user_id) DO UPDATE SET used_count = voice_room_free_joins.used_count + 1
+          `);
+          usedFree = true;
+        } else {
+          const wallet = await getOrCreateWallet(userId);
+          if (wallet.balance < room.join_cost) {
+            return res.status(402).json({ message: "Not enough coins", required: room.join_cost, balance: wallet.balance });
+          }
+          await addCoins(userId, -room.join_cost, "join_room", String(roomId));
+          // Host ko coins milen (agar khud ka room nahi join kar raha)
+          if (room.host_id !== userId) {
+            await addCoins(room.host_id, room.join_cost, "host_earning", String(roomId));
+          }
+        }
+      }
+
+      const nextSeat = seatCount + 1;
+      await db.execute(sql`
+        INSERT INTO voice_room_seats (room_id, user_id, seat_number)
+        VALUES (${roomId}, ${userId}, ${nextSeat})
+      `);
+
+      res.json({ success: true, usedFree, seatNumber: nextSeat });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Room leave karo
+  app.post("/api/voice-rooms/:id/leave", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const roomId = Number(req.params.id);
+      await db.execute(sql`DELETE FROM voice_room_seats WHERE room_id = ${roomId} AND user_id = ${userId}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Host room end kare
+  app.post("/api/voice-rooms/:id/end", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const result = await db.execute(sql`
+        UPDATE voice_rooms SET is_active = false, ended_at = NOW()
+        WHERE id = ${roomId} AND host_id = ${userId}
+        RETURNING *
+      `);
+      const updated = ((result as any).rows ?? result)[0];
+      if (!updated) return res.status(403).json({ message: "Not allowed" });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Host apna join cost badal sake
+  app.patch("/api/voice-rooms/:id/cost", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const { joinCost } = req.body;
+      if (joinCost === undefined || joinCost < 0) return res.status(400).json({ message: "Invalid joinCost" });
+      const result = await db.execute(sql`
+        UPDATE voice_rooms SET join_cost = ${joinCost}
+        WHERE id = ${roomId} AND host_id = ${userId}
+        RETURNING *
+      `);
+      const updated = ((result as any).rows ?? result)[0];
+      if (!updated) return res.status(403).json({ message: "Not allowed" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Live text chat: message bhejo
+  app.post("/api/voice-rooms/:id/messages", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const { content } = req.body;
+      if (!content) return res.status(400).json({ message: "Content required" });
+      const result = await db.execute(sql`
+        INSERT INTO voice_room_messages (room_id, user_id, content)
+        VALUES (${roomId}, ${userId}, ${content})
+        RETURNING *
+      `);
+      const msg = ((result as any).rows ?? result)[0];
+      res.status(201).json(msg);
+
+      // WebSocket broadcast — room ke sabhi members ko bhejo
+      try {
+        const seatRows = await db.execute(sql`SELECT user_id FROM voice_room_seats WHERE room_id = ${roomId}`);
+        const memberIds = ((seatRows as any).rows ?? seatRows).map((r: any) => r.user_id);
+        const sender = await authStorage.getUser(userId);
+        memberIds.forEach((memberId: string) => {
+          const ws = wsClients.get(String(memberId));
+          if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: "voice_room_message", roomId, message: {
+                ...msg, user: { firstName: sender?.firstName, profileImageUrl: sender?.profileImageUrl }
+              }
+            }));
+          }
+        });
+      } catch (wsErr) {
+        console.error("[voice room message] WS error:", wsErr);
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Live text chat: messages fetch karo
+  app.get("/api/voice-rooms/:id/messages", isAuthenticated, async (req, res) => {
+    try {
+      const roomId = Number(req.params.id);
+      const rows = await db.execute(sql`
+        SELECT m.*, u.first_name, u.last_name, u.profile_image_url
+        FROM voice_room_messages m JOIN users u ON u.id = m.user_id
+        WHERE m.room_id = ${roomId} ORDER BY m.created_at ASC LIMIT 100
+      `);
+      res.json((rows as any).rows ?? rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
   // ══════════════════════════════════════════════════════════════════════════
   // LIVE STREAM ROUTES
   // ══════════════════════════════════════════════════════════════════════════

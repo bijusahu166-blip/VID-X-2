@@ -394,6 +394,15 @@ const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
   staleTime: 0,
 });
 const stories = storiesData ?? [];
+const { data: voiceRooms = [] } = useQuery<any[]>({
+  queryKey: ["/api/voice-rooms"],
+  queryFn: async () => {
+    const res = await fetch("/api/voice-rooms", { credentials: "include" });
+    if (!res.ok) return [];
+    return res.json();
+  },
+  refetchInterval: 8000,
+});
 
 const { data: allBooks = [] } = useQuery<any[]>({
   queryKey: ["/api/books"],
@@ -478,57 +487,64 @@ const likeMutation = useMutation({
           ))}
         </div>
 
-       {/* ── BOOKS RECOMMENDED ── */}
-{recommendedBooks.length > 0 && (
-  <div className="mt-1 pb-3 border-b border-white/5">
-    <div className="flex items-center justify-between px-3 pt-3 pb-2">
-      <div className="flex items-center gap-2">
-        <span className="text-lg">📚</span>
-        <span className="text-[13px] font-black text-white tracking-wide">
-          Recommended Books
-        </span>
-      </div>
+  {/* ── VOICE ROOMS ── */}
+<div className="mt-1 pb-3 border-b border-white/5">
+  <div className="flex items-center justify-between px-3 pt-3 pb-2">
+    <div className="flex items-center gap-2">
+      <span className="text-lg">🎙️</span>
+      <span className="text-[13px] font-black text-white tracking-wide">
+        Voice Rooms
+      </span>
+    </div>
+    <button
+      onClick={() => navigate("/voice-rooms/create")}
+      className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1"
+    >
+      + Create <ChevronRight className="w-3 h-3" />
+    </button>
+  </div>
+
+  {voiceRooms.length === 0 ? (
+    <div className="px-3 py-4">
       <button
-        onClick={() => navigate("/reading")}
-        className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1"
+        onClick={() => navigate("/voice-rooms/create")}
+        className="w-full py-4 rounded-xl border border-dashed border-white/15 text-zinc-500 text-[12px] hover:border-white/30 hover:text-zinc-300 transition-colors"
       >
-        See all <ChevronRight className="w-3 h-3" />
+        No active rooms — tap to start one 🎙️
       </button>
     </div>
+  ) : (
     <div className="flex gap-3 overflow-x-auto scrollbar-hide px-3">
-      {recommendedBooks.map((book: any) => (
+      {voiceRooms.map((room: any) => (
         <button
-          key={book.id}
-          onClick={() => navigate("/reading")}
-          className="flex flex-col items-start gap-1.5 shrink-0 group w-[100px]"
+          key={room.id}
+          onClick={() => navigate(`/voice-rooms/${room.id}`)}
+          className="flex flex-col items-start gap-1.5 shrink-0 group w-[120px]"
         >
-          <div className="w-[100px] h-[140px] rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 relative">
-            {book.imageUrl ? (
-              <img
-                src={book.imageUrl}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-3xl"
-                style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)" }}>
-                📖
-              </div>
-            )}
+          <div className="w-[120px] h-[100px] rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 relative flex items-center justify-center"
+            style={{ background: "linear-gradient(135deg, #2a0a3a, #150520)" }}>
+            <img
+              src={room.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${room.host_id}`}
+              className="w-12 h-12 rounded-full object-cover ring-2 ring-pink-500/40"
+            />
+            <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+              <div className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
+            </div>
+            <div className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
+              {room.seat_count}/12
+            </div>
           </div>
-          <p className="text-[10px] text-zinc-300 font-semibold text-left line-clamp-2 leading-tight">
-            {book.title}
+          <p className="text-[10px] text-zinc-300 font-semibold text-left line-clamp-1 leading-tight w-full">
+            {room.title}
           </p>
-          {book.author && (
-            <p className="text-[9px] text-zinc-600 text-left truncate w-full">
-              {book.author}
-            </p>
-          )}
+          <p className="text-[9px] text-zinc-600 text-left truncate w-full">
+            {room.first_name} {room.last_name}
+          </p>
         </button>
       ))}
     </div>
-  </div>
-)}
-
+  )}
+</div>
         {/* ── STORIES SHELF ── */}
         <div className="mt-1 pb-2 border-b border-white/5">
           <div className="flex items-center justify-between px-3 pt-3 pb-2">
