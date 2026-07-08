@@ -113,6 +113,7 @@
     "zod-validation-error": "^3.5.4"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.1",
     "@prisma/client": "^5.15.0",
     "@replit/vite-plugin-cartographer": "^0.4.4",
     "@replit/vite-plugin-dev-banner": "^0.1.1",

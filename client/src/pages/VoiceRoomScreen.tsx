@@ -41,6 +41,16 @@ interface RoomMessage {
 
 const MAX_SEATS = 12;
 
+// user_id (string) ko Agora ke numeric uid me convert karta hai — token generation
+// (server/agora.ts) me use hone wale hash se match hona chahiye
+function stringToNumericUid(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return hash === 0 ? 1 : hash;
+}
+
 export default function VoiceRoomScreen() {
   const params = useParams<{ id: string }>();
   const roomId = Number(params.id);
@@ -57,7 +67,7 @@ export default function VoiceRoomScreen() {
   const [showCostEditor, setShowCostEditor] = useState(false);
   const [newCost, setNewCost] = useState(0);
   const [watchingAd, setWatchingAd] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [speakingUsers, setSpeakingUsers] = useState<Set<number>>(new Set());
 
   const agoraClient = useRef<IAgoraRTCClient | null>(null);
   const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
@@ -93,9 +103,43 @@ export default function VoiceRoomScreen() {
   const isHost = room?.host_id === currentUserId;
   const mySeat = room?.seats.find(s => s.user_id === currentUserId);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  const connectToAgora = useCallback(async () => {
+    if (connected || !room) return;
+    try {
+      const tokenRes: any = await apiRequest("POST", "/api/agora/token", { channelName: room.channel_name });
+      const tokenData = tokenRes.json ? await tokenRes.json() : tokenRes;
+
+      const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+      agoraClient.current = client;
+
+      await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid);
+
+      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      localAudioTrack.current = audioTrack;
+      await client.publish([audioTrack]);
+
+      client.on("user-published", async (remoteUser, mediaType) => {
+        await client.subscribe(remoteUser, mediaType);
+        if (mediaType === "audio") {
+          remoteUser.audioTrack?.play();
+        }
+      });
+
+      // ── Active speaker detection (glow indicator ke liye) ──
+      client.enableAudioVolumeIndicator();
+      client.on("volume-indicator", (volumes: any[]) => {
+        const speaking = new Set<number>();
+        volumes.forEach((v: any) => {
+          if (v.level > 5) speaking.add(v.uid);
+        });
+        setSpeakingUsers(speaking);
+      });
+
+      setConnected(true);
+    } catch (err: any) {
+      toast({ title: "Voice connection failed", description: err.message, variant: "destructive" });
+    }
+  }, [connected, room, toast]);
 
   // ── Join room (coins/free-join logic on backend) then connect Agora ──
   const joinRoom = useCallback(async () => {
@@ -117,35 +161,15 @@ export default function VoiceRoomScreen() {
     } finally {
       setJoining(false);
     }
-  }, [room, roomId, joining]);
+  }, [room, roomId, joining, connectToAgora, refetchRoom]);
 
-  const connectToAgora = async () => {
-    if (connected) return;
-    try {
-      const tokenRes: any = await apiRequest("POST", "/api/agora/token", { channelName: room?.channel_name });
-      const tokenData = tokenRes.json ? await tokenRes.json() : tokenRes;
-
-      const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
-      agoraClient.current = client;
-
-      await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid);
-
-      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-      localAudioTrack.current = audioTrack;
-      await client.publish([audioTrack]);
-
-      client.on("user-published", async (remoteUser, mediaType) => {
-        await client.subscribe(remoteUser, mediaType);
-        if (mediaType === "audio") {
-          remoteUser.audioTrack?.play();
-        }
-      });
-
-      setConnected(true);
-    } catch (err: any) {
-      toast({ title: "Voice connection failed", description: err.message, variant: "destructive" });
+  // ── Agar user pehle se seat me hai (refresh/dobara open karne par) to
+  //    auto Agora connect karo — "Join Room" button na dabana pade ──
+  useEffect(() => {
+    if (room && mySeat && !connected) {
+      connectToAgora();
     }
-  };
+  }, [room, mySeat, connected, connectToAgora]);
 
   const leaveRoom = async () => {
     try {
@@ -275,24 +299,31 @@ export default function VoiceRoomScreen() {
 
       {/* ── Seats Grid ── */}
       <div className="grid grid-cols-4 gap-4 px-4 py-5">
-        {seats.map((seat) => (
-          <div key={seat.id} className="flex flex-col items-center gap-1">
-            <div className="relative">
-              <div className="w-14 h-14 rounded-full overflow-hidden ring-2 ring-pink-500/50">
-                <img
-                  src={seat.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${seat.user_id}`}
-                  className="w-full h-full object-cover"
-                />
+        {seats.map((seat) => {
+          const isSpeaking = speakingUsers.has(stringToNumericUid(seat.user_id));
+          return (
+            <div key={seat.id} className="flex flex-col items-center gap-1">
+              <div className="relative">
+                <div className={`w-14 h-14 rounded-full overflow-hidden ring-2 transition-all ${
+                  isSpeaking
+                    ? "ring-4 ring-green-400 shadow-[0_0_16px_4px_rgba(74,222,128,0.6)] animate-pulse"
+                    : "ring-pink-500/50"
+                }`}>
+                  <img
+                    src={seat.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${seat.user_id}`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                {seat.user_id === room.host_id && (
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[7px] font-black px-1.5 py-0.5 rounded-full">
+                    HOST
+                  </span>
+                )}
               </div>
-              {seat.user_id === room.host_id && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[7px] font-black px-1.5 py-0.5 rounded-full">
-                  HOST
-                </span>
-              )}
+              <span className="text-[9px] text-zinc-300 truncate max-w-[56px]">{seat.first_name}</span>
             </div>
-            <span className="text-[9px] text-zinc-300 truncate max-w-[56px]">{seat.first_name}</span>
-          </div>
-        ))}
+          );
+        })}
         {Array.from({ length: emptySeatSlots }).map((_, i) => (
           <div key={`empty-${i}`} className="flex flex-col items-center gap-1">
             <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center">
@@ -315,15 +346,14 @@ export default function VoiceRoomScreen() {
         </button>
       </div>
 
-      {/* ── Live Chat ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-        {messages.map((m) => (
+      {/* ── Live Chat (newest on top) ── */}
+      <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col-reverse gap-2">
+        {[...messages].reverse().map((m) => (
           <div key={m.id} className="bg-black/30 rounded-xl px-3 py-2 max-w-[85%]">
             <p className="text-[10px] text-pink-300 font-semibold">{m.first_name}</p>
             <p className="text-[13px] text-white">{m.content}</p>
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
 
       {/* ── Bottom Controls ── */}
