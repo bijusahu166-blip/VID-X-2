@@ -1,6 +1,5 @@
 import type { Express, Request, Response } from "express";
 import { chatStorage } from "./storage";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";

@@ -5,12 +5,10 @@ import { storage } from "./storage";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { setupAuth, registerAuthRoutes, registerSmsOtpRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { registerChatRoutes } from "./replit_integrations/chat";
-import { registerImageRoutes } from "./replit_integrations/image";
 import { api } from "@shared/routes";
 import { users, posts, comments, savedPosts, reports, notifications, conversations, messages, pendingBlocks, blocks } from "@shared/schema";
 import { db } from "./db";
 import { sql, eq, desc, and } from "drizzle-orm";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -18,26 +16,6 @@ import { v2 as cloudinary } from "cloudinary";
 import { wsClients } from "./realtime";
 import { error } from "console";
 
-const GEMINI_MODEL_FALLBACKS = [
-  process.env.GEMINI_MODEL || "gemini-2.0-flash",
-  "gemini-2.0-flash-exp",
-  "gemini-1.5-flash",
-];
-
-async function generateGeminiContent(genAI: GoogleGenerativeAI, prompt: string) {
-  let lastError: any;
-  for (const modelName of GEMINI_MODEL_FALLBACKS) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent(prompt);
-      return { modelName, result };
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`[ai] Gemini model ${modelName} failed:`, err?.message || err);
-    }
-  }
-  throw lastError;
-}
 
 // --- CONFIGURATION ---
 const uploadsDir = path.join(process.cwd(), "uploads", "videos");
@@ -2441,87 +2419,6 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       res.json(adsList);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
-    }
-  });
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // AI / GEMINI ROUTES
-  // ══════════════════════════════════════════════════════════════════════════
-
-  app.get("/api/audio-proxy", async (req, res) => {
-    try {
-      const targetUrl = req.query.url as string;
-      if (!targetUrl) return res.status(400).json({ message: "Missing url parameter" });
-
-      const allowedHost = "www.soundhelix.com";
-      const parsed = new URL(targetUrl);
-      if (parsed.hostname !== allowedHost) {
-        return res.status(403).json({ message: "URL not allowed" });
-      }
-
-      const upstream = await fetch(targetUrl);
-      if (!upstream.ok || !upstream.body) {
-        return res.status(502).json({ message: "Failed to fetch audio source" });
-      }
-
-      res.set("Content-Type", upstream.headers.get("content-type") || "audio/mpeg");
-      res.set("Cache-Control", "public, max-age=86400");
-      if (upstream.headers.get("content-length")) {
-        res.set("Content-Length", upstream.headers.get("content-length")!);
-      }
-
-      const reader = (upstream.body as any).getReader
-        ? (upstream.body as any).getReader()
-        : null;
-
-      if (reader) {
-        const pump = async () => {
-          const { done, value } = await reader.read();
-          if (done) { res.end(); return; }
-          res.write(Buffer.from(value));
-          pump();
-        };
-        pump();
-      } else {
-        (upstream.body as any).pipe(res);
-      }
-    } catch (err: any) {
-      console.error("[audio-proxy] Error:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ message: "Audio proxy failed" });
-      }
-    }
-  });
-
-  app.post("/api/translate", isAuthenticated, async (req, res) => {
-    const { text, targetLang } = req.body;
-    if (!text) return res.status(400).json({ message: "text required" });
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("GEMINI_API_KEY is not defined in environment variables.");
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const { result } = await generateGeminiContent(genAI, `Translate to ${targetLang || "English"}. Reply with only translated text:\n\n${text}`);
-      res.json({ translated: result.response.text() || "" });
-    } catch (err: any) {
-      console.error("[translate] Gemini error:", err.message);
-      res.status(500).json({ message: "Translation failed" });
-    }
-  });
-
-  app.post("/api/smart-reply", isAuthenticated, async (req, res) => {
-    const { lastMessage } = req.body;
-    if (!lastMessage) return res.status(400).json({ message: "lastMessage required" });
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("GEMINI_API_KEY is not defined in environment variables.");
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const { result } = await generateGeminiContent(genAI, `Generate 3 short reply suggestions for: "${lastMessage}". Reply with JSON array of strings only.`);
-      const raw = result.response.text() ?? "[]";
-      const suggestions = JSON.parse(raw.replace(/```json|```/g, "").trim());
-      res.json({ suggestions });
-    } catch (err: any) {
-      console.error("[smart-reply] Gemini error:", err?.message || err);
-      res.json({ suggestions: ["👍", "Got it!", "Thanks!"] });
     }
   });
 
