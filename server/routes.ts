@@ -1682,7 +1682,292 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       res.status(500).json({ message: err.message });
     }
   });
+// ══════════════════════════════════════════════════════════════════════════
+  // GIFTS & COIN PURCHASE (Razorpay)
+  // ══════════════════════════════════════════════════════════════════════════
 
+  const { razorpay } = await import("./razorpay");
+  const crypto = await import("crypto");
+
+  app.get("/api/coins/packages", async (_req, res) => {
+    try {
+      const rows = await db.execute(sql`SELECT * FROM coin_packages WHERE is_active = true ORDER BY amount_inr ASC`);
+      res.json((rows as any).rows ?? rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/coins/purchase/create-order", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { packageId } = req.body;
+      const pkgRows = await db.execute(sql`SELECT * FROM coin_packages WHERE id = ${packageId} AND is_active = true`);
+      const pkg = ((pkgRows as any).rows ?? pkgRows)[0];
+      if (!pkg) return res.status(400).json({ message: "Invalid package" });
+
+      const order = await razorpay.orders.create({
+        amount: pkg.amount_inr * 100, // paise me
+        currency: "INR",
+        receipt: `coins_${userId}_${Date.now()}`,
+      });
+
+      await db.execute(sql`
+        INSERT INTO coin_purchase_orders (user_id, razorpay_order_id, amount_inr, coins, status)
+        VALUES (${userId}, ${order.id}, ${pkg.amount_inr}, ${pkg.coins}, 'created')
+      `);
+
+      res.json({
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        keyId: process.env.RAZORPAY_KEY_ID,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Order creation failed" });
+    }
+  });
+
+  app.post("/api/coins/purchase/verify", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+      const expectedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest("hex");
+
+      if (expectedSignature !== razorpay_signature) {
+        return res.status(400).json({ message: "Invalid payment signature" });
+      }
+
+      const orderRows = await db.execute(sql`
+        SELECT * FROM coin_purchase_orders WHERE razorpay_order_id = ${razorpay_order_id} AND user_id = ${userId}
+      `);
+      const order = ((orderRows as any).rows ?? orderRows)[0];
+      if (!order) return res.status(404).json({ message: "Order not found" });
+      if (order.status === "paid") return res.json({ success: true, alreadyProcessed: true });
+
+      await db.execute(sql`
+        UPDATE coin_purchase_orders SET status = 'paid', razorpay_payment_id = ${razorpay_payment_id}
+        WHERE razorpay_order_id = ${razorpay_order_id}
+      `);
+
+      await addCoins(userId, order.coins, "purchase", razorpay_order_id);
+
+      res.json({ success: true, coinsAdded: order.coins });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Verification failed" });
+    }
+  });
+
+  // ── Gift catalog ──
+  app.get("/api/gifts/catalog", async (_req, res) => {
+    try {
+      const rows = await db.execute(sql`SELECT * FROM gifts_catalog WHERE is_active = true ORDER BY sort_order ASC`);
+      res.json((rows as any).rows ?? rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Send a gift (50% creator, 50% app — app ka hissa bas record hota hai, kaata nahi jaata) ──
+  app.post("/api/gifts/send", isAuthenticated, async (req: any, res) => {
+    try {
+      const senderId = req.session.userId;
+      const { receiverId, giftId, roomId } = req.body;
+      if (!receiverId || !giftId) return res.status(400).json({ message: "receiverId and giftId required" });
+      if (receiverId === senderId) return res.status(400).json({ message: "Cannot gift yourself" });
+
+      const giftRows = await db.execute(sql`SELECT * FROM gifts_catalog WHERE id = ${giftId} AND is_active = true`);
+      const gift = ((giftRows as any).rows ?? giftRows)[0];
+      if (!gift) return res.status(404).json({ message: "Gift not found" });
+
+      const wallet = await getOrCreateWallet(senderId);
+      if (wallet.balance < gift.price_coins) {
+        return res.status(402).json({ message: "Not enough coins", required: gift.price_coins, balance: wallet.balance });
+      }
+
+      // Sender se coins kaato
+      await addCoins(senderId, -gift.price_coins, "gift_sent", String(giftId));
+
+      // Creator ko 50% coins milen
+      const creatorShare = Math.floor(gift.price_coins / 2);
+      await db.execute(sql`
+        INSERT INTO creator_earnings (user_id, total_coins_earned) VALUES (${receiverId}, ${creatorShare})
+        ON CONFLICT (user_id) DO UPDATE SET total_coins_earned = creator_earnings.total_coins_earned + ${creatorShare}, updated_at = NOW()
+      `);
+      // Creator apne earned coins ko wallet me bhi use kar sake, wallet me bhi credit karo
+      await addCoins(receiverId, creatorShare, "gift_received", String(giftId));
+
+      await db.execute(sql`
+        INSERT INTO gift_transactions (sender_id, receiver_id, gift_id, coins_spent, room_id)
+        VALUES (${senderId}, ${receiverId}, ${giftId}, ${gift.price_coins}, ${roomId || null})
+      `);
+
+      // Notification bhejo receiver ko
+      const sender = await authStorage.getUser(senderId);
+      await db.insert(notifications).values({
+        userId: receiverId, fromUserId: senderId, type: "gift",
+        message: `${sender?.firstName ?? "Someone"} sent you ${gift.icon} ${gift.name}`,
+      });
+
+      // WebSocket real-time notify (voice room ke liye)
+      const receiverWs = wsClients.get(String(receiverId));
+      if (receiverWs && receiverWs.readyState === 1) {
+        receiverWs.send(JSON.stringify({
+          type: "gift_received", roomId, gift, sender: { firstName: sender?.firstName, profileImageUrl: sender?.profileImageUrl },
+        }));
+      }
+      // Sabko room me bhi dikhao (agar voice room me bheja gaya)
+      if (roomId) {
+        const seatRows = await db.execute(sql`SELECT user_id FROM voice_room_seats WHERE room_id = ${roomId}`);
+        const memberIds = ((seatRows as any).rows ?? seatRows).map((r: any) => r.user_id);
+        memberIds.forEach((memberId: string) => {
+          const ws = wsClients.get(String(memberId));
+          if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: "voice_room_gift", roomId, gift,
+              sender: { firstName: sender?.firstName, profileImageUrl: sender?.profileImageUrl },
+              receiver: { userId: receiverId },
+            }));
+          }
+        });
+      }
+
+      const newWallet = await getOrCreateWallet(senderId);
+      res.json({ success: true, balance: newWallet.balance });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Profile pe dikhane ke liye: kisi user ko kitne gifts mile ──
+  app.get("/api/users/:id/gifts-received", async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const rows = await db.execute(sql`
+        SELECT g.name, g.icon, COUNT(*) as count, SUM(gt.coins_spent) as total_coins
+        FROM gift_transactions gt JOIN gifts_catalog g ON g.id = gt.gift_id
+        WHERE gt.receiver_id = ${userId}
+        GROUP BY g.id, g.name, g.icon
+        ORDER BY total_coins DESC
+      `);
+      const earningsRows = await db.execute(sql`SELECT total_coins_earned FROM creator_earnings WHERE user_id = ${userId}`);
+      const earnings = ((earningsRows as any).rows ?? earningsRows)[0]?.total_coins_earned ?? 0;
+      res.json({ gifts: (rows as any).rows ?? rows, totalEarnedCoins: earnings });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  // ══════════════════════════════════════════════════════════════════════════
+  // SUBSCRIPTIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const PLAN_IDS: Record<string, string> = {
+    premium: process.env.RAZORPAY_PLAN_PREMIUM!,
+    creator_pro: process.env.RAZORPAY_PLAN_CREATOR_PRO!,
+    business: process.env.RAZORPAY_PLAN_BUSINESS!,
+  };
+
+  app.get("/api/subscription/mine", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.execute(sql`
+        SELECT * FROM user_subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1
+      `);
+      const sub = ((rows as any).rows ?? rows)[0] || null;
+      res.json({ subscription: sub });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/subscription/create", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { planType } = req.body;
+      const planId = PLAN_IDS[planType];
+      if (!planId) return res.status(400).json({ message: "Invalid plan type" });
+
+      const existingRows = await db.execute(sql`
+        SELECT * FROM user_subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1
+      `);
+      if (((existingRows as any).rows ?? existingRows).length > 0) {
+        return res.status(400).json({ message: "You already have an active subscription" });
+      }
+
+      const subscription = await razorpay.subscriptions.create({
+        plan_id: planId,
+        customer_notify: 1,
+        total_count: 12, // 12 billing cycles (1 year), auto-renews within Razorpay
+      });
+
+      await db.execute(sql`
+        INSERT INTO user_subscriptions (user_id, plan_type, razorpay_subscription_id, status)
+        VALUES (${userId}, ${planType}, ${subscription.id}, 'created')
+      `);
+
+      res.json({ subscriptionId: subscription.id, keyId: process.env.RAZORPAY_KEY_ID });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Subscription creation failed" });
+    }
+  });
+
+  // Razorpay Dashboard → Webhooks me ye URL add karni hogi (Step 6 me detail)
+  app.post("/api/subscription/webhook", express.json(), async (req: any, res) => {
+    try {
+      const signature = req.headers["x-razorpay-signature"];
+      const expectedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
+        .update(JSON.stringify(req.body))
+        .digest("hex");
+
+      if (signature !== expectedSignature) {
+        return res.status(400).json({ message: "Invalid webhook signature" });
+      }
+
+      const event = req.body.event;
+      const subEntity = req.body.payload?.subscription?.entity;
+      if (!subEntity) return res.json({ received: true });
+
+      if (event === "subscription.activated" || event === "subscription.charged") {
+        await db.execute(sql`
+          UPDATE user_subscriptions SET status = 'active', updated_at = NOW()
+          WHERE razorpay_subscription_id = ${subEntity.id}
+        `);
+      }
+      if (event === "subscription.cancelled" || event === "subscription.completed" || event === "subscription.halted") {
+        await db.execute(sql`
+          UPDATE user_subscriptions SET status = 'expired', updated_at = NOW()
+          WHERE razorpay_subscription_id = ${subEntity.id}
+        `);
+      }
+
+      res.json({ received: true });
+    } catch (err: any) {
+      console.error("[subscription webhook]", err);
+      res.status(500).json({ message: "Webhook processing failed" });
+    }
+  });
+
+  app.post("/api/subscription/cancel", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.execute(sql`
+        SELECT * FROM user_subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1
+      `);
+      const sub = ((rows as any).rows ?? rows)[0];
+      if (!sub) return res.status(404).json({ message: "No active subscription" });
+
+      await razorpay.subscriptions.cancel(sub.razorpay_subscription_id);
+      await db.execute(sql`UPDATE user_subscriptions SET status = 'cancelled', updated_at = NOW() WHERE id = ${sub.id}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
   // ══════════════════════════════════════════════════════════════════════════
   // VOICE ROOMS
   // ══════════════════════════════════════════════════════════════════════════
@@ -1739,7 +2024,6 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId}`);
       const room = ((roomRows as any).rows ?? roomRows)[0];
       if (!room) return res.status(404).json({ message: "Room not found" });
-
       const seatRows = await db.execute(sql`
         SELECT s.*, u.first_name, u.last_name, u.username, u.profile_image_url
         FROM voice_room_seats s JOIN users u ON u.id = s.user_id
@@ -1760,7 +2044,15 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId} AND is_active = true`);
       const room = ((roomRows as any).rows ?? roomRows)[0];
       if (!room) return res.status(404).json({ message: "Room not found or ended" });
-
+        if (room.requires_approval && room.host_id !== userId) {
+        const approvalRows = await db.execute(sql`
+          SELECT status FROM voice_room_join_requests WHERE room_id = ${roomId} AND user_id = ${userId}
+        `);
+        const approvalRow = ((approvalRows as any).rows ?? approvalRows)[0];
+        if (!approvalRow || approvalRow.status !== "approved") {
+          return res.status(403).json({ message: "This room requires host approval", requiresApproval: true });
+        }
+      }
       // Already joined hai kya check
       const alreadyRows = await db.execute(sql`
         SELECT * FROM voice_room_seats WHERE room_id = ${roomId} AND user_id = ${userId}
@@ -1811,6 +2103,159 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
     }
   });
 
+  // ── Toggle approval requirement (host only) ──
+  app.patch("/api/voice-rooms/:id/settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const { requiresApproval } = req.body;
+      const result = await db.execute(sql`
+        UPDATE voice_rooms SET requires_approval = ${!!requiresApproval}
+        WHERE id = ${roomId} AND host_id = ${userId}
+        RETURNING *
+      `);
+      const updated = ((result as any).rows ?? result)[0];
+      if (!updated) return res.status(403).json({ message: "Not allowed" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Request to join (jab requires_approval true ho) ──
+  app.post("/api/voice-rooms/:id/request-join", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId} AND is_active = true`);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room) return res.status(404).json({ message: "Room not found" });
+
+      await db.execute(sql`
+        INSERT INTO voice_room_join_requests (room_id, user_id, status)
+        VALUES (${roomId}, ${userId}, 'pending')
+        ON CONFLICT (room_id, user_id) DO UPDATE SET status = 'pending', created_at = NOW()
+      `);
+
+      // Host ko WebSocket se notify karo
+      const requester = await authStorage.getUser(userId);
+      const hostWs = wsClients.get(String(room.host_id));
+      if (hostWs && hostWs.readyState === 1) {
+        hostWs.send(JSON.stringify({
+          type: "voice_room_join_request", roomId, userId,
+          user: { firstName: requester?.firstName, profileImageUrl: requester?.profileImageUrl },
+        }));
+      }
+      res.json({ success: true, status: "pending" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Pending requests list (host only) ──
+  app.get("/api/voice-rooms/:id/join-requests", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const roomRows = await db.execute(sql`SELECT host_id FROM voice_rooms WHERE id = ${roomId}`);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room || room.host_id !== userId) return res.status(403).json({ message: "Not allowed" });
+
+      const rows = await db.execute(sql`
+        SELECT r.*, u.first_name, u.last_name, u.profile_image_url
+        FROM voice_room_join_requests r JOIN users u ON u.id = r.user_id
+        WHERE r.room_id = ${roomId} AND r.status = 'pending'
+        ORDER BY r.created_at ASC
+      `);
+      res.json((rows as any).rows ?? rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Approve / Deny join request (host only) ──
+  app.post("/api/voice-rooms/:id/join-requests/:userId/:action", isAuthenticated, async (req: any, res) => {
+    try {
+      const hostId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const targetUserId = req.params.userId;
+      const action = req.params.action; // "approve" | "deny"
+
+      const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId}`);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room || room.host_id !== hostId) return res.status(403).json({ message: "Not allowed" });
+
+      if (action === "approve") {
+        await db.execute(sql`UPDATE voice_room_join_requests SET status = 'approved' WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
+        const seatCountRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM voice_room_seats WHERE room_id = ${roomId}`);
+        const seatCount = parseInt(((seatCountRows as any).rows ?? seatCountRows)[0]?.cnt ?? "0");
+        await db.execute(sql`
+          INSERT INTO voice_room_seats (room_id, user_id, seat_number) VALUES (${roomId}, ${targetUserId}, ${seatCount + 1})
+          ON CONFLICT (room_id, user_id) DO NOTHING
+        `);
+      } else {
+        await db.execute(sql`UPDATE voice_room_join_requests SET status = 'denied' WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
+      }
+
+      const targetWs = wsClients.get(String(targetUserId));
+      if (targetWs && targetWs.readyState === 1) {
+        targetWs.send(JSON.stringify({ type: "voice_room_join_response", roomId, approved: action === "approve" }));
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Force mute a seat (host only) ──
+  app.post("/api/voice-rooms/:id/seats/:userId/mute", isAuthenticated, async (req: any, res) => {
+    try {
+      const hostId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const targetUserId = req.params.userId;
+      const { muted } = req.body;
+
+      const roomRows = await db.execute(sql`SELECT host_id FROM voice_rooms WHERE id = ${roomId}`);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room || room.host_id !== hostId) return res.status(403).json({ message: "Not allowed" });
+
+      await db.execute(sql`UPDATE voice_room_seats SET is_muted = ${!!muted} WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
+
+      const targetWs = wsClients.get(String(targetUserId));
+      if (targetWs && targetWs.readyState === 1) {
+        targetWs.send(JSON.stringify({ type: "voice_room_force_mute", roomId, muted: !!muted }));
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Kick a user (host only) ──
+  app.delete("/api/voice-rooms/:id/seats/:userId", isAuthenticated, async (req: any, res) => {
+    try {
+      const hostId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const targetUserId = req.params.userId;
+      if (targetUserId === hostId) return res.status(400).json({ message: "Host cannot kick themselves" });
+
+      const roomRows = await db.execute(sql`SELECT host_id FROM voice_rooms WHERE id = ${roomId}`);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room || room.host_id !== hostId) return res.status(403).json({ message: "Not allowed" });
+
+      await db.execute(sql`DELETE FROM voice_room_seats WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
+      await db.execute(sql`DELETE FROM voice_room_join_requests WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
+
+      const targetWs = wsClients.get(String(targetUserId));
+      if (targetWs && targetWs.readyState === 1) {
+        targetWs.send(JSON.stringify({ type: "voice_room_kicked", roomId }));
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
   // Room leave karo
   app.post("/api/voice-rooms/:id/leave", isAuthenticated, async (req: any, res) => {
     try {

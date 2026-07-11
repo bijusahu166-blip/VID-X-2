@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Mic, MicOff, X, Send, Coins, Play, Settings } from "lucide-react";
+import { ArrowLeft, Mic, MicOff, X, Send, Coins, Play, Settings, UserX, Check } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import AgoraRTC, { IAgoraRTCClient, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
+import { Gift } from "lucide-react";
 
 interface Seat {
   id: number;
@@ -25,6 +26,7 @@ interface Room {
   title: string;
   join_cost: number;
   is_active: boolean;
+  requires_approval: boolean;
   seats: Seat[];
 }
 
@@ -39,10 +41,17 @@ interface RoomMessage {
   profile_image_url: string | null;
 }
 
+interface JoinRequest {
+  id: number;
+  room_id: number;
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  profile_image_url: string | null;
+}
+
 const MAX_SEATS = 12;
 
-// user_id (string) ko Agora ke numeric uid me convert karta hai — token generation
-// (server/agora.ts) me use hone wale hash se match hona chahiye
 function stringToNumericUid(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -59,18 +68,26 @@ export default function VoiceRoomScreen() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const currentUserId: string = (user as any)?.id ?? "";
-
+  const [showGiftPicker, setShowGiftPicker] = useState(false);
+  const [giftTargetUserId, setGiftTargetUserId] = useState<string | null>(null);
+  const [floatingGifts, setFloatingGifts] = useState<{ id: number; icon: string; name: string }[]>([]);
   const [chatText, setChatText] = useState("");
   const [isMuted, setIsMuted] = useState(false);
+  const [forceMuted, setForceMuted] = useState(false);
   const [connected, setConnected] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
   const [showCostEditor, setShowCostEditor] = useState(false);
   const [newCost, setNewCost] = useState(0);
+  const [newRequiresApproval, setNewRequiresApproval] = useState(false);
+  const [showRequests, setShowRequests] = useState(false);
   const [watchingAd, setWatchingAd] = useState(false);
   const [speakingUsers, setSpeakingUsers] = useState<Set<number>>(new Set());
+  const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
 
   const agoraClient = useRef<IAgoraRTCClient | null>(null);
   const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const { data: room, refetch: refetchRoom } = useQuery<Room>({
     queryKey: ["/api/voice-rooms", roomId],
@@ -99,9 +116,28 @@ export default function VoiceRoomScreen() {
       return res.json();
     },
   });
+  const { data: giftCatalog = [] } = useQuery<{ id: number; name: string; icon: string; price_coins: number }[]>({
+    queryKey: ["/api/gifts/catalog"],
+    queryFn: async () => {
+      const res = await fetch("/api/gifts/catalog", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
 
   const isHost = room?.host_id === currentUserId;
   const mySeat = room?.seats.find(s => s.user_id === currentUserId);
+
+  const { data: joinRequests = [] } = useQuery<JoinRequest[]>({
+    queryKey: ["/api/voice-rooms", roomId, "join-requests"],
+    queryFn: async () => {
+      const res = await fetch(`/api/voice-rooms/${roomId}/join-requests`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!isHost,
+    refetchInterval: 5000,
+  });
 
   const connectToAgora = useCallback(async () => {
     if (connected || !room) return;
@@ -112,12 +148,7 @@ export default function VoiceRoomScreen() {
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       agoraClient.current = client;
 
-      await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid);
-
-      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-      localAudioTrack.current = audioTrack;
-      await client.publish([audioTrack]);
-
+      // Listeners join se pehle register karo
       client.on("user-published", async (remoteUser, mediaType) => {
         await client.subscribe(remoteUser, mediaType);
         if (mediaType === "audio") {
@@ -125,7 +156,6 @@ export default function VoiceRoomScreen() {
         }
       });
 
-      // ── Active speaker detection (glow indicator ke liye) ──
       client.enableAudioVolumeIndicator();
       client.on("volume-indicator", (volumes: any[]) => {
         const speaking = new Set<number>();
@@ -135,19 +165,31 @@ export default function VoiceRoomScreen() {
         setSpeakingUsers(speaking);
       });
 
+      await client.join(tokenData.appId, tokenData.channelName, tokenData.token, tokenData.uid);
+
+      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      localAudioTrack.current = audioTrack;
+      await client.publish([audioTrack]);
+
       setConnected(true);
     } catch (err: any) {
       toast({ title: "Voice connection failed", description: err.message, variant: "destructive" });
     }
   }, [connected, room, toast]);
 
-  // ── Join room (coins/free-join logic on backend) then connect Agora ──
   const joinRoom = useCallback(async () => {
     if (!room || joining) return;
     setJoining(true);
     try {
       const res: any = await apiRequest("POST", `/api/voice-rooms/${roomId}/join`, {});
       const data = res.json ? await res.json() : res;
+      if (data.requiresApproval) {
+        await apiRequest("POST", `/api/voice-rooms/${roomId}/request-join`, {});
+        setRequestSent(true);
+        toast({ title: "Request sent to host" });
+        setJoining(false);
+        return;
+      }
       if (data.message && !data.success) {
         toast({ title: data.message, variant: "destructive" });
         setJoining(false);
@@ -157,19 +199,76 @@ export default function VoiceRoomScreen() {
       refetchRoom();
     } catch (err: any) {
       const msg = err?.message || "Could not join room";
-      toast({ title: msg, variant: "destructive" });
+      if (msg.toLowerCase().includes("approval")) {
+        await apiRequest("POST", `/api/voice-rooms/${roomId}/request-join`, {}).catch(() => {});
+        setRequestSent(true);
+        toast({ title: "Request sent to host" });
+      } else {
+        toast({ title: msg, variant: "destructive" });
+      }
     } finally {
       setJoining(false);
     }
   }, [room, roomId, joining, connectToAgora, refetchRoom]);
 
-  // ── Agar user pehle se seat me hai (refresh/dobara open karne par) to
-  //    auto Agora connect karo — "Join Room" button na dabana pade ──
   useEffect(() => {
     if (room && mySeat && !connected) {
       connectToAgora();
     }
   }, [room, mySeat, connected, connectToAgora]);
+
+  // ── WebSocket: join-response, force-mute, kicked events sunein ──
+  useEffect(() => {
+    if (!currentUserId) return;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "register", userId: currentUserId }));
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.roomId !== roomId) return;
+
+        if (data.type === "voice_room_join_response") {
+          if (data.approved) {
+            toast({ title: "Host approved your request!" });
+            setRequestSent(false);
+            refetchRoom();
+          } else {
+            toast({ title: "Host denied your request", variant: "destructive" });
+            setRequestSent(false);
+          }
+        }
+        if (data.type === "voice_room_force_mute") {
+          setForceMuted(data.muted);
+          if (data.muted && localAudioTrack.current) {
+            localAudioTrack.current.setEnabled(false);
+            setIsMuted(true);
+          }
+          toast({ title: data.muted ? "Host muted you" : "Host unmuted you" });
+        }
+        if (data.type === "voice_room_kicked") {
+          toast({ title: "You were removed from the room", variant: "destructive" });
+          leaveRoom();
+        }
+        if (data.type === "voice_room_join_request") {
+          qc.invalidateQueries({ queryKey: ["/api/voice-rooms", roomId, "join-requests"] });
+          toast({ title: `${data.user?.firstName ?? "Someone"} wants to join` });
+        }
+        if (data.type === "voice_room_gift") {
+          const id = Date.now();
+          setFloatingGifts(prev => [...prev, { id, icon: data.gift.icon, name: data.gift.name }]);
+          setTimeout(() => setFloatingGifts(prev => prev.filter(f => f.id !== id)), 2500);
+        }
+      } catch {}
+    };
+
+    return () => { ws.close(); };
+  }, [currentUserId, roomId]);
 
   const leaveRoom = async () => {
     try {
@@ -190,7 +289,7 @@ export default function VoiceRoomScreen() {
   };
 
   const toggleMute = async () => {
-    if (!localAudioTrack.current) return;
+    if (!localAudioTrack.current || forceMuted) return;
     if (isMuted) {
       await localAudioTrack.current.setEnabled(true);
     } else {
@@ -208,14 +307,46 @@ export default function VoiceRoomScreen() {
     }
   };
 
-  const updateCost = async () => {
+  const updateSettings = async () => {
     try {
       await apiRequest("PATCH", `/api/voice-rooms/${roomId}/cost`, { joinCost: newCost });
+      await apiRequest("PATCH", `/api/voice-rooms/${roomId}/settings`, { requiresApproval: newRequiresApproval });
       setShowCostEditor(false);
       refetchRoom();
-      toast({ title: "Join cost updated" });
+      toast({ title: "Room settings updated" });
     } catch {
-      toast({ title: "Could not update cost", variant: "destructive" });
+      toast({ title: "Could not update settings", variant: "destructive" });
+    }
+  };
+
+  const respondToRequest = async (targetUserId: string, action: "approve" | "deny") => {
+    try {
+      await apiRequest("POST", `/api/voice-rooms/${roomId}/join-requests/${targetUserId}/${action}`, {});
+      qc.invalidateQueries({ queryKey: ["/api/voice-rooms", roomId, "join-requests"] });
+      refetchRoom();
+    } catch {
+      toast({ title: "Action failed", variant: "destructive" });
+    }
+  };
+
+  const toggleSeatMute = async (targetUserId: string, currentlyMuted: boolean) => {
+    try {
+      await apiRequest("POST", `/api/voice-rooms/${roomId}/seats/${targetUserId}/mute`, { muted: !currentlyMuted });
+      refetchRoom();
+      setSelectedSeat(null);
+    } catch {
+      toast({ title: "Could not update mute", variant: "destructive" });
+    }
+  };
+
+  const kickUser = async (targetUserId: string) => {
+    try {
+      await apiRequest("DELETE", `/api/voice-rooms/${roomId}/seats/${targetUserId}`, {});
+      refetchRoom();
+      setSelectedSeat(null);
+      toast({ title: "User removed" });
+    } catch {
+      toast({ title: "Could not remove user", variant: "destructive" });
     }
   };
 
@@ -227,7 +358,25 @@ export default function VoiceRoomScreen() {
     },
   });
 
-  // ── Watch Ad → 20 coins ──
+const sendGift = useMutation({
+    mutationFn: ({ giftId, receiverId }: { giftId: number; receiverId: string }) =>
+      apiRequest("POST", "/api/gifts/send", { giftId, receiverId, roomId }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["/api/coins/balance"] });
+      const gift = giftCatalog.find(g => g.id === variables.giftId);
+      if (gift) {
+        const id = Date.now();
+        setFloatingGifts(prev => [...prev, { id, icon: gift.icon, name: gift.name }]);
+        setTimeout(() => setFloatingGifts(prev => prev.filter(f => f.id !== id)), 2500);
+      }
+      setShowGiftPicker(false);
+      setGiftTargetUserId(null);
+    },
+    onError: (err: any) => {
+      toast({ title: err.message || "Could not send gift", variant: "destructive" });
+    },
+  });
+
   const watchAd = async () => {
     setWatchingAd(true);
     try {
@@ -286,9 +435,20 @@ export default function VoiceRoomScreen() {
             <Coins className="w-3 h-3 text-yellow-400" />
             <span className="text-[11px] text-white font-semibold">{coinData?.balance ?? 0}</span>
           </div>
+          {isHost && joinRequests.length > 0 && (
+            <button
+              onClick={() => setShowRequests(true)}
+              className="relative w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <Check className="w-4 h-4 text-white" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-[9px] text-white flex items-center justify-center font-bold">
+                {joinRequests.length}
+              </span>
+            </button>
+          )}
           {isHost && (
             <button
-              onClick={() => { setNewCost(room.join_cost); setShowCostEditor(true); }}
+              onClick={() => { setNewCost(room.join_cost); setNewRequiresApproval(room.requires_approval); setShowCostEditor(true); }}
               className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"
             >
               <Settings className="w-4 h-4 text-white" />
@@ -301,8 +461,17 @@ export default function VoiceRoomScreen() {
       <div className="grid grid-cols-4 gap-4 px-4 py-5">
         {seats.map((seat) => {
           const isSpeaking = speakingUsers.has(stringToNumericUid(seat.user_id));
+          const canControl = isHost && seat.user_id !== room.host_id;
           return (
-            <div key={seat.id} className="flex flex-col items-center gap-1">
+            <button
+              key={seat.id}
+             onClick={() => {
+                if (canControl) { setSelectedSeat(seat); return; }
+                if (seat.user_id !== currentUserId) { setGiftTargetUserId(seat.user_id); setShowGiftPicker(true); }
+              }}
+              className="flex flex-col items-center gap-1"
+              disabled={!canControl}
+            >
               <div className="relative">
                 <div className={`w-14 h-14 rounded-full overflow-hidden ring-2 transition-all ${
                   isSpeaking
@@ -319,9 +488,14 @@ export default function VoiceRoomScreen() {
                     HOST
                   </span>
                 )}
+                {seat.is_muted && (
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                    <MicOff className="w-2.5 h-2.5 text-white" />
+                  </span>
+                )}
               </div>
               <span className="text-[9px] text-zinc-300 truncate max-w-[56px]">{seat.first_name}</span>
-            </div>
+            </button>
           );
         })}
         {Array.from({ length: emptySeatSlots }).map((_, i) => (
@@ -330,6 +504,15 @@ export default function VoiceRoomScreen() {
               <span className="text-white/30 text-xl">+</span>
             </div>
             <span className="text-[9px] text-transparent">-</span>
+          </div>
+        ))}
+      </div>
+    {/* ── Floating Gift Animations ── */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-32 flex flex-col items-center gap-2 z-40">
+        {floatingGifts.map((g) => (
+          <div key={g.id} className="animate-bounce bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2">
+            <span className="text-2xl">{g.icon}</span>
+            <span className="text-white text-xs font-bold">{g.name}!</span>
           </div>
         ))}
       </div>
@@ -363,18 +546,25 @@ export default function VoiceRoomScreen() {
           {!mySeat ? (
             <button
               onClick={joinRoom}
-              disabled={joining}
+              disabled={joining || requestSent}
               className="flex-1 py-3 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-sm disabled:opacity-50"
             >
-              {joining ? "Joining..." : room.join_cost > 0 ? `Join Room (${room.join_cost} coins)` : "Join Room"}
+              {requestSent ? "Waiting for host approval..." : joining ? "Joining..." : room.join_cost > 0 ? `Join Room (${room.join_cost} coins)` : "Join Room"}
             </button>
           ) : (
             <>
+            <button
+                onClick={() => { setGiftTargetUserId(room.host_id === currentUserId ? seats[1]?.user_id ?? null : room.host_id); setShowGiftPicker(true); }}
+                className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center"
+              >
+                <Gift className="w-4 h-4 text-pink-400" />
+              </button>
               <button
                 onClick={toggleMute}
-                className={`w-11 h-11 rounded-xl flex items-center justify-center ${isMuted ? "bg-red-500" : "bg-white/10"}`}
+                disabled={forceMuted}
+                className={`w-11 h-11 rounded-xl flex items-center justify-center ${(isMuted || forceMuted) ? "bg-red-500" : "bg-white/10"} disabled:opacity-70`}
               >
-                {isMuted ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-white" />}
+                {(isMuted || forceMuted) ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-white" />}
               </button>
               <input
                 value={chatText}
@@ -399,23 +589,120 @@ export default function VoiceRoomScreen() {
         </div>
       </div>
 
-      {/* ── Cost Editor Modal ── */}
+      {/* ── Seat Control Modal (host: mute/kick) ── */}
+      {selectedSeat && (
+        <div className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center px-6" onClick={() => setSelectedSeat(null)}>
+          <div className="bg-[#1a0a2e] border border-white/10 rounded-2xl p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <p className="text-white font-bold text-sm mb-4">{selectedSeat.first_name}</p>
+            <button
+              onClick={() => toggleSeatMute(selectedSeat.user_id, selectedSeat.is_muted)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/8 hover:bg-white/12 mb-2 text-left"
+            >
+              <MicOff className="w-4 h-4 text-orange-400" />
+              <span className="text-white text-sm">{selectedSeat.is_muted ? "Unmute user" : "Mute user"}</span>
+            </button>
+            <button
+              onClick={() => kickUser(selectedSeat.user_id)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 mb-2 text-left"
+            >
+              <UserX className="w-4 h-4 text-red-400" />
+              <span className="text-red-400 text-sm">Remove from room</span>
+            </button>
+            <button onClick={() => setSelectedSeat(null)} className="w-full py-2.5 rounded-xl bg-white/10 text-zinc-300 text-sm">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pending Join Requests Modal (host) ── */}
+      {showRequests && (
+        <div className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center px-6" onClick={() => setShowRequests(false)}>
+          <div className="bg-[#1a0a2e] border border-white/10 rounded-2xl p-5 w-full max-w-xs max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <p className="text-white font-bold text-sm mb-4">Join Requests</p>
+            {joinRequests.length === 0 ? (
+              <p className="text-zinc-500 text-xs">No pending requests</p>
+            ) : (
+              <div className="space-y-2">
+                {joinRequests.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 bg-white/5 rounded-xl p-2">
+                    <img
+                      src={r.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.user_id}`}
+                      className="w-9 h-9 rounded-full object-cover"
+                    />
+                    <span className="flex-1 text-white text-xs font-semibold">{r.first_name}</span>
+                    <button onClick={() => respondToRequest(r.user_id, "approve")} className="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center">
+                      <Check className="w-3.5 h-3.5 text-white" />
+                    </button>
+                    <button onClick={() => respondToRequest(r.user_id, "deny")} className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center">
+                      <X className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowRequests(false)} className="w-full mt-4 py-2.5 rounded-xl bg-white/10 text-zinc-300 text-sm">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Room Settings Modal (host) ── */}
       {showCostEditor && (
         <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center px-6" onClick={() => setShowCostEditor(false)}>
           <div className="bg-[#1a0a2e] border border-white/10 rounded-2xl p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
-            <p className="text-white font-bold text-sm mb-3">Set Join Cost</p>
+            <p className="text-white font-bold text-sm mb-3">Room Settings</p>
+            <label className="text-xs text-zinc-400 font-semibold">Join Cost (coins)</label>
             <input
               type="number"
               min={0}
               value={newCost}
               onChange={(e) => setNewCost(Number(e.target.value))}
-              className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none mb-3"
+              className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none mb-3 mt-1"
             />
+            <button
+              onClick={() => setNewRequiresApproval(p => !p)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/8 mb-4"
+            >
+              <span className="text-white text-sm">Require approval to join</span>
+              <div className={`w-10 h-6 rounded-full flex items-center px-0.5 transition-colors ${newRequiresApproval ? "bg-pink-500 justify-end" : "bg-white/20 justify-start"}`}>
+                <div className="w-5 h-5 rounded-full bg-white" />
+              {/* ── Gift Picker Modal ── */}
+      {showGiftPicker && (
+        <div className="fixed inset-0 z-[70] bg-black/70 flex items-end justify-center" onClick={() => setShowGiftPicker(false)}>
+          <div className="bg-[#1a0a2e] border-t border-white/10 rounded-t-3xl p-5 w-full max-w-md max-h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-white font-bold text-sm">Send a Gift</p>
+              <div className="flex items-center gap-1 bg-white/10 rounded-full px-2.5 py-1">
+                <Coins className="w-3 h-3 text-yellow-400" />
+                <span className="text-[11px] text-white font-semibold">{coinData?.balance ?? 0}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              {giftCatalog.map((gift) => (
+                <button
+                  key={gift.id}
+                  onClick={() => giftTargetUserId && sendGift.mutate({ giftId: gift.id, receiverId: giftTargetUserId })}
+                  disabled={sendGift.isPending}
+                  className="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
+                >
+                  <span className="text-3xl">{gift.icon}</span>
+                  <span className="text-[9px] text-zinc-300 truncate w-full text-center">{gift.name}</span>
+                  <span className="text-[9px] text-yellow-400 font-bold">{gift.price_coins}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+              </div>
+            </button>
             <div className="flex gap-2">
               <button onClick={() => setShowCostEditor(false)} className="flex-1 py-2.5 rounded-xl bg-white/10 text-zinc-300 text-sm">
                 Cancel
               </button>
-              <button onClick={updateCost} className="flex-1 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-bold">
+              <button onClick={updateSettings} className="flex-1 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-bold">
                 Save
               </button>
             </div>

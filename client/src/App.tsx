@@ -12,6 +12,7 @@ import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
 import { useEffect, useRef } from "react";
 
 import VoiceRoomCreate from "@/pages/VoiceRoomCreate";
+import BuyCoins from "@/pages/BuyCoins";
 import VoiceRoomScreen from "@/pages/VoiceRoomScreen";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
@@ -25,6 +26,7 @@ import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
 import Notifications from "@/pages/Notifications";
 import Jobs from "@/pages/Jobs";
+import Subscription from "@/pages/Subscription";
 
 // Polls the server version every 30s. When the server restarts (new code deployed),
 // the version changes and the browser hard-reloads to pick up the latest bundle.
@@ -92,6 +94,7 @@ function Router() {
     <>
       <Switch>
         <Route path="/voice-rooms/create" component={VoiceRoomCreate} />
+        <Route path="/buy-coins" component={BuyCoins} />
         <Route path="/voice-rooms/:id" component={VoiceRoomScreen} />
         <Route path="/" component={Home} />
         <Route path="/search" component={Search} />
@@ -104,6 +107,7 @@ function Router() {
         <Route path="/profile" component={Profile} />
         <Route path="/profile/:id" component={Profile} />
         <Route component={NotFound} />
+        <Route path="/Subscription" component={Subscription} />
       </Switch>
       <GlobalCallOverlay />
     </>
