@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Mic, MicOff, X, Send, Coins, Play, Settings, UserX, Check } from "lucide-react";
+import { ArrowLeft, Mic, MicOff, X, Send, Coins, Play, Settings, UserX, Check, Gift } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import AgoraRTC, { IAgoraRTCClient, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
-import { Gift } from "lucide-react";
 
 interface Seat {
   id: number;
@@ -68,6 +67,7 @@ export default function VoiceRoomScreen() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const currentUserId: string = (user as any)?.id ?? "";
+
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [giftTargetUserId, setGiftTargetUserId] = useState<string | null>(null);
   const [floatingGifts, setFloatingGifts] = useState<{ id: number; icon: string; name: string }[]>([]);
@@ -116,6 +116,7 @@ export default function VoiceRoomScreen() {
       return res.json();
     },
   });
+
   const { data: giftCatalog = [] } = useQuery<{ id: number; name: string; icon: string; price_coins: number }[]>({
     queryKey: ["/api/gifts/catalog"],
     queryFn: async () => {
@@ -148,7 +149,6 @@ export default function VoiceRoomScreen() {
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       agoraClient.current = client;
 
-      // Listeners join se pehle register karo
       client.on("user-published", async (remoteUser, mediaType) => {
         await client.subscribe(remoteUser, mediaType);
         if (mediaType === "audio") {
@@ -217,7 +217,6 @@ export default function VoiceRoomScreen() {
     }
   }, [room, mySeat, connected, connectToAgora]);
 
-  // ── WebSocket: join-response, force-mute, kicked events sunein ──
   useEffect(() => {
     if (!currentUserId) return;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -358,7 +357,7 @@ export default function VoiceRoomScreen() {
     },
   });
 
-const sendGift = useMutation({
+  const sendGift = useMutation({
     mutationFn: ({ giftId, receiverId }: { giftId: number; receiverId: string }) =>
       apiRequest("POST", "/api/gifts/send", { giftId, receiverId, roomId }),
     onSuccess: (_data, variables) => {
@@ -465,12 +464,11 @@ const sendGift = useMutation({
           return (
             <button
               key={seat.id}
-             onClick={() => {
+              onClick={() => {
                 if (canControl) { setSelectedSeat(seat); return; }
                 if (seat.user_id !== currentUserId) { setGiftTargetUserId(seat.user_id); setShowGiftPicker(true); }
               }}
               className="flex flex-col items-center gap-1"
-              disabled={!canControl}
             >
               <div className="relative">
                 <div className={`w-14 h-14 rounded-full overflow-hidden ring-2 transition-all ${
@@ -507,7 +505,8 @@ const sendGift = useMutation({
           </div>
         ))}
       </div>
-    {/* ── Floating Gift Animations ── */}
+
+      {/* ── Floating Gift Animations ── */}
       <div className="pointer-events-none absolute inset-x-0 bottom-32 flex flex-col items-center gap-2 z-40">
         {floatingGifts.map((g) => (
           <div key={g.id} className="animate-bounce bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2">
@@ -553,7 +552,7 @@ const sendGift = useMutation({
             </button>
           ) : (
             <>
-            <button
+              <button
                 onClick={() => { setGiftTargetUserId(room.host_id === currentUserId ? seats[1]?.user_id ?? null : room.host_id); setShowGiftPicker(true); }}
                 className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center"
               >
@@ -668,7 +667,21 @@ const sendGift = useMutation({
               <span className="text-white text-sm">Require approval to join</span>
               <div className={`w-10 h-6 rounded-full flex items-center px-0.5 transition-colors ${newRequiresApproval ? "bg-pink-500 justify-end" : "bg-white/20 justify-start"}`}>
                 <div className="w-5 h-5 rounded-full bg-white" />
-              {/* ── Gift Picker Modal ── */}
+              </div>
+            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setShowCostEditor(false)} className="flex-1 py-2.5 rounded-xl bg-white/10 text-zinc-300 text-sm">
+                Cancel
+              </button>
+              <button onClick={updateSettings} className="flex-1 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-bold">
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Gift Picker Modal ── */}
       {showGiftPicker && (
         <div className="fixed inset-0 z-[70] bg-black/70 flex items-end justify-center" onClick={() => setShowGiftPicker(false)}>
           <div className="bg-[#1a0a2e] border-t border-white/10 rounded-t-3xl p-5 w-full max-w-md max-h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -692,19 +705,6 @@ const sendGift = useMutation({
                   <span className="text-[9px] text-yellow-400 font-bold">{gift.price_coins}</span>
                 </button>
               ))}
-            </div>
-          </div>
-        </div>
-      )}
-              </div>
-            </button>
-            <div className="flex gap-2">
-              <button onClick={() => setShowCostEditor(false)} className="flex-1 py-2.5 rounded-xl bg-white/10 text-zinc-300 text-sm">
-                Cancel
-              </button>
-              <button onClick={updateSettings} className="flex-1 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-bold">
-                Save
-              </button>
             </div>
           </div>
         </div>
