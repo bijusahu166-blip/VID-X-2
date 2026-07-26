@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { chatStorage } from "./storage";
 
-
+export function registerChatRoutes(app: Express) {
 
   app.get("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
@@ -40,35 +40,12 @@ import { chatStorage } from "./storage";
       const conversationId = parseInt(String(req.params.id), 10);
       const { content } = req.body;
 
-      await chatStorage.createMessage(conversationId, "user", content);
+      const savedMessage = await chatStorage.createMessage(conversationId, "user", content);
 
-      const messages = await chatStorage.getMessagesByConversation(conversationId);
-      const history = messages.slice(0, -1).map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
-
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-
-      const model = genAI.getGenerativeModel({ model: DEFAULT_GEMINI_MODEL });
-      const chat = model.startChat({ history });
-      const result = await chat.sendMessage(content);
-      const fullResponse = result.response.text();
-
-      res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
-      await chatStorage.createMessage(conversationId, "assistant", fullResponse);
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
+      res.status(201).json(savedMessage);
     } catch (error) {
       console.error("Chat error:", error);
-      if (res.headersSent) {
-        res.write(`data: ${JSON.stringify({ error: "Failed" })}\n\n`);
-        res.end();
-      } else {
-        res.status(500).json({ error: "Failed to send message" });
-      }
+      res.status(500).json({ error: "Failed to send message" });
     }
   });
 }
