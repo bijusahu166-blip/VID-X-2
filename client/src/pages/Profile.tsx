@@ -704,6 +704,7 @@ const sortedUserPosts = (userPosts ?? [])
   );
 }
 export default function Profile() {
+  const [, navigate] = useLocation();
   const params = useParams<{ id?: string }>();
   const { user, logout, isLoading: authLoading } = useAuth();
   const { data: posts } = usePosts();
@@ -1470,16 +1471,25 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
           </div>
         </div>
 
-        {/* Rank badge top-center */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border"
-          style={{ top: "var(--header-total)", borderColor: rankColor, color: rankColor, background: `${rankColor}18`, boxShadow: `0 0 12px ${rankColor}40` }}>
+      {/* Rank badge top-center — tap to buy coins */}
+        <button
+          onClick={() => navigate("/buy-coins")}
+          className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border active:scale-95 transition-transform"
+          style={{ top: "var(--header-total)", borderColor: rankColor, color: rankColor, background: `${rankColor}18`, boxShadow: `0 0 12px ${rankColor}40` }}
+          data-testid="button-buy-coins-rank"
+        >
           <Crown className="w-3 h-3" />
           {rank}
-        </div>
-       <div className="absolute top-3 right-3 flex items-center gap-1 bg-yellow-500/15 border border-yellow-500/40 rounded-full px-2 py-1 text-[10px] font-black text-yellow-200">
+        </button>
+      <button
+          onClick={() => navigate("/buy-coins")}
+          className="absolute right-3 flex items-center gap-1 bg-yellow-500/15 border border-yellow-500/40 rounded-full px-2 py-1 text-[10px] font-black text-yellow-200 active:scale-95 transition-transform"
+          style={{ top: "calc(var(--header-total) + 32px)" }}
+          data-testid="button-buy-coins-wallet"
+        >
           <span>💰</span>
           {currentProfileUser?.coins ?? 0}
-        </div>
+        </button>
       </div>
 
       <BlockedAccountsDialog open={blockedDialogOpen} onOpenChange={setBlockedDialogOpen} />
@@ -2012,4 +2022,3 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
     </div>
   );
 }
-

@@ -1,18 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { chatStorage } from "./storage";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
-export function registerChatRoutes(app: Express): void {
-  app.get("/api/conversations", async (req: Request, res: Response) => {
-    try {
-      const conversations = await chatStorage.getAllConversations();
-      res.json(conversations);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch conversations" });
-    }
-  });
 
   app.get("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
