@@ -203,7 +203,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerAuthRoutes(app);
   registerSmsOtpRoutes(app);
   registerChatRoutes(app);
-  registerImageRoutes(app);
 
   const settingsRoutes = await import('./routes/settings');
   const messagesRoutes = await import('./routes/messages');
