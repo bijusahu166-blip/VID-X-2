@@ -1620,7 +1620,7 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       const apiKey = process.env.YOUTUBE_API_KEY;
       if (!apiKey) return res.status(500).json({ message: "YouTube API key not configured" });
 
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&key=${apiKey}`;
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&maxResults=10&key=${apiKey}`;
       const ytRes = await fetch(url);
       const ytData: any = await ytRes.json();
 

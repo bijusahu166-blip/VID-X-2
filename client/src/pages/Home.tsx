@@ -368,7 +368,7 @@ function RecommendedVideoCard({ video }: { video: any }) {
     <div className="mb-1 rounded-3xl overflow-hidden border border-white/5 bg-zinc-950">
       <div className="relative w-full aspect-video bg-black">
         <iframe
-          src={`https://www.youtube.com/embed/${video.videoId}`}
+          src={`https://www.youtube.com/embed/${video.videoId}?origin=${window.location.origin}`}
           title={video.title}
           className="absolute inset-0 w-full h-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
