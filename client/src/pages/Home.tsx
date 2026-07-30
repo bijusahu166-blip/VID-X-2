@@ -24,6 +24,7 @@ import { PostViewerModal } from "@/components/post/PostViewerModal";
 import { StoryViewer } from "@/components/story/StoryViewer";
 import { playLike, playUnlike } from "@/lib/sounds";
 import { getGoalSubjects } from "@/lib/goal-subjects";
+
 const CATEGORIES = [
   { label: "All", icon: null },
   { label: "Trending", icon: Flame },
@@ -49,7 +50,7 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const { toast } = useToast();   // ← add karo
+  const { toast } = useToast();
 
   const { data: comments, isLoading } = useQuery<any[]>({
     queryKey: ["/api/posts", postId, "comments"],
@@ -104,11 +105,9 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
     <div className="fixed inset-0 z-50 flex items-end" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-md mx-auto rounded-t-3xl bg-zinc-950 border-t border-zinc-800 flex flex-col" style={{ maxHeight: "75vh" }}>
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-2">
           <div className="w-10 h-1 rounded-full bg-zinc-700" />
         </div>
-        {/* Header */}
         <div className="flex items-center justify-between px-4 pb-3 border-b border-zinc-800">
           <span className="text-sm font-black text-white">
             Comments {comments ? `(${comments.length})` : ""}
@@ -117,7 +116,6 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
-        {/* Comment list */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -153,7 +151,6 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
           )}
           <div ref={bottomRef} />
         </div>
-        {/* Input */}
         <div className="px-4 py-3 border-t border-zinc-800 flex gap-2 items-center">
           <div className="w-7 h-7 rounded-full overflow-hidden bg-zinc-800 shrink-0">
             <img
@@ -235,12 +232,10 @@ function PostActionMenu({
     <div className="fixed inset-0 z-50 flex items-end" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-md mx-auto rounded-t-3xl bg-zinc-950 border-t border-zinc-800 overflow-hidden">
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-zinc-700" />
         </div>
 
-        {/* Menu view */}
         {view === "menu" && (
           <div className="px-4 py-3 space-y-1">
             <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-3">Post Options</p>
@@ -290,7 +285,6 @@ function PostActionMenu({
           </div>
         )}
 
-        {/* Confirm delete */}
         {view === "confirm-delete" && (
           <div className="px-5 py-5">
             <div className="w-14 h-14 rounded-2xl bg-red-500/15 border border-red-500/25 flex items-center justify-center mx-auto mb-4">
@@ -314,7 +308,6 @@ function PostActionMenu({
           </div>
         )}
 
-        {/* Report reason picker */}
         {view === "report-reason" && (
           <div className="px-4 py-3">
             <div className="flex items-center gap-3 mb-4">
@@ -341,7 +334,6 @@ function PostActionMenu({
           </div>
         )}
 
-        {/* Report success */}
         {view === "reported" && (
           <div className="px-5 py-8 text-center">
             <div className="w-14 h-14 rounded-full bg-green-500/15 border border-green-500/25 flex items-center justify-center mx-auto mb-4">
@@ -356,7 +348,6 @@ function PostActionMenu({
           </div>
         )}
 
-        {/* Deleted success */}
         {view === "deleted" && (
           <div className="px-5 py-8 text-center">
             <div className="w-14 h-14 rounded-full bg-red-500/15 border border-red-500/25 flex items-center justify-center mx-auto mb-4">
@@ -372,11 +363,40 @@ function PostActionMenu({
   );
 }
 
+function RecommendedVideoCard({ video }: { video: any }) {
+  return (
+    <div className="mb-1 rounded-3xl overflow-hidden border border-white/5 bg-zinc-950">
+      <div className="relative w-full aspect-video bg-black">
+        <iframe
+          src={`https://www.youtube.com/embed/${video.videoId}`}
+          title={video.title}
+          className="absolute inset-0 w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+      <div className="flex gap-3 px-3 py-3">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center shrink-0">
+          <Play className="w-4 h-4 text-white fill-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-white leading-snug line-clamp-2 mb-1">{video.title}</p>
+          <div className="flex items-center gap-1 text-[11px] text-zinc-500">
+            <span>{video.channelTitle}</span>
+            <span>·</span>
+            <span className="text-pink-400 font-bold">Recommended</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const { data: postsData, isLoading } = usePosts();
-const posts = Array.isArray(postsData) 
-  ? postsData.filter(p => p.type !== "story") 
-  : [];
+  const posts = Array.isArray(postsData)
+    ? postsData.filter(p => p.type !== "story")
+    : [];
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [activeCategory, setActiveCategory] = useState("All");
@@ -385,83 +405,138 @@ const posts = Array.isArray(postsData)
   const [livePost, setLivePost] = useState<any | null>(null);
   const [viewingPost, setViewingPost] = useState<any | null>(null);
   const [viewingStoryIdx, setViewingStoryIdx] = useState<number | null>(null);
-const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
-  queryKey: ["/api/stories"],
-  queryFn: () => fetch("/api/posts", { credentials: "include" })
-    .then(r => r.json())
-    .then(data => Array.isArray(data) ? data.filter((p: any) => p.type === "story") : []),
-  refetchInterval: 10000,
-  staleTime: 0,
-});
-const stories = storiesData ?? [];
-const { data: voiceRooms = [] } = useQuery<any[]>({
-  queryKey: ["/api/voice-rooms"],
-  queryFn: async () => {
-    const res = await fetch("/api/voice-rooms", { credentials: "include" });
-    if (!res.ok) return [];
-    return res.json();
-  },
-  refetchInterval: 8000,
-});
 
-const { data: allBooks = [] } = useQuery<any[]>({
-  queryKey: ["/api/books"],
-  queryFn: async () => {
-    const res = await fetch("/api/books", { credentials: "include" });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  },
-});
+  const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
+    queryKey: ["/api/stories"],
+    queryFn: () => fetch("/api/posts", { credentials: "include" })
+      .then(r => r.json())
+      .then(data => Array.isArray(data) ? data.filter((p: any) => p.type === "story") : []),
+    refetchInterval: 10000,
+    staleTime: 0,
+  });
+  const stories = storiesData ?? [];
 
-const userGoal = (user as any)?.goal || localStorage.getItem("user_goal") || "";
-const allowedSubjects = getGoalSubjects(userGoal);
+  const { data: voiceRooms = [] } = useQuery<any[]>({
+    queryKey: ["/api/voice-rooms"],
+    queryFn: async () => {
+      const res = await fetch("/api/voice-rooms", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 8000,
+  });
 
-const recommendedBooks = allBooks.filter((book: any) => {
-  if (allowedSubjects.length === 0 || !book?.subject) return true;
-  return allowedSubjects.some(s => book.subject?.toLowerCase().includes(s));
-}).slice(0, 10);
+  const { data: allBooks = [] } = useQuery<any[]>({
+    queryKey: ["/api/books"],
+    queryFn: async () => {
+      const res = await fetch("/api/books", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
 
-const matchesUserGoal = (post: any) => {
-  if (allowedSubjects.length === 0) return true;
-  const text = `${post.caption ?? ""} ${post.type ?? ""} ${post.title ?? ""} ${post.user?.firstName ?? ""} ${post.user?.lastName ?? ""}`.toLowerCase();
-  return allowedSubjects.some(subject => text.includes(subject));
-};
+  const userGoal = (user as any)?.goal || localStorage.getItem("user_goal") || "";
+  const allowedSubjects = getGoalSubjects(userGoal);
 
-const likeMutation = useMutation({
-  mutationFn: async (postId: number) => {
-    const res = await apiRequest("POST", `/api/posts/${postId}/like`);
-    return res.json();
-  },
-  onMutate: async (postId: number) => {
-    await queryClient.cancelQueries({ queryKey: ["/api/posts"] });
-    const previous = queryClient.getQueryData<any[]>(["/api/posts"]);
-    queryClient.setQueryData<any[]>(["/api/posts"], (old) =>
-      old?.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              hasLiked: !p.hasLiked,
-              likesCount: p.hasLiked ? (p.likesCount ?? 1) - 1 : (p.likesCount ?? 0) + 1,
-            }
-          : p
-      )
-    );
-    return { previous };
-  },
-  onSuccess: (data: any) => {
-    if (data?.added) playLike(); else playUnlike();
-  },
-  onError: (_err, _postId, ctx) => {
-    if (ctx?.previous) queryClient.setQueryData(["/api/posts"], ctx.previous);
-  },
-  onSettled: () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
-  },
-});
+ const { data: recommendedVideosRaw = [] } = useQuery<any[]>({
+    queryKey: ["/api/youtube/feed", userGoal],
+    queryFn: async () => {
+      const res = await fetch(`/api/youtube/feed?query=${encodeURIComponent(userGoal || "trending")}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 60,
+  });
+
+  // Videos jo already user ko dikh chuke hain unhe dobara mat dikhao
+  const SHOWN_KEY = "shown_recommended_videos";
+  const getShownIds = (): string[] => {
+    try {
+      return JSON.parse(localStorage.getItem(SHOWN_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  };
+  const markAsShown = (videoId: string) => {
+    const shown = getShownIds();
+    if (!shown.includes(videoId)) {
+      const updated = [...shown, videoId].slice(-200); // last 200 tak yaad rakho
+      localStorage.setItem(SHOWN_KEY, JSON.stringify(updated));
+    }
+  };
+  const shownIds = getShownIds();
+  const recommendedVideos = recommendedVideosRaw.filter((v: any) => !shownIds.includes(v.videoId));
+
+  const recommendedBooks = allBooks.filter((book: any) => {
+    if (allowedSubjects.length === 0 || !book?.subject) return true;
+    return allowedSubjects.some(s => book.subject?.toLowerCase().includes(s));
+  }).slice(0, 10);
+
+  const matchesUserGoal = (post: any) => {
+    if (allowedSubjects.length === 0) return true;
+    const text = `${post.caption ?? ""} ${post.type ?? ""} ${post.title ?? ""} ${post.user?.firstName ?? ""} ${post.user?.lastName ?? ""}`.toLowerCase();
+    return allowedSubjects.some(subject => text.includes(subject));
+  };
+
+  const likeMutation = useMutation({
+    mutationFn: async (postId: number) => {
+      const res = await apiRequest("POST", `/api/posts/${postId}/like`);
+      return res.json();
+    },
+    onMutate: async (postId: number) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/posts"] });
+      const previous = queryClient.getQueryData<any[]>(["/api/posts"]);
+      queryClient.setQueryData<any[]>(["/api/posts"], (old) =>
+        old?.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                hasLiked: !p.hasLiked,
+                likesCount: p.hasLiked ? (p.likesCount ?? 1) - 1 : (p.likesCount ?? 0) + 1,
+              }
+            : p
+        )
+      );
+      return { previous };
+    },
+    onSuccess: (data: any) => {
+      if (data?.added) playLike(); else playUnlike();
+    },
+    onError: (_err, _postId, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(["/api/posts"], ctx.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+    },
+  });
 
   const isVideoPost = (post: any) => post.type === "video" || post.type === "live" || post.type === "reel";
   const isPhotoPost = (post: any) => post.type === "post" || post.type === "story";
+
+  const filteredPosts = (posts ?? []).filter((post) => {
+    if (activeCategory === "All") return true;
+    if (activeCategory === "Trending") return (post.likesCount ?? 0) >= 0;
+    if (activeCategory === "Reels") return post.type === "reel" || post.type === "video";
+    if (activeCategory === "Music") return post.caption?.toLowerCase().includes("music") || post.caption?.toLowerCase().includes("song");
+    if (activeCategory === "Gaming") return post.caption?.toLowerCase().includes("gaming") || post.caption?.toLowerCase().includes("game");
+    if (activeCategory === "Food") return post.caption?.toLowerCase().includes("food") || post.caption?.toLowerCase().includes("eat");
+    if (activeCategory === "Travel") return post.caption?.toLowerCase().includes("travel") || post.caption?.toLowerCase().includes("trip");
+    if (activeCategory === "Tech") return post.caption?.toLowerCase().includes("tech") || post.caption?.toLowerCase().includes("code");
+    if (activeCategory === "World") return post.type === "post";
+    return true;
+  });
+
+  type FeedItem = { kind: "post"; data: any } | { kind: "recommended"; data: any };
+  const combinedFeed: FeedItem[] = [];
+  let ytIndex = 0;
+  filteredPosts.forEach((post, i) => {
+    combinedFeed.push({ kind: "post", data: post });
+    if ((i + 1) % 4 === 0 && recommendedVideos.length > 0) {
+      combinedFeed.push({ kind: "recommended", data: recommendedVideos[ytIndex % recommendedVideos.length] });
+      ytIndex++;
+    }
+  });
 
   return (
     <div className="min-h-screen bg-black pb-28">
@@ -469,7 +544,6 @@ const likeMutation = useMutation({
 
       <main className="mx-auto max-w-[720px]" style={{ paddingTop: "var(--header-total)" }}>
 
-        {/* ── CATEGORY CHIPS ── */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide px-3 py-2.5 sticky z-40 bg-black/95 backdrop-blur border-b border-white/5" style={{ top: "var(--header-total)" }}>
           {CATEGORIES.map(({ label, icon: Icon }) => (
             <button
@@ -487,65 +561,64 @@ const likeMutation = useMutation({
           ))}
         </div>
 
-  {/* ── VOICE ROOMS ── */}
-<div className="mt-1 pb-3 border-b border-white/5">
-  <div className="flex items-center justify-between px-3 pt-3 pb-2">
-    <div className="flex items-center gap-2">
-      <span className="text-lg">🎙️</span>
-      <span className="text-[13px] font-black text-white tracking-wide">
-        Voice Rooms
-      </span>
-    </div>
-    <button
-      onClick={() => navigate("/voice-rooms/create")}
-      className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1"
-    >
-      + Create <ChevronRight className="w-3 h-3" />
-    </button>
-  </div>
-
-  {voiceRooms.length === 0 ? (
-    <div className="px-3 py-4">
-      <button
-        onClick={() => navigate("/voice-rooms/create")}
-        className="w-full py-4 rounded-xl border border-dashed border-white/15 text-zinc-500 text-[12px] hover:border-white/30 hover:text-zinc-300 transition-colors"
-      >
-        No active rooms — tap to start one 🎙️
-      </button>
-    </div>
-  ) : (
-    <div className="flex gap-3 overflow-x-auto scrollbar-hide px-3">
-      {voiceRooms.map((room: any) => (
-        <button
-          key={room.id}
-          onClick={() => navigate(`/voice-rooms/${room.id}`)}
-          className="flex flex-col items-start gap-1.5 shrink-0 group w-[120px]"
-        >
-          <div className="w-[120px] h-[100px] rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 relative flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #2a0a3a, #150520)" }}>
-            <img
-              src={room.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${room.host_id}`}
-              className="w-12 h-12 rounded-full object-cover ring-2 ring-pink-500/40"
-            />
-            <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-              <div className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
+        <div className="mt-1 pb-3 border-b border-white/5">
+          <div className="flex items-center justify-between px-3 pt-3 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🎙️</span>
+              <span className="text-[13px] font-black text-white tracking-wide">
+                Voice Rooms
+              </span>
             </div>
-            <div className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
-              {room.seat_count}/12
-            </div>
+            <button
+              onClick={() => navigate("/voice-rooms/create")}
+              className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1"
+            >
+              + Create <ChevronRight className="w-3 h-3" />
+            </button>
           </div>
-          <p className="text-[10px] text-zinc-300 font-semibold text-left line-clamp-1 leading-tight w-full">
-            {room.title}
-          </p>
-          <p className="text-[9px] text-zinc-600 text-left truncate w-full">
-            {room.first_name} {room.last_name}
-          </p>
-        </button>
-      ))}
-    </div>
-  )}
-</div>
-        {/* ── STORIES SHELF ── */}
+
+          {voiceRooms.length === 0 ? (
+            <div className="px-3 py-4">
+              <button
+                onClick={() => navigate("/voice-rooms/create")}
+                className="w-full py-4 rounded-xl border border-dashed border-white/15 text-zinc-500 text-[12px] hover:border-white/30 hover:text-zinc-300 transition-colors"
+              >
+                No active rooms — tap to start one 🎙️
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide px-3">
+              {voiceRooms.map((room: any) => (
+                <button
+                  key={room.id}
+                  onClick={() => navigate(`/voice-rooms/${room.id}`)}
+                  className="flex flex-col items-start gap-1.5 shrink-0 group w-[120px]"
+                >
+                  <div className="w-[120px] h-[100px] rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 relative flex items-center justify-center"
+                    style={{ background: "linear-gradient(135deg, #2a0a3a, #150520)" }}>
+                    <img
+                      src={room.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${room.host_id}`}
+                      className="w-12 h-12 rounded-full object-cover ring-2 ring-pink-500/40"
+                    />
+                    <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                      <div className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
+                    </div>
+                    <div className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
+                      {room.seat_count}/12
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-300 font-semibold text-left line-clamp-1 leading-tight w-full">
+                    {room.title}
+                  </p>
+                  <p className="text-[9px] text-zinc-600 text-left truncate w-full">
+                    {room.first_name} {room.last_name}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="mt-1 pb-2 border-b border-white/5">
           <div className="flex items-center justify-between px-3 pt-3 pb-2">
             <div className="flex items-center gap-2">
@@ -557,7 +630,6 @@ const likeMutation = useMutation({
           </div>
 
           <div className="flex gap-2.5 overflow-x-auto scrollbar-hide px-3">
-            {/* Add your story card */}
             <div className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
               <div className="w-[88px] h-[148px] rounded-xl relative overflow-hidden"
                 style={{
@@ -586,7 +658,6 @@ const likeMutation = useMutation({
               <span className="text-[10px] text-pink-400/80 font-semibold">Your story</span>
             </div>
 
-            {/* Only real stories (not live) from all users */}
             {(() => {
               const storyList = stories;
               if (storyList.length === 0) {
@@ -639,9 +710,9 @@ const likeMutation = useMutation({
             })()}
           </div>
         </div>
-{/* ── FOLLOW SUGGESTIONS ── */}
-<FollowSuggestions currentUserId={user?.id} onNavigate={navigate} />
-        {/* ── MAIN FEED ── */}
+
+        <FollowSuggestions currentUserId={user?.id} onNavigate={navigate} />
+
         <div className="mt-1">
           {isLoading ? (
             Array(3).fill(0).map((_, i) => (
@@ -656,34 +727,25 @@ const likeMutation = useMutation({
                 </div>
               </div>
             ))
-          ) : posts?.length === 0 ? (
+          ) : combinedFeed.length === 0 ? (
             <div className="text-center py-20 text-zinc-600">
               <Play className="w-12 h-12 mx-auto mb-3 opacity-20" />
               <p className="text-sm">No posts yet. Be the first!</p>
             </div>
           ) : (
-              posts?.filter((post) => {
+            combinedFeed.map((item, index) => {
+            if (item.kind === "recommended") {
+                markAsShown(item.data.videoId);
+                return <RecommendedVideoCard key={`rec-${index}`} video={item.data} />;
+              }
 
-              if (activeCategory === "All") return true;
-              if (activeCategory === "Trending") return (post.likesCount ?? 0) >= 0;
-              if (activeCategory === "Reels") return post.type === "reel" || post.type === "video";
-              if (activeCategory === "Music") return post.caption?.toLowerCase().includes("music") || post.caption?.toLowerCase().includes("song");
-              if (activeCategory === "Gaming") return post.caption?.toLowerCase().includes("gaming") || post.caption?.toLowerCase().includes("game");
-              if (activeCategory === "Food") return post.caption?.toLowerCase().includes("food") || post.caption?.toLowerCase().includes("eat");
-              if (activeCategory === "Travel") return post.caption?.toLowerCase().includes("travel") || post.caption?.toLowerCase().includes("trip");
-              if (activeCategory === "Tech") return post.caption?.toLowerCase().includes("tech") || post.caption?.toLowerCase().includes("code");
-              if (activeCategory === "World") return post.type === "post";
-              return true;
-            }).map((post, index) => {
+              const post = item.data;
               const isVideo = isVideoPost(post);
               const isPhoto = isPhotoPost(post);
-              // YouTube-style sizing: Videos are landscape (16:9), Photos are portrait (3:4)
               const aspectClass = isVideo ? "aspect-video" : "aspect-[3/4]";
               return (
                 <div key={post.id} className="mb-1 group cursor-pointer rounded-3xl overflow-hidden border border-white/5">
-                  {/* Thumbnail / media */}
                   <div className={`relative w-full ${aspectClass} bg-zinc-900 overflow-hidden rounded-3xl border border-white/5`}>
-                    {/* Background gradient */}
                     <div
                       className="absolute inset-0 flex items-center justify-center"
                       style={{ background: `linear-gradient(135deg, hsl(${(post.id * 47) % 360}, 40%, 14%), hsl(${(post.id * 47 + 120) % 360}, 50%, 20%))` }}
@@ -693,7 +755,6 @@ const likeMutation = useMutation({
                         : <Film className="w-12 h-12 text-white/15" />}
                     </div>
 
-                    {/* Media: real video if available, else thumbnail */}
                     {isVideo && (post as any).videoUrl ? (
                      <VideoPlayer
                       src={(post as any).videoUrl}
@@ -703,7 +764,6 @@ const likeMutation = useMutation({
                      songArtist={(post as any).songArtist}
                      songColor={(post as any).songColor}
                      className="absolute inset-0 w-full h-full"
-                     // Ye add karo:
                      precacheSrc={posts?.filter(p => p.type === "video" && (p as any).videoUrl)?.[
                      posts?.filter(p => p.type === "video" && (p as any).videoUrl).indexOf(post) + 1
                      ]?.videoUrl ?? null}
@@ -717,7 +777,6 @@ const likeMutation = useMutation({
                       />
                     ) : null}
 
-                    {/* Video with no file: show play overlay on thumbnail */}
                     {isVideo && !(post as any).videoUrl && (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm">
@@ -726,21 +785,18 @@ const likeMutation = useMutation({
                       </div>
                     )}
 
-                    {/* Photo: no play button, but show full image */}
                     {isPhoto && post.imageUrl && !post.imageUrl.startsWith("blob:") && (
                       <div className="absolute bottom-2 left-2 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
                         <Image className="w-2.5 h-2.5" /> Photo
                       </div>
                     )}
 
-                    {/* LIVE badge */}
                     {post.type === "live" && (
                       <div className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded flex items-center gap-1">
                         <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE
                       </div>
                     )}
 
-                    {/* Reel badge */}
                     {post.type === "reel" && (
                       <div className="absolute top-2 left-2 flex items-center gap-0.5 bg-black/60 text-pink-400 text-[8px] font-black px-1.5 py-0.5 rounded-md">
                         <Play className="w-2 h-2 fill-current" /> REEL
@@ -748,7 +804,6 @@ const likeMutation = useMutation({
                     )}
                   </div>
 
-                  {/* Info row */}
                   <div className="flex gap-3 px-3 py-3">
                     <button
                       className="shrink-0"
@@ -782,7 +837,6 @@ const likeMutation = useMutation({
                         <span>{formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}</span>
                       </div>
 
-                      {/* Actions */}
                       <div className="flex items-center gap-3 mt-2">
                         <button
                           data-testid={`button-like-${post.id}`}
@@ -836,7 +890,6 @@ const likeMutation = useMutation({
 
       <BottomNav />
 
-      {/* Comments Drawer */}
       {openCommentPostId !== null && (
         <CommentsDrawer
           postId={openCommentPostId}
@@ -845,7 +898,6 @@ const likeMutation = useMutation({
         />
       )}
 
-      {/* Post Action Menu */}
       {actionMenuPost && (
         <PostActionMenu
           post={actionMenuPost}
@@ -854,12 +906,10 @@ const likeMutation = useMutation({
         />
       )}
 
-      {/* Live Stream Viewer */}
       {livePost && (
         <LiveStreamViewer post={livePost} onClose={() => setLivePost(null)} />
       )}
 
-      {/* Post Viewer Modal */}
       {viewingPost && (
         <PostViewerModal
           post={viewingPost}
@@ -868,17 +918,16 @@ const likeMutation = useMutation({
         />
       )}
 
-      {/* Story Viewer */}
-    {viewingStoryIdx !== null && (
-  <StoryViewer
-    stories={stories as any}
-    initialIndex={viewingStoryIdx}
-    onClose={() => {
-      setViewingStoryIdx(null);
-      refetchStories(); // ← ye add karo
-    }}
-  />
-)}
+      {viewingStoryIdx !== null && (
+        <StoryViewer
+          stories={stories as any}
+          initialIndex={viewingStoryIdx}
+          onClose={() => {
+            setViewingStoryIdx(null);
+            refetchStories();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1600,6 +1600,48 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       res.status(500).json({ message: err.message || "Token generation failed" });
     }
   });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RECOMMENDED VIDEOS FEED (goal-based, cached to save API quota)
+  // ══════════════════════════════════════════════════════════════════════════
+  const youtubeCache = new Map<string, { data: any[]; expiresAt: number }>();
+  const YOUTUBE_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+  app.get("/api/youtube/feed", isAuthenticated, async (req: any, res) => {
+    try {
+      const query = ((req.query.query as string) || "trending").toString().trim() || "trending";
+      const cacheKey = query.toLowerCase();
+
+      const cached = youtubeCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return res.json(cached.data);
+      }
+
+      const apiKey = process.env.YOUTUBE_API_KEY;
+      if (!apiKey) return res.status(500).json({ message: "YouTube API key not configured" });
+
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&key=${apiKey}`;
+      const ytRes = await fetch(url);
+      const ytData: any = await ytRes.json();
+
+      if (!ytRes.ok) {
+        return res.status(500).json({ message: ytData?.error?.message || "Video fetch failed" });
+      }
+
+      const videos = (ytData.items || []).map((item: any) => ({
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+        channelTitle: item.snippet.channelTitle,
+        thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+      }));
+
+      youtubeCache.set(cacheKey, { data: videos, expiresAt: Date.now() + YOUTUBE_CACHE_TTL });
+      res.json(videos);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
   // ══════════════════════════════════════════════════════════════════════════
   // COINS SYSTEM
   // ══════════════════════════════════════════════════════════════════════════
