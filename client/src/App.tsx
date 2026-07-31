@@ -21,7 +21,7 @@ import Search from "@/pages/Search";
 import Reading from "@/pages/Reading";
 import AimSelection from "@/pages/AimSelection";
 import Reels from "@/pages/Reels";
-import PrivacyPolicy from "./pages/privacypolicy";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
 import Notifications from "@/pages/Notifications";

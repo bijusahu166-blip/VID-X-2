@@ -1604,43 +1604,70 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
   // ══════════════════════════════════════════════════════════════════════════
   // RECOMMENDED VIDEOS FEED (goal-based, cached to save API quota)
   // ══════════════════════════════════════════════════════════════════════════
-  const youtubeCache = new Map<string, { data: any[]; expiresAt: number }>();
-  const YOUTUBE_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+ const GOAL_TO_QUERY: Record<string, string> = {
+  ias: "UPSC IAS preparation strategy",
+  doctor: "medical NEET doctor study",
+  engineer: "coding programming tutorial",
+  teacher: "teaching skills education",
+  business: "business growth strategy",
+  vfx: "VFX animation tutorial",
+  fitness: "fitness workout training",
+  reading: "study tips learning skills",
+  law: "law LLB exam preparation",
+  ca: "CA finance accounting",
+  design: "UI UX design tutorial",
+  music: "music production singing",
+  sports: "sports athlete training",
+  neet: "NEET biology preparation",
+  defense: "army defense exam preparation",
+  content: "content creation tips",
+  aviation: "pilot aviation training",
+  police: "SSC police exam preparation",
+  pharmacy: "pharmacy pharmacology study",
+  acting: "acting drama skills",
+  chef: "chef cooking culinary skills",
+  cyber: "cyber security tutorial",
+  space: "ISRO space science",
+  language: "language learning tips",
+};
 
-  app.get("/api/youtube/feed", isAuthenticated, async (req: any, res) => {
-    try {
-      const query = ((req.query.query as string) || "trending").toString().trim() || "trending";
-      const cacheKey = query.toLowerCase();
+app.get("/api/youtube/feed", isAuthenticated, async (req: any, res) => {
+  try {
+    const goal = ((req.query.query as string) || "").toLowerCase().trim();
+    if (!goal) return res.json([]);
 
-      const cached = youtubeCache.get(cacheKey);
-      if (cached && cached.expiresAt > Date.now()) {
-        return res.json(cached.data);
-      }
+    const searchQuery = GOAL_TO_QUERY[goal] || goal;
+    const cacheKey = goal;
 
-      const apiKey = process.env.YOUTUBE_API_KEY;
-      if (!apiKey) return res.status(500).json({ message: "YouTube API key not configured" });
-
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoEmbeddable=true&maxResults=10&key=${apiKey}`;
-      const ytRes = await fetch(url);
-      const ytData: any = await ytRes.json();
-
-      if (!ytRes.ok) {
-        return res.status(500).json({ message: ytData?.error?.message || "Video fetch failed" });
-      }
-
-      const videos = (ytData.items || []).map((item: any) => ({
-        videoId: item.id.videoId,
-        title: item.snippet.title,
-        channelTitle: item.snippet.channelTitle,
-        thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
-      }));
-
-      youtubeCache.set(cacheKey, { data: videos, expiresAt: Date.now() + YOUTUBE_CACHE_TTL });
-      res.json(videos);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    const cached = youtubeCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return res.json(cached.data);
     }
-  });
+
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) return res.status(500).json({ message: "YouTube API key not configured" });
+
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchQuery)}&type=video&videoEmbeddable=true&maxResults=25&key=${apiKey}`;
+    const ytRes = await fetch(url);
+    const ytData: any = await ytRes.json();
+
+    if (!ytRes.ok) {
+      return res.status(500).json({ message: ytData?.error?.message || "Video fetch failed" });
+    }
+
+    const videos = (ytData.items || []).map((item: any) => ({
+      videoId: item.id.videoId,
+      title: item.snippet.title,
+      channelTitle: item.snippet.channelTitle,
+      thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+    }));
+
+    youtubeCache.set(cacheKey, { data: videos, expiresAt: Date.now() + YOUTUBE_CACHE_TTL });
+    res.json(videos);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
   
   // ══════════════════════════════════════════════════════════════════════════
   // COINS SYSTEM
