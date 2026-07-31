@@ -21,7 +21,7 @@ import Search from "@/pages/Search";
 import Reading from "@/pages/Reading";
 import AimSelection from "@/pages/AimSelection";
 import Reels from "@/pages/Reels";
-import PrivacyPolicy from "@/pages/PrivacyPolicy";
+
 import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
 import Notifications from "@/pages/Notifications";
@@ -103,7 +103,7 @@ function Router() {
         <Route path="/jobs" component={Jobs} />
         <Route path="/messages" component={Messages} />
         <Route path="/notifications" component={Notifications} />
-        <Route path="/Privacy-Policy" component={PrivacyPolicy} />
+        
         <Route path="/profile" component={Profile} />
         <Route path="/profile/:id" component={Profile} />
         <Route component={NotFound} />
