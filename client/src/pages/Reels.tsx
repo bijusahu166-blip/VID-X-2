@@ -397,12 +397,12 @@ const reels = (allPosts ?? [])
   });  
   const userGoal = localStorage.getItem("user_goal") || "";
   const allowedSubjects = getGoalSubjects(userGoal);
-  
-const displayReels = reels.filter((r) => {
+const filteredReels = reels.filter((r) => {
   if (allowedSubjects.length === 0) return true;
   const text = `${r.caption ?? ""}`.toLowerCase();
   return allowedSubjects.some(subject => text.includes(subject));
 });
+const displayReels = filteredReels.length > 0 ? filteredReels : reels; // fallback
 const visibleReels = displayReels.slice(0, 15);
 
   // IMPROVEMENT 4: Debounced Scroll Detection (Massive UI Thread frame improvement)

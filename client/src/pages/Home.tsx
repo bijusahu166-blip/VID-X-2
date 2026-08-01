@@ -362,39 +362,67 @@ function PostActionMenu({
     </div>
   );
 }
-function RecommendedVideoCard({ video }: { video: any }) {
-  const [playing, setPlaying] = useState(false);
+function RecommendedVideoCard({ video, onSkip }: { video: any; onSkip: (videoId: string) => void }) {
   const [failed, setFailed] = useState(false);
+  const [ready, setReady] = useState(false);
+  const playerId = `yt-player-${video.videoId}`;
 
-  if (failed) return null; // Agar chalne layak nahi hai, card hi hide
+  useEffect(() => {
+    const shown = JSON.parse(localStorage.getItem("shown_recommended_videos") || "[]");
+    if (!shown.includes(video.videoId)) {
+      const updated = [...shown, video.videoId].slice(-200);
+      localStorage.setItem("shown_recommended_videos", JSON.stringify(updated));
+    }
+  }, [video.videoId]);
+
+  useEffect(() => {
+    let player: any;
+    let destroyed = false;
+
+    const initPlayer = () => {
+      if (destroyed) return;
+      const el = document.getElementById(playerId);
+      if (!el) return;
+      player = new (window as any).YT.Player(playerId, {
+        videoId: video.videoId,
+        playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0 },
+        events: {
+          onReady: () => setReady(true),
+          onError: () => {
+            setFailed(true);
+            onSkip(video.videoId);
+          },
+        },
+      });
+    };
+
+    if (!(window as any).YT || !(window as any).YT.Player) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.body.appendChild(tag);
+      const prevCallback = (window as any).onYouTubeIframeAPIReady;
+      (window as any).onYouTubeIframeAPIReady = () => {
+        prevCallback?.();
+        initPlayer();
+      };
+    } else {
+      initPlayer();
+    }
+
+    return () => {
+      destroyed = true;
+      try { player?.destroy?.(); } catch {}
+    };
+  }, [video.videoId]);
+
+  if (failed) return null;
 
   return (
     <div className="mb-1 rounded-3xl overflow-hidden border border-white/5 bg-zinc-950">
       <div className="relative w-full aspect-video bg-black">
-        {playing ? (
-          <iframe
-            src={`https://www.youtube.com/embed/${video.videoId}?autoplay=1&origin=${window.location.origin}`}
-            title={video.title}
-            className="absolute inset-0 w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        ) : (
-          <button
-            onClick={() => setPlaying(true)}
-            className="absolute inset-0 w-full h-full"
-          >
-            <img
-              src={video.thumbnail}
-              alt={video.title}
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-              <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm">
-                <Play className="w-7 h-7 text-white fill-white ml-1" />
-              </div>
-            </div>
-          </button>
+        <div id={playerId} className="absolute inset-0 w-full h-full" />
+        {!ready && (
+          <img src={video.thumbnail} alt={video.title} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
         )}
       </div>
       <div className="flex gap-3 px-3 py-3">
@@ -413,7 +441,6 @@ function RecommendedVideoCard({ video }: { video: any }) {
     </div>
   );
 }
-
 export default function Home() {
   const { data: postsData, isLoading } = usePosts();
   const posts = Array.isArray(postsData)
@@ -756,10 +783,15 @@ filteredPosts.forEach((post, i) => {
             </div>
           ) : (
             combinedFeed.map((item, index) => {
-            if (item.kind === "recommended") {
-                markAsShown(item.data.videoId);
-                return <RecommendedVideoCard key={`rec-${index}`} video={item.data} />;
-              }
+           if (item.kind === "recommended") {
+    return (
+      <RecommendedVideoCard
+        key={`rec-${item.data.videoId}`}
+        video={item.data}
+        onSkip={(videoId) => console.log("skipped:", videoId)}
+      />
+    );
+}
 
               const post = item.data;
               const isVideo = isVideoPost(post);
