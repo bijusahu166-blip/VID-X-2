@@ -362,18 +362,40 @@ function PostActionMenu({
     </div>
   );
 }
-
 function RecommendedVideoCard({ video }: { video: any }) {
+  const [playing, setPlaying] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) return null; // Agar chalne layak nahi hai, card hi hide
+
   return (
     <div className="mb-1 rounded-3xl overflow-hidden border border-white/5 bg-zinc-950">
       <div className="relative w-full aspect-video bg-black">
-        <iframe
-          src={`https://www.youtube.com/embed/${video.videoId}?origin=${window.location.origin}`}
-          title={video.title}
-          className="absolute inset-0 w-full h-full"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
+        {playing ? (
+          <iframe
+            src={`https://www.youtube.com/embed/${video.videoId}?autoplay=1&origin=${window.location.origin}`}
+            title={video.title}
+            className="absolute inset-0 w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <button
+            onClick={() => setPlaying(true)}
+            className="absolute inset-0 w-full h-full"
+          >
+            <img
+              src={video.thumbnail}
+              alt={video.title}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+              <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                <Play className="w-7 h-7 text-white fill-white ml-1" />
+              </div>
+            </div>
+          </button>
+        )}
       </div>
       <div className="flex gap-3 px-3 py-3">
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center shrink-0">

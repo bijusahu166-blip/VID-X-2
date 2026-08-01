@@ -440,13 +440,39 @@ export function VideoPlayer({
             </button>
           )}
 
-          {/* Progress bar */}
-          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/10 z-20">
-            <div
-              className="h-full bg-white/70 transition-all duration-200"
-              style={{ width: `${progress * 100}%` }}
-            />
-          </div>
+          {/* Progress bar — premium gradient with seek + glowing thumb */}
+<div
+  className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/10 z-20 cursor-pointer group/progress"
+  onClick={(e) => {
+    e.stopPropagation();
+    const video = videoRef.current;
+    if (!video || !video.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    video.currentTime = percent * video.duration;
+  }}
+>
+  {/* Hover-expand hit area for easier seeking */}
+  <div className="absolute inset-x-0 -top-2 -bottom-2" />
+
+  <div
+    className="h-full relative transition-all duration-150"
+    style={{
+      width: `${progress * 100}%`,
+      background: "linear-gradient(90deg, #ec4899, #a855f7, #f97316)",
+      boxShadow: "0 0 8px rgba(236,72,153,0.6)",
+    }}
+  >
+    {/* Glowing thumb dot at the playhead */}
+    <div
+      className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity"
+      style={{
+        background: "#fff",
+        boxShadow: "0 0 6px 2px rgba(236,72,153,0.8)",
+      }}
+    />
+  </div>
+</div>
 
           {/* Song info pill */}
           {songTitle && (
