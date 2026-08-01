@@ -527,16 +527,16 @@ export default function Home() {
     return true;
   });
 
-  type FeedItem = { kind: "post"; data: any } | { kind: "recommended"; data: any };
-  const combinedFeed: FeedItem[] = [];
-  let ytIndex = 0;
-  filteredPosts.forEach((post, i) => {
-    combinedFeed.push({ kind: "post", data: post });
-    if ((i + 1) % 4 === 0 && recommendedVideos.length > 0) {
-      combinedFeed.push({ kind: "recommended", data: recommendedVideos[ytIndex % recommendedVideos.length] });
-      ytIndex++;
-    }
-  });
+ type FeedItem = { kind: "post"; data: any } | { kind: "recommended"; data: any };
+const combinedFeed: FeedItem[] = [];
+let ytIndex = 0;
+filteredPosts.forEach((post, i) => {
+  combinedFeed.push({ kind: "post", data: post });
+  if ((i + 1) % 4 === 0 && recommendedVideos.length > 0) {
+    combinedFeed.push({ kind: "recommended", data: recommendedVideos[ytIndex % recommendedVideos.length] });
+    ytIndex++;
+  }
+});
 
   return (
     <div className="min-h-screen bg-black pb-28">
