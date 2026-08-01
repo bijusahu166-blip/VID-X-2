@@ -363,16 +363,13 @@ function PostActionMenu({
   );
 }
 function RecommendedVideoCard({ video, onSkip }: { video: any; onSkip: (videoId: string) => void }) {
-  const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
+  const [errored, setErrored] = useState(false);
   const playerId = `yt-player-${video.videoId}`;
 
   useEffect(() => {
-    const shown = JSON.parse(localStorage.getItem("shown_recommended_videos") || "[]");
-    if (!shown.includes(video.videoId)) {
-      const updated = [...shown, video.videoId].slice(-200);
-      localStorage.setItem("shown_recommended_videos", JSON.stringify(updated));
-    }
+    setReady(false);
+    setErrored(false);
   }, [video.videoId]);
 
   useEffect(() => {
@@ -383,17 +380,21 @@ function RecommendedVideoCard({ video, onSkip }: { video: any; onSkip: (videoId:
       if (destroyed) return;
       const el = document.getElementById(playerId);
       if (!el) return;
-      player = new (window as any).YT.Player(playerId, {
-        videoId: video.videoId,
-        playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0 },
-        events: {
-          onReady: () => setReady(true),
-          onError: () => {
-            setFailed(true);
-            onSkip(video.videoId);
+      try {
+        player = new (window as any).YT.Player(playerId, {
+          videoId: video.videoId,
+          playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0 },
+          events: {
+            onReady: () => setReady(true),
+            onError: () => {
+              setErrored(true);
+              onSkip(video.videoId);
+            },
           },
-        },
-      });
+        });
+      } catch {
+        setErrored(true);
+      }
     };
 
     if (!(window as any).YT || !(window as any).YT.Player) {
@@ -415,14 +416,24 @@ function RecommendedVideoCard({ video, onSkip }: { video: any; onSkip: (videoId:
     };
   }, [video.videoId]);
 
-  if (failed) return null;
-
+  // Card kabhi bhi poori tarah blank nahi hoga — thumbnail hamesha fallback rahega
   return (
     <div className="mb-1 rounded-3xl overflow-hidden border border-white/5 bg-zinc-950">
       <div className="relative w-full aspect-video bg-black">
-        <div id={playerId} className="absolute inset-0 w-full h-full" />
-        {!ready && (
-          <img src={video.thumbnail} alt={video.title} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+        {!errored && <div id={playerId} className="absolute inset-0 w-full h-full" />}
+        {(!ready || errored) && (
+          <img
+            src={video.thumbnail}
+            alt={video.title}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
+        {errored && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+            <div className="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm">
+              <Play className="w-7 h-7 text-white fill-white ml-1" />
+            </div>
+          </div>
         )}
       </div>
       <div className="flex gap-3 px-3 py-3">
@@ -499,24 +510,7 @@ export default function Home() {
   });
 
   // Videos jo already user ko dikh chuke hain unhe dobara mat dikhao
-  const SHOWN_KEY = "shown_recommended_videos";
-  const getShownIds = (): string[] => {
-    try {
-      return JSON.parse(localStorage.getItem(SHOWN_KEY) || "[]");
-    } catch {
-      return [];
-    }
-  };
-  const markAsShown = (videoId: string) => {
-    const shown = getShownIds();
-    if (!shown.includes(videoId)) {
-      const updated = [...shown, videoId].slice(-200); // last 200 tak yaad rakho
-      localStorage.setItem(SHOWN_KEY, JSON.stringify(updated));
-    }
-  };
-  const shownIds = getShownIds();
-  const recommendedVideos = recommendedVideosRaw.filter((v: any) => !shownIds.includes(v.videoId));
-
+ const recommendedVideos = recommendedVideosRaw;
   const recommendedBooks = allBooks.filter((book: any) => {
     if (allowedSubjects.length === 0 || !book?.subject) return true;
     return allowedSubjects.some(s => book.subject?.toLowerCase().includes(s));
