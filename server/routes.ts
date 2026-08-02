@@ -14,8 +14,6 @@ import path from "path";
 import fs from "fs";
 import { v2 as cloudinary } from "cloudinary";
 import { wsClients } from "./realtime";
-import { error } from "console";
-
 
 // --- CONFIGURATION ---
 const uploadsDir = path.join(process.cwd(), "uploads", "videos");
@@ -225,7 +223,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // UPLOAD ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024; // 200MB
+  const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024;
 
   const chunkUpload = multer({
     storage: multer.memoryStorage(),
@@ -413,7 +411,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const stats = fs.statSync(finalPath);
       if (stats.size > MAX_VIDEO_UPLOAD_BYTES) {
         try { fs.unlinkSync(finalPath); } catch {}
-        return res.status(413).json({ message: "Video exceeds the 100 MB upload limit." });
+        return res.status(413).json({ message: "Video exceeds the 200 MB upload limit." });
       }
       const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
         cloudinary.uploader.upload_large(
@@ -1963,20 +1961,26 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
   });
 
   // Razorpay Dashboard → Webhooks me ye URL add karni hogi (Step 6 me detail)
-  app.post("/api/subscription/webhook", express.json(), async (req: any, res) => {
+app.post(
+  "/api/subscription/webhook",
+  express.raw({ type: "application/json" }), // raw buffer, NOT parsed JSON
+  async (req: any, res) => {
     try {
       const signature = req.headers["x-razorpay-signature"];
+      const rawBody = req.body as Buffer; // raw bytes exactly as Razorpay sent
+
       const expectedSignature = crypto
         .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
-        .update(JSON.stringify(req.body))
+        .update(rawBody)
         .digest("hex");
 
       if (signature !== expectedSignature) {
         return res.status(400).json({ message: "Invalid webhook signature" });
       }
 
-      const event = req.body.event;
-      const subEntity = req.body.payload?.subscription?.entity;
+      const payload = JSON.parse(rawBody.toString("utf8"));
+      const event = payload.event;
+      const subEntity = payload.payload?.subscription?.entity;
       if (!subEntity) return res.json({ received: true });
 
       if (event === "subscription.activated" || event === "subscription.charged") {
@@ -1997,7 +2001,10 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       console.error("[subscription webhook]", err);
       res.status(500).json({ message: "Webhook processing failed" });
     }
-  });
+  }
+);
+
+
 
   app.post("/api/subscription/cancel", isAuthenticated, async (req: any, res) => {
     try {

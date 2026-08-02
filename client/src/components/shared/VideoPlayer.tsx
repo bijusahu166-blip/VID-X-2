@@ -5,15 +5,7 @@ import Hls from "hls.js";
 import { toCloudinaryVideoUrl } from "@/lib/utils";
 import { precacheVideo } from "@/lib/videoPrecache";
 
-// ── Global single-video coordinator ───────────
-//─────────────────────────────
-// ── Global mute preference (persists across all videos) ────────────────────
-let globalMuted = true;
-try {
-  const saved = localStorage.getItem("videoMuted");
-  if (saved !== null) globalMuted = saved === "true";
-} catch {}
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Global single-video coordinator ─────────────────────────────────────────
 // Only ONE video across the entire page is allowed to play at a time.
 // Any VideoPlayer that wants to play first calls claimPlayback().
 // claimPlayback() pauses the currently-playing video and returns a token;
@@ -32,6 +24,25 @@ function claimPlayback(video: HTMLVideoElement): number {
 
 function isTokenActive(token: number): boolean {
   return token === activeToken;
+}
+
+function releaseIfActive(video: HTMLVideoElement) {
+  if (activeVideoEl === video) {
+    activeVideoEl = null;
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Global mute preference (persists across ALL videos, all pages) ─────────
+let globalMuted = true;
+try {
+  const saved = localStorage.getItem("videoMuted");
+  if (saved !== null) globalMuted = saved === "true";
+} catch {}
+
+function setGlobalMuted(value: boolean) {
+  globalMuted = value;
+  try { localStorage.setItem("videoMuted", String(value)); } catch {}
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -84,8 +95,6 @@ export function VideoPlayer({
   const { dataSaver, quality } = useVideoSettings();
 
   // ── HLS.js setup ────────────────────────────────────────────────────────────
-  // Attach an HLS.js instance whenever the src is an .m3u8 manifest.
-  // Tears down the old instance first to avoid duplicate attachment.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -98,7 +107,6 @@ export function VideoPlayer({
 
     const isHls = src.includes(".m3u8");
     if (!isHls) {
-      // Plain MP4 — let the <video> element handle it via src= attribute
       video.src = src;
       video.load();
       return;
@@ -108,7 +116,6 @@ export function VideoPlayer({
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
-        // Start with a small buffer so first-frame appears quickly
         maxBufferLength: 30,
         maxMaxBufferLength: 60,
         startLevel: -1, // auto
@@ -120,18 +127,15 @@ export function VideoPlayer({
           console.warn("[hls.js] fatal error", data.type, data.details);
           hls.destroy();
           hlsRef.current = null;
-          // Fallback: try loading as plain src
           video.src = src;
           video.load();
         }
       });
       hlsRef.current = hls;
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Native HLS — iOS Safari
       video.src = src;
       video.load();
     } else {
-      // No HLS support — load raw anyway (will likely fail gracefully)
       video.src = src;
       video.load();
     }
@@ -150,12 +154,12 @@ export function VideoPlayer({
 
   // Smart play: claim global slot → wait for canplay → play
   const playWhenReady = useCallback((video: HTMLVideoElement) => {
-    const token = claimPlayback(video);          // evict any other playing video
+    const token = claimPlayback(video);
     const reqId = ++playRequestRef.current;
 
     const doPlay = () => {
       if (playRequestRef.current !== reqId) return;
-      if (!isTokenActive(token)) return; // another video claimed the slot
+      if (!isTokenActive(token)) return;
       video.play()
         .then(() => { setPlaying(true); setBuffering(false); })
         .catch(() => { setPlaying(false); setBuffering(false); });
@@ -165,7 +169,6 @@ export function VideoPlayer({
       doPlay();
     } else {
       setBuffering(true);
-      // Trigger load if preload="none" — only NOW that we need to play
       if (video.networkState === HTMLMediaElement.NETWORK_EMPTY) video.load();
       const onCanPlay = () => {
         video.removeEventListener("canplay", onCanPlay);
@@ -175,17 +178,25 @@ export function VideoPlayer({
     }
   }, []);
 
-  // IntersectionObserver: auto-play when ≥50% visible
+  // Hard-stop helper — pauses, resets, and releases the global slot.
+  // Used whenever a video scrolls out of view or unmounts, so audio/video
+  // can NEVER keep playing in the background.
+  const hardStop = useCallback((video: HTMLVideoElement) => {
+    ++playRequestRef.current;
+    try { video.pause(); } catch {}
+    releaseIfActive(video);
+    if (hlsRef.current) hlsRef.current.stopLoad();
+    setPlaying(false);
+    setBuffering(false);
+  }, []);
+
+  // IntersectionObserver: auto-play when ≥50% visible, hard-stop otherwise
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (dataSaver || quality === "low") {
-      ++playRequestRef.current;
-      try { video.pause(); } catch {}
-      if (hlsRef.current) hlsRef.current.stopLoad();
-      setPlaying(false);
-      setBuffering(false);
+      hardStop(video);
       return;
     }
 
@@ -193,32 +204,34 @@ export function VideoPlayer({
       (entries) => {
         const entry = entries[0];
         if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-          // Resume HLS loading if it was stopped (e.g. when scrolled away)
           if (hlsRef.current) hlsRef.current.startLoad(-1);
           playWhenReady(video);
           onVisible?.();
-          // Pre-cache the next video while this one plays
           if (precacheSrc) precacheVideo(precacheSrc);
         } else {
-          ++playRequestRef.current;
-          try { video.pause(); } catch {}
-          // Pause HLS buffering when scrolled away to save bandwidth
-          if (hlsRef.current) hlsRef.current.stopLoad();
-          setPlaying(false);
-          setBuffering(false);
+          hardStop(video);
         }
       },
       { threshold: [0, 0.5] }
     );
 
-   observer.observe(video);
-return () => {
-  observer.disconnect();
-  ++playRequestRef.current;
-  try { video.pause(); } catch {}
-  if (activeVideoEl === video) activeVideoEl = null;
-};
-  }, [src, dataSaver, quality, playWhenReady, onVisible, precacheSrc]);
+    observer.observe(video);
+
+    // Also stop playback the moment the tab is hidden / backgrounded
+    const onVisibilityChange = () => {
+      if (document.hidden) hardStop(video);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      // Component is unmounting (route change, list item removed, etc.)
+      // Guarantee playback stops — this is what prevents "video keeps
+      // playing in the background" after navigating away.
+      hardStop(video);
+    };
+  }, [src, dataSaver, quality, playWhenReady, hardStop, onVisible, precacheSrc]);
 
   // Buffering/waiting events
   useEffect(() => {
@@ -267,7 +280,6 @@ return () => {
     if (!video) return;
     const onCanPlay = () => setFirstFrame(true);
     video.addEventListener("canplay", onCanPlay);
-    // If already ready (e.g. cached), fire immediately
     if (video.readyState >= 3) setFirstFrame(true);
     return () => video.removeEventListener("canplay", onCanPlay);
   }, [src]);
@@ -282,6 +294,15 @@ return () => {
     ++playRequestRef.current;
   }, [src]);
 
+  // Keep the <video> element's muted flag in sync with the latest global
+  // preference (covers the case where another VideoPlayer changed it after
+  // this one already mounted).
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = muted;
+  }, [muted]);
+
   const toggleFullscreen = (e: React.MouseEvent) => {
     e.stopPropagation();
     const container = containerRef.current;
@@ -294,15 +315,14 @@ return () => {
   };
 
   const toggleMute = (e: React.MouseEvent) => {
-  e.stopPropagation();
-  const video = videoRef.current;
-  if (!video) return;
-  const newMuted = !muted;
-  video.muted = newMuted;
-  setMuted(newMuted);
-  globalMuted = newMuted;
-  try { localStorage.setItem("videoMuted", String(newMuted)); } catch {}
-};
+    e.stopPropagation();
+    const video = videoRef.current;
+    if (!video) return;
+    const newMuted = !muted;
+    video.muted = newMuted;
+    setMuted(newMuted);
+    setGlobalMuted(newMuted);
+  };
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -326,9 +346,7 @@ return () => {
     lastTap.current = now;
 
     if (playing && !buffering) {
-      ++playRequestRef.current;
-      try { video.pause(); } catch {}
-      setPlaying(false);
+      hardStop(video);
     } else if (!playing) {
       playWhenReady(video);
     }
@@ -362,11 +380,9 @@ return () => {
         data-testid="video-element"
       />
 
-      {/* Loading shimmer — visible until the first video frame is ready.
-          Gives instant visual feedback while HLS fetches its first segment. */}
+      {/* Loading shimmer — visible until the first video frame is ready. */}
       {!firstFrame && !showDataSaverOverlay && (
         <div className="video-shimmer" aria-hidden="true">
-          {/* Play icon centred so users know something will play */}
           <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
             <div className="w-12 h-12 rounded-full bg-white/8 border border-white/10 flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-5 h-5 text-white/30 fill-current ml-0.5">
@@ -417,14 +433,12 @@ return () => {
 
       {showControls && (
         <>
-          {/* Quality badge */}
           {qualityLabel && (
             <div className="absolute top-2.5 left-2.5 z-20 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur border border-white/10">
               <span className="text-[10px] font-bold text-white/80 tracking-wider">{qualityLabel}</span>
             </div>
           )}
 
-          {/* Fullscreen button */}
           <button
             onClick={toggleFullscreen}
             className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-black/50 backdrop-blur flex items-center justify-center z-20 border border-white/10"
@@ -433,7 +447,6 @@ return () => {
             {isFullscreen ? <Minimize2 className="w-4 h-4 text-white" /> : <Maximize2 className="w-4 h-4 text-white" />}
           </button>
 
-          {/* Mute/Unmute */}
           <button
             onClick={toggleMute}
             className="absolute bottom-14 right-2.5 w-8 h-8 rounded-full bg-black/50 backdrop-blur flex items-center justify-center z-20 border border-white/10"
@@ -442,7 +455,6 @@ return () => {
             {muted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
           </button>
 
-          {/* Replay button */}
           {progress > 0.95 && !loop && (
             <button
               onClick={replay}
@@ -453,41 +465,36 @@ return () => {
             </button>
           )}
 
-          {/* Progress bar — premium gradient with seek + glowing thumb */}
-<div
-  className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/10 z-20 cursor-pointer group/progress"
-  onClick={(e) => {
-    e.stopPropagation();
-    const video = videoRef.current;
-    if (!video || !video.duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const percent = (e.clientX - rect.left) / rect.width;
-    video.currentTime = percent * video.duration;
-  }}
->
-  {/* Hover-expand hit area for easier seeking */}
-  <div className="absolute inset-x-0 -top-2 -bottom-2" />
+          <div
+            className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/10 z-20 cursor-pointer group/progress"
+            onClick={(e) => {
+              e.stopPropagation();
+              const video = videoRef.current;
+              if (!video || !video.duration) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const percent = (e.clientX - rect.left) / rect.width;
+              video.currentTime = percent * video.duration;
+            }}
+          >
+            <div className="absolute inset-x-0 -top-2 -bottom-2" />
+            <div
+              className="h-full relative transition-all duration-150"
+              style={{
+                width: `${progress * 100}%`,
+                background: "linear-gradient(90deg, #ec4899, #a855f7, #f97316)",
+                boxShadow: "0 0 8px rgba(236,72,153,0.6)",
+              }}
+            >
+              <div
+                className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity"
+                style={{
+                  background: "#fff",
+                  boxShadow: "0 0 6px 2px rgba(236,72,153,0.8)",
+                }}
+              />
+            </div>
+          </div>
 
-  <div
-    className="h-full relative transition-all duration-150"
-    style={{
-      width: `${progress * 100}%`,
-      background: "linear-gradient(90deg, #ec4899, #a855f7, #f97316)",
-      boxShadow: "0 0 8px rgba(236,72,153,0.6)",
-    }}
-  >
-    {/* Glowing thumb dot at the playhead */}
-    <div
-      className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity"
-      style={{
-        background: "#fff",
-        boxShadow: "0 0 6px 2px rgba(236,72,153,0.8)",
-      }}
-    />
-  </div>
-</div>
-
-          {/* Song info pill */}
           {songTitle && (
             <div className="absolute bottom-4 left-2.5 right-12 z-20 pointer-events-none">
               <div
