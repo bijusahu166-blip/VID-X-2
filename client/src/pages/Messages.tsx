@@ -1059,7 +1059,7 @@ const res: any = await apiRequest("POST", "/api/translate", {
                                 <Play className="w-6 h-6 text-white ml-1" />
                               </div>
                               
-                             </motion.div>
+                             </div>
                           </div>
                         )}
 
@@ -1104,7 +1104,7 @@ const res: any = await apiRequest("POST", "/api/translate", {
                       )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               </div>
               
             );
