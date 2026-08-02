@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { playSend, playReceive } from "@/lib/sounds";
 import { encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
 import { supabase } from "@/lib/supabase";
-
+import { motion, AnimatePresence } from "framer-motion";
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DirectMessage {
   id: number;
@@ -608,7 +608,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
       qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
     },
     (deletedId) => {
-      // ✅ FIX: WebSocket delete event se UI update
+     
       qc.setQueryData<DirectMessage[]>(
         ["/api/direct-chats", chat.id, "messages"],
         (old = []) => old.filter(m => m.id !== deletedId)
@@ -622,8 +622,8 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   }, [chat.id, messages.length]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, isOtherTyping]);
+  bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+}, [messages.length]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -653,9 +653,15 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   });
 }, [messages, currentUserId, partnerId]);
 
-  const notifyTyping = useCallback(() => {
-    apiRequest("POST", `/api/direct-chats/${chat.id}/typing`, {}).catch(() => { });
-  }, [chat.id]);
+const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+const notifyTyping = useCallback(() => {
+  if (typingTimeoutRef.current) return; // already notified recently
+  apiRequest("POST", `/api/direct-chats/${chat.id}/typing`, {}).catch(() => {});
+  typingTimeoutRef.current = setTimeout(() => {
+    typingTimeoutRef.current = null;
+  }, 2000);
+}, [chat.id]);
 
   const focusComposer = useCallback(() => {
     window.setTimeout(() => {
@@ -677,14 +683,49 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   }, [messages.length, currentUserId]);
 
   const sendMsg = useMutation({
-    mutationFn: (body: any) => apiRequest("POST", `/api/direct-chats/${chat.id}/messages`, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
-      qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
-      setReplyTo(null);
-      setSmartReplies([]);
-    },
-  });
+  mutationFn: (body: any) => apiRequest("POST", `/api/direct-chats/${chat.id}/messages`, body),
+  onMutate: async (body: any) => {
+    await qc.cancelQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
+    const previous = qc.getQueryData<DirectMessage[]>(["/api/direct-chats", chat.id, "messages"]);
+
+    const optimisticMsg: DirectMessage = {
+      id: Date.now(), // temp id
+      chatId: chat.id,
+      senderId: currentUserId,
+      content: body.content,
+      type: body.type || "text",
+      mediaUrl: body.mediaUrl || null,
+      metadata: body.metadata || null,
+      readAt: null,
+      pinnedAt: null,
+      expiresAt: null,
+      reactions: "{}",
+      replyToId: body.replyToId || null,
+      createdAt: new Date().toISOString(),
+    };
+
+    qc.setQueryData<DirectMessage[]>(
+      ["/api/direct-chats", chat.id, "messages"],
+      (old = []) => [...old, optimisticMsg]
+    );
+
+    return { previous };
+  },
+  onError: (_err, _body, ctx) => {
+    if (ctx?.previous) {
+      qc.setQueryData(["/api/direct-chats", chat.id, "messages"], ctx.previous);
+    }
+    toast({ title: "Message failed to send", variant: "destructive" });
+  },
+  onSettled: () => {
+    qc.invalidateQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
+    qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
+  },
+  onSuccess: () => {
+    setReplyTo(null);
+    setSmartReplies([]);
+  },
+});
 
   const reactMutation = useMutation({
     mutationFn: ({ id, emoji }: { id: number; emoji: string }) =>
@@ -919,7 +960,12 @@ const res: any = await apiRequest("POST", "/api/translate", {
                   </div>
                 )}
 
-                <div className={cn("flex mb-0.5", isSender ? "justify-end" : "justify-start")}>
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className={cn("flex mb-0.5", isSender ? "justify-end" : "justify-start")}
+                >
                   {!isSender && (
                     <Avatar className="w-7 h-7 mr-2 mt-auto mb-1 shrink-0 ring-1 ring-white/8">
                       <AvatarImage src={other?.profileImageUrl || undefined} />
@@ -1012,7 +1058,8 @@ const res: any = await apiRequest("POST", "/api/translate", {
                               <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
                                 <Play className="w-6 h-6 text-white ml-1" />
                               </div>
-                            </div>
+                              
+                             </motion.div>
                           </div>
                         )}
 
@@ -1059,6 +1106,7 @@ const res: any = await apiRequest("POST", "/api/translate", {
                   </div>
                 </div>
               </div>
+              
             );
           })}
 
@@ -1290,6 +1338,9 @@ const res: any = await apiRequest("POST", "/api/translate", {
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder="Message..."
                 rows={1}
+                autoCorrect="off"
+                autoComplete="off"
+                autoCapitalize="sentences"
                 className="flex-1 bg-transparent text-[14px] outline-none resize-none placeholder-zinc-500 leading-relaxed py-0.5 max-h-[120px]"
               />
               <button className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mb-0.5 hover:bg-white/8">
@@ -1297,12 +1348,14 @@ const res: any = await apiRequest("POST", "/api/translate", {
               </button>
             </div>
 
-            {text.trim() ? (
-              <button onClick={handleSend}
-                className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 transition-all active:scale-90">
-                <Send className="w-4 h-4 text-white" />
-              </button>
-            ) : (
+          {text.trim() ? (
+  <motion.button
+    whileTap={{ scale: 0.85 }}
+    onClick={handleSend}
+    className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 transition-shadow">
+    <Send className="w-4 h-4 text-white" />
+  </motion.button>
+) : (
               <button onClick={handleVoice}
                 className={cn("w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-all active:scale-90",
                   voiceRec.recording
