@@ -199,7 +199,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(200).json({ status: "ok" });
   });
 
-  await setupAuth(app);
   registerAuthRoutes(app);
   registerSmsOtpRoutes(app);
   registerChatRoutes(app);

@@ -17,76 +17,14 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { setupAuth } from "./replit_integrations/auth";
 
 const app = express();
 const httpServer = createServer(app);
-// ── WebRTC Signaling + Real-time Events via WebSocket ─────────────────────
-// Use noServer:true so that upgrade requests for OTHER paths (e.g. Vite's
-// /vite-hmr) are not aborted with 400 by the ws library.  We install our own
-// 'upgrade' listener that only handles the /ws path; everything else is left
-// for subsequent listeners (Vite HMR) to process.
+
 const wss = new WebSocketServer({ noServer: true });
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID!,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-  callbackURL: "/api/auth/google/callback",
-}, async (_accessToken, _refreshToken, profile, done) => {
-  try {
-    const email = profile.emails?.[0]?.value;
-    if (!email) return done(new Error("No email from Google"));
-    let user = await db.select().from(users).where(eq(users.email, email)).limit(1);
-    if (user.length === 0) {
-      const inserted = await db.insert(users).values({
-        email,
-        firstName: profile.name?.givenName || "User",
-        lastName: profile.name?.familyName || "",
-        username: email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, ""),
-        profileImageUrl: profile.photos?.[0]?.value || "",
-        password: "",
-      }).returning();
-      return done(null, inserted[0]);
-    }
-    return done(null, user[0]);
-  } catch (err) {
-    return done(err);
-  }
-}));
 
-passport.serializeUser((user: any, done) => done(null, user.id));
-passport.deserializeUser(async (id: string, done) => {
-  try {
-    const user = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    done(null, user[0] || null);
-  } catch (err) { done(err); }
-});
-app.use(session({
-  secret: process.env.SESSION_SECRET!,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  }
-}));
-app.use(passport.initialize());
-app.use(passport.session());
-
-app.get("/api/auth/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
-);
-
-app.get("/api/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
-  (req: any, res) => {
-    req.session.userId = req.user.id;
-    req.session.save(() => {
-      res.redirect("/");
-    });
-  }
-);
-const randomCallQueue: string[] = []; // userIds waiting for a random match
+const randomCallQueue: string[] = [];
 
 httpServer.on("upgrade", (req, socket, head) => {
   const pathname = (req.url || "").split("?")[0];
@@ -94,8 +32,6 @@ httpServer.on("upgrade", (req, socket, head) => {
     wss.handleUpgrade(req, socket as any, head, (ws) => {
       wss.emit("connection", ws, req);
     });
-    // All other paths (e.g. /vite-hmr for Vite HMR) are intentionally left
-    // unhandled here so subsequent 'upgrade' listeners can process them.
   }
 });
 
@@ -111,7 +47,6 @@ wss.on("connection", (ws) => {
     try {
       const msg = JSON.parse(data.toString());
 
-      // ── Register user ──
       if (msg.type === "register") {
         userId = String(msg.userId);
         wsClients.set(userId, ws);
@@ -119,19 +54,15 @@ wss.on("connection", (ws) => {
         return;
       }
 
-      // ── Random call matchmaking ──
       if (msg.type === "random-call-join") {
         if (!userId) return;
-        // Try to find a waiting partner
         let matched = false;
         while (randomCallQueue.length > 0) {
           const partnerId = randomCallQueue.shift()!;
-          if (partnerId === userId) continue; // skip self
+          if (partnerId === userId) continue;
           const partnerWs = wsClients.get(partnerId);
           if (partnerWs && partnerWs.readyState === WebSocket.OPEN) {
-            // Shared Agora channel for this pair (deterministic, order-independent)
             const agoraChannel = `random_${[userId, partnerId].sort().join("_")}`;
-            // Pair them — both get the shared channel name so they join the same Agora room
             partnerWs.send(
               JSON.stringify({
                 type: "random-call-matched",
@@ -153,7 +84,6 @@ wss.on("connection", (ws) => {
           }
         }
         if (!matched) {
-          // No one waiting — add to queue
           if (!randomCallQueue.includes(userId)) randomCallQueue.push(userId);
           ws.send(
             JSON.stringify({
@@ -165,13 +95,11 @@ wss.on("connection", (ws) => {
         return;
       }
 
-      // ── Leave random call queue ──
       if (msg.type === "random-call-leave") {
         if (userId) removeFromQueue(userId);
         return;
       }
 
-      // ── Forward signaling messages to target user ──
       if (msg.to) {
         const target = wsClients.get(String(msg.to));
         if (target && target.readyState === WebSocket.OPEN) {
@@ -203,29 +131,13 @@ declare module "http" {
   }
 }
 
-// ── Security & Performance Headers ──────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: false,
 }));
 
-// ── Compression ─────────────────────────────────────────────────────────────
 app.use(compression());
 
-import session from 'express-session';
-
-app.use(session({
-secret: process.env.SESSION_SECRET!,
-  resave: false,
-  saveUninitialized: false,
- cookie: {
-  maxAge: 30 * 24 * 60 * 60 * 1000,
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-}
-}));
-// ── CORS ────────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: process.env.FRONTEND_URL || process.env.NODE_ENV === "production" ? "*" : "*",
   credentials: true,
@@ -233,7 +145,6 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-// ── Pagination Middleware ──────────────────────────────────────────────────
 app.use(paginationMiddleware);
 
 app.use(
@@ -247,7 +158,6 @@ app.use(
 
 app.use(express.urlencoded({ extended: false, limit: "300mb" }));
 
-// ── Rate Limiting ────────────────────────────────────────────────────────────
 app.use("/api/auth", authLimiter);
 app.use("/api/upload", uploadLimiter);
 app.use("/api", apiLimiter);
@@ -281,7 +191,6 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       log(logLine);
     }
   });
@@ -308,10 +217,64 @@ process.on("SIGINT", () => {
 });
 
 (async () => {
+  // ── Session (single source of truth — PostgreSQL-backed) ──────────────────
+  await setupAuth(app);
+
+  // ── Google OAuth (uses the session set up above) ───────────────────────────
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    callbackURL: "/api/auth/google/callback",
+  }, async (_accessToken, _refreshToken, profile, done) => {
+    try {
+      const email = profile.emails?.[0]?.value;
+      if (!email) return done(new Error("No email from Google"));
+      let user = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      if (user.length === 0) {
+        const inserted = await db.insert(users).values({
+          email,
+          firstName: profile.name?.givenName || "User",
+          lastName: profile.name?.familyName || "",
+          username: email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, ""),
+          profileImageUrl: profile.photos?.[0]?.value || "",
+          password: "",
+        }).returning();
+        return done(null, inserted[0]);
+      }
+      return done(null, user[0]);
+    } catch (err) {
+      return done(err as any);
+    }
+  }));
+
+  passport.serializeUser((user: any, done) => done(null, user.id));
+  passport.deserializeUser(async (id: string, done) => {
+    try {
+      const user = await db.select().from(users).where(eq(users.id, id)).limit(1);
+      done(null, user[0] || null);
+    } catch (err) { done(err as any); }
+  });
+
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  app.get("/api/auth/google",
+    passport.authenticate("google", { scope: ["profile", "email"] })
+  );
+
+  app.get("/api/auth/google/callback",
+    passport.authenticate("google", { failureRedirect: "/" }),
+    (req: any, res) => {
+      req.session.userId = req.user.id;
+      req.session.save(() => {
+        res.redirect("/");
+      });
+    }
+  );
+
   // ── Health Check Endpoint ───────────────────────────────────────────────────
   app.get("/health", asyncHandler(async (req: Request, res: Response) => {
     try {
-      // Test database connection
       await db.execute(sql`SELECT NOW()`);
       res.json({
         status: "healthy",
@@ -330,14 +293,12 @@ process.on("SIGINT", () => {
     }
   }));
 
-  // ── Readiness Check (for container orchestration) ──────────────────────────
   app.get("/ready", (req: Request, res: Response) => {
     res.json({ ready: true });
   });
 
   await registerRoutes(httpServer, app);
 
-  // ── Error Handling Middleware (must be last) ────────────────────────────────
   app.use(errorHandler);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -350,9 +311,6 @@ process.on("SIGINT", () => {
     return res.status(status).json({ message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -360,8 +318,6 @@ process.on("SIGINT", () => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 10000 if not specified.
   const port = Number(process.env.PORT ? Number(process.env.PORT) : 10000);
   console.log(`Starting server with PORT=${process.env.PORT} resolved port=${port}`);
   httpServer.listen(port, "0.0.0.0", () => {
