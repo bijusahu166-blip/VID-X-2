@@ -5,7 +5,15 @@ import Hls from "hls.js";
 import { toCloudinaryVideoUrl } from "@/lib/utils";
 import { precacheVideo } from "@/lib/videoPrecache";
 
-// ── Global single-video coordinator ─────────────────────────────────────────
+// ── Global single-video coordinator ───────────
+//─────────────────────────────
+// ── Global mute preference (persists across all videos) ────────────────────
+let globalMuted = true;
+try {
+  const saved = localStorage.getItem("videoMuted");
+  if (saved !== null) globalMuted = saved === "true";
+} catch {}
+// ─────────────────────────────────────────────────────────────────────────────
 // Only ONE video across the entire page is allowed to play at a time.
 // Any VideoPlayer that wants to play first calls claimPlayback().
 // claimPlayback() pauses the currently-playing video and returns a token;
@@ -62,7 +70,7 @@ export function VideoPlayer({
   const hlsRef = useRef<Hls | null>(null);
   const lastTap = useRef(0);
   const playRequestRef = useRef(0);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(globalMuted);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -203,11 +211,13 @@ export function VideoPlayer({
       { threshold: [0, 0.5] }
     );
 
-    observer.observe(video);
-    return () => {
-      observer.disconnect();
-      ++playRequestRef.current;
-    };
+   observer.observe(video);
+return () => {
+  observer.disconnect();
+  ++playRequestRef.current;
+  try { video.pause(); } catch {}
+  if (activeVideoEl === video) activeVideoEl = null;
+};
   }, [src, dataSaver, quality, playWhenReady, onVisible, precacheSrc]);
 
   // Buffering/waiting events
@@ -284,12 +294,15 @@ export function VideoPlayer({
   };
 
   const toggleMute = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const video = videoRef.current;
-    if (!video) return;
-    video.muted = !muted;
-    setMuted(!muted);
-  };
+  e.stopPropagation();
+  const video = videoRef.current;
+  if (!video) return;
+  const newMuted = !muted;
+  video.muted = newMuted;
+  setMuted(newMuted);
+  globalMuted = newMuted;
+  try { localStorage.setItem("videoMuted", String(newMuted)); } catch {}
+};
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
