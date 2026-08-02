@@ -11,10 +11,14 @@ interface Props {
 export function FollowSuggestions({ currentUserId, onNavigate }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
-  const { data: users = [] } = useQuery<any[]>({
-    queryKey: ["/api/users"],
-    queryFn: () => fetch("/api/users", { credentials: "include" }).then(r => r.json()),
-  });
+ const { data: users = [] } = useQuery<any[]>({
+  queryKey: ["/api/users"],
+  queryFn: async () => {
+    const res = await fetch("/api/users", { credentials: "include" });
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
+});
 
   const { data: following = [] } = useQuery<any[]>({
     queryKey: ["/api/following-ids"],
@@ -37,7 +41,7 @@ export function FollowSuggestions({ currentUserId, onNavigate }: Props) {
 
   const followingSet = new Set(following);
 
-  const suggestions = users
+  const suggestions = (Array.isArray(users) ? users : [])
     .filter(u =>
       String(u.id) !== String(currentUserId) &&
       !followingSet.has(String(u.id)) &&
