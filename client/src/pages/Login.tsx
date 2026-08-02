@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
 
 type Tab = "login" | "signup";
 type View = "auth" | "forgot";
@@ -287,9 +289,15 @@ export default function Login() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
-  const handleGoogleLogin = () => {
+ const handleGoogleLogin = async () => {
   setGoogleLoading(true);
-  window.location.href = "/api/auth/google";
+  const googleUrl = "https://vid-x-2.onrender.com/api/auth/google";
+  
+  if (Capacitor.isNativePlatform()) {
+    await Browser.open({ url: googleUrl });
+  } else {
+    window.location.href = googleUrl;
+  }
 };
 
   const mutation = useMutation({
