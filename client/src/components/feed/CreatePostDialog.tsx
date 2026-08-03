@@ -527,7 +527,9 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
   };
 const MAX_VIDEO_SIZE_MB = 100;
 const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
-const MAX_VIDEO_DURATION_SECONDS = 60;
+const MAX_REEL_DURATION_SECONDS = 60;
+const MAX_VIDEO_DURATION_SECONDS = 1800;
+
   const formatFileSize = (bytes: number) => {
     if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
@@ -564,10 +566,10 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
       return;
     }
     const duration = await getVideoDuration(file);
-    if (duration > MAX_VIDEO_DURATION_SECONDS) {
+    if (duration > MAX_REEL_DURATION_SECONDS) {
       toast({
         title: "Video too long",
-        description: `Your video is ${Math.round(duration)}s. Maximum allowed is ${MAX_VIDEO_DURATION_SECONDS}s. Please trim it shorter.`,
+        description: `Your video is ${Math.round(duration)}s. Maximum allowed is ${MAX_REEL_DURATION_SECONDS}s. Please trim it shorter.`,
         variant: "destructive",
       });
       e.target.value = "";
@@ -679,7 +681,7 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
     }
   };
 
-  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+ const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_VIDEO_SIZE_BYTES) {
@@ -691,6 +693,18 @@ const MAX_VIDEO_DURATION_SECONDS = 60;
       e.target.value = "";
       return;
     }
+    // NEW — duration check for long video
+    const duration = await getVideoDuration(file);
+    if (duration > MAX_VIDEO_DURATION_SECONDS) {
+      toast({
+        title: "Video too long",
+        description: `Your video is ${Math.round(duration / 60)} min. Maximum allowed is 30 minutes.`,
+        variant: "destructive",
+      });
+      e.target.value = "";
+      return;
+    }
+   
     setSelectedFile(file);
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
@@ -1131,7 +1145,7 @@ const MAX_RETRIES = 3;
                     </div>
                     <div className="text-center">
                       <p className="text-sm font-semibold text-white">Tap to select video</p>
-                      <p className="text-[10px] text-zinc-500 mt-0.5">MP4, MOV up to 100MB · max 60 sec</p>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">MP4, MOV up to 100MB · max 30 min</p>
                     </div>
                   </label>
                 )}
