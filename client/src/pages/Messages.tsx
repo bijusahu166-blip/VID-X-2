@@ -882,15 +882,15 @@ const res: any = await apiRequest("POST", "/api/translate", {
           <p className="font-semibold text-[15px] truncate leading-tight">
             {other ? `${other.firstName} ${other.lastName}` : "Chat"}
           </p>
-          <p className="text-[11px] text-zinc-400 leading-tight mt-0.5">
-            {isOtherTyping
-              ? <span className="text-violet-400 font-medium">typing...</span>
-              : chat.isOnline
-              ? <span className="text-green-400">Online</span>
-              : chat.lastSeen
-              ? `Last seen ${formatTime(chat.lastSeen)}`
-              : "Offline"}
-          </p>
+<p className="text-[11px] text-zinc-400 leading-tight mt-0.5">
+  {isOtherTyping
+    ? <span className="text-violet-400 font-medium">typing...</span>
+    : chat.isOnline
+    ? <span className="text-red-500 font-bold">〜〜</span>
+    : chat.lastSeen
+    ? `Last seen ${formatTime(chat.lastSeen)}`
+    : "Offline"}
+</p>
         </div>
 
         <div className="flex items-center gap-1">
