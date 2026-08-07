@@ -104,11 +104,11 @@ function Router() {
         <Route path="/jobs" component={Jobs} />
         <Route path="/messages" component={Messages} />
         <Route path="/notifications" component={Notifications} />
-        
         <Route path="/profile" component={Profile} />
         <Route path="/profile/:id" component={Profile} />
-        <Route component={NotFound} />
+        <Route path="/subscription" component={Subscription} />
         <Route path="/Subscription" component={Subscription} />
+        <Route component={NotFound} />
       </Switch>
       <GlobalCallOverlay />
     </>
