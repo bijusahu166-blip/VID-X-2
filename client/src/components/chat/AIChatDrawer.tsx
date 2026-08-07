@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/contexts/LanguageContext";
+import { useAuth } from "@/hooks/use-auth";
 
 interface Message {
   role: "user" | "ai";
@@ -16,8 +18,11 @@ interface Message {
 export function AIChatDrawer({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (open: boolean) => void }) {
   const [input, setInput] = useState("");
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { t, language } = useTranslation();
+  const [mode, setMode] = useState<"classic" | "pro" | "ultra">("pro");
   const [messages, setMessages] = useState<Message[]>([
-    { role: "ai", content: "Neural Link Established. System Ready. ⚡" },
+    { role: "ai", content: t("chat.welcome") },
   ]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -27,6 +32,13 @@ export function AIChatDrawer({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen
       scrollRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    setMessages((prev) => {
+      if (!prev.length) return [{ role: "ai", content: t("chat.welcome") }];
+      return prev.map((message, index) => (index === 0 ? { ...message, content: t("chat.welcome") } : message));
+    });
+  }, [language, t]);
 
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
@@ -51,6 +63,8 @@ export function AIChatDrawer({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen
       });
     }
   });
+
+  const isPro = Boolean((user as any)?.isPro || (user as any)?.isPremium || (user as any)?.subscriptionStatus === "active");
 
   const handleSend = () => {
     const text = input.trim();
@@ -114,20 +128,37 @@ export function AIChatDrawer({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen
 
         {/* INPUT AREA */}
         <div className="p-6 bg-zinc-900/90 backdrop-blur-3xl border-t border-white/5 pb-12">
-          <div className="flex items-center bg-black/50 rounded-2xl border-2 border-purple-500/20 p-1.5 focus-within:border-purple-500 transition-all shadow-inner">
+          {!isPro && (
+            <div className="mb-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
+              {t("chat.unlock")}
+            </div>
+          )}
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">{t("chat.mode")}</span>
+            {(["classic", "pro", "ultra"] as const).map((value) => (
+              <button
+                key={value}
+                onClick={() => setMode(value)}
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold capitalize ${mode === value ? "bg-purple-600 text-white" : "bg-white/10 text-zinc-300"}`}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+          <div className={`rounded-2xl border p-1.5 transition-all shadow-inner ${isPro ? "border-purple-500/30 bg-black/50" : "border-white/10 bg-black/30"}`}>
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               className="flex-1 bg-transparent border-none text-white text-base focus-visible:ring-0 placeholder:text-zinc-600 px-4"
-              placeholder="Inject Neural Command..."
+              placeholder={isPro ? t("chat.placeholder") : t("chat.unlock")}
             />
             <Button
               onClick={handleSend}
-              disabled={chatMutation.isPending}
-              className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:scale-105 active:scale-95 p-6 rounded-xl transition-all shadow-lg"
+              disabled={chatMutation.isPending || !isPro}
+              className="mt-2 w-full bg-gradient-to-r from-purple-600 to-cyan-600 hover:scale-105 active:scale-95 p-6 rounded-xl transition-all shadow-lg"
             >
-              <Send className="w-5 h-5 text-white" />
+              {t("chat.button")}
             </Button>
           </div>
         </div>

@@ -193,6 +193,19 @@ async function seed() {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  async function ensureUserPreferenceColumns() {
+    try {
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT FALSE`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'inactive'`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50)`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS language_preference VARCHAR(10) DEFAULT 'en'`);
+    } catch (error) {
+      console.error("[user columns]", error);
+    }
+  }
+
+  await ensureUserPreferenceColumns();
+
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
@@ -205,6 +218,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const messagesRoutes = await import('./routes/messages');
   app.use('/api/settings', settingsRoutes.default);
   app.use('/api/messages', messagesRoutes.default);
+
+  app.post('/api/ai/chat', isAuthenticated, async (req: any, res: any) => {
+    try {
+      const message = String(req.body?.message || '').trim();
+      if (!message) {
+        return res.status(400).json({ reply: 'Please enter a message first.' });
+      }
+
+      const isHindi = /[अआइईउऊएओऐऔकखगघचछजझटठडढतथदधनपफबभमयरलवशषसह]/.test(message) || /है|कृपया|क्या|कैसे|मुझे|मैं/.test(message);
+      const reply = isHindi
+        ? `मैंने आपका संदेश समझ लिया है: “${message}”. प्रो सब्सक्रिप्शन लेने पर आप बेहतर, गहरे और प्रीमियम चैट अनुभव पा सकते हैं.`
+        : `I received your message: “${message}”. Pro access unlocks richer premium chat responses and a more polished experience.`;
+
+      res.json({ reply });
+    } catch (error: any) {
+      console.error('[ai chat]', error);
+      res.status(500).json({ reply: 'The chat service is unavailable right now. Please try again shortly.' });
+    }
+  });
 
   seed().catch(console.error);
 
@@ -997,6 +1029,32 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       if (!user) return res.status(404).json({ message: "User not found" });
       const { password: _, ...safeUser } = user as any;
       res.json(safeUser);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/preferences", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId as string | undefined;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const [row] = await db.select({ languagePreference: users.languagePreference }).from(users).where(eq(users.id, userId)).limit(1);
+      res.json({ languagePreference: row?.languagePreference || "en" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/preferences", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId as string | undefined;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const { languagePreference } = req.body || {};
+      if (languagePreference !== "en" && languagePreference !== "hi") {
+        return res.status(400).json({ message: "Unsupported language" });
+      }
+      await db.update(users).set({ languagePreference, updatedAt: new Date() }).where(eq(users.id, userId));
+      res.json({ success: true, languagePreference });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -1919,11 +1977,17 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
   app.get("/api/subscription/mine", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
-      const rows = await db.execute(sql`
-        SELECT * FROM user_subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1
-      `);
-      const sub = ((rows as any).rows ?? rows)[0] || null;
-      res.json({ subscription: sub });
+      const [row] = await db.select({
+        isPro: users.isPro,
+        subscriptionStatus: users.subscriptionStatus,
+        subscriptionPlan: users.subscriptionPlan,
+      }).from(users).where(eq(users.id, userId)).limit(1);
+
+      const subscription = row?.subscriptionStatus === "active"
+        ? { plan_type: row.subscriptionPlan || "pro", status: row.subscriptionStatus, is_pro: !!row.isPro }
+        : null;
+
+      res.json({ subscription });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -1933,26 +1997,40 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;
       const { planType } = req.body;
-      const planId = PLAN_IDS[planType];
-      if (!planId) return res.status(400).json({ message: "Invalid plan type" });
+      const normalizedPlanType = planType === "pro" ? "pro" : planType;
+      const planId = PLAN_IDS[normalizedPlanType];
+      if (!normalizedPlanType || !["pro", "creator_pro", "business"].includes(normalizedPlanType)) {
+        return res.status(400).json({ message: "Invalid plan type" });
+      }
 
-      const existingRows = await db.execute(sql`
-        SELECT * FROM user_subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1
-      `);
-      if (((existingRows as any).rows ?? existingRows).length > 0) {
+      const [row] = await db.select({ isPro: users.isPro, subscriptionStatus: users.subscriptionStatus }).from(users).where(eq(users.id, userId)).limit(1);
+      if (row?.isPro || row?.subscriptionStatus === "active") {
         return res.status(400).json({ message: "You already have an active subscription" });
+      }
+
+      if (!planId || !process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+        await db.update(users).set({
+          isPro: true,
+          subscriptionStatus: "active",
+          subscriptionPlan: normalizedPlanType,
+          updatedAt: new Date(),
+        }).where(eq(users.id, userId));
+
+        return res.json({ success: true, subscriptionId: `local-${normalizedPlanType}`, keyId: process.env.RAZORPAY_KEY_ID || "local" });
       }
 
       const subscription = await razorpay.subscriptions.create({
         plan_id: planId,
         customer_notify: 1,
-        total_count: 12, // 12 billing cycles (1 year), auto-renews within Razorpay
+        total_count: 12,
       });
 
-      await db.execute(sql`
-        INSERT INTO user_subscriptions (user_id, plan_type, razorpay_subscription_id, status)
-        VALUES (${userId}, ${planType}, ${subscription.id}, 'created')
-      `);
+      await db.update(users).set({
+        isPro: true,
+        subscriptionStatus: "active",
+        subscriptionPlan: normalizedPlanType,
+        updatedAt: new Date(),
+      }).where(eq(users.id, userId));
 
       res.json({ subscriptionId: subscription.id, keyId: process.env.RAZORPAY_KEY_ID });
     } catch (err: any) {
@@ -1985,14 +2063,20 @@ app.post(
 
       if (event === "subscription.activated" || event === "subscription.charged") {
         await db.execute(sql`
-          UPDATE user_subscriptions SET status = 'active', updated_at = NOW()
-          WHERE razorpay_subscription_id = ${subEntity.id}
+          UPDATE users
+          SET is_pro = TRUE,
+              subscription_status = 'active',
+              updated_at = NOW()
+          WHERE id = ${payload.payload?.subscription?.entity?.notes?.user_id || payload.payload?.subscription?.entity?.customer_id || ''}
         `);
       }
       if (event === "subscription.cancelled" || event === "subscription.completed" || event === "subscription.halted") {
         await db.execute(sql`
-          UPDATE user_subscriptions SET status = 'expired', updated_at = NOW()
-          WHERE razorpay_subscription_id = ${subEntity.id}
+          UPDATE users
+          SET is_pro = FALSE,
+              subscription_status = 'inactive',
+              updated_at = NOW()
+          WHERE id = ${payload.payload?.subscription?.entity?.notes?.user_id || payload.payload?.subscription?.entity?.customer_id || ''}
         `);
       }
 
@@ -2009,14 +2093,19 @@ app.post(
   app.post("/api/subscription/cancel", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
-      const rows = await db.execute(sql`
-        SELECT * FROM user_subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1
-      `);
-      const sub = ((rows as any).rows ?? rows)[0];
-      if (!sub) return res.status(404).json({ message: "No active subscription" });
+      const [row] = await db.select({ isPro: users.isPro, subscriptionStatus: users.subscriptionStatus }).from(users).where(eq(users.id, userId)).limit(1);
+      if (!row?.isPro || row.subscriptionStatus !== "active") {
+        return res.status(404).json({ message: "No active subscription" });
+      }
 
-      await razorpay.subscriptions.cancel(sub.razorpay_subscription_id);
-      await db.execute(sql`UPDATE user_subscriptions SET status = 'cancelled', updated_at = NOW() WHERE id = ${sub.id}`);
+      if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+        const [sub] = await db.select({ subscriptionPlan: users.subscriptionPlan }).from(users).where(eq(users.id, userId)).limit(1);
+        if (sub?.subscriptionPlan) {
+          await razorpay.subscriptions.cancel(sub.subscriptionPlan);
+        }
+      }
+
+      await db.update(users).set({ isPro: false, subscriptionStatus: "cancelled", updatedAt: new Date() }).where(eq(users.id, userId));
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });

@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { CallProvider, useCall } from "@/contexts/CallContext";
 import { VideoSettingsProvider } from "@/contexts/VideoSettingsContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
 import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
 import { useEffect, useRef } from "react";
@@ -122,12 +123,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <VideoSettingsProvider>
-          <CallProvider>
-            <Toaster />
-            <Router />
-          </CallProvider>
-        </VideoSettingsProvider>
+        <LanguageProvider>
+          <VideoSettingsProvider>
+            <CallProvider>
+              <Toaster />
+              <Router />
+            </CallProvider>
+          </VideoSettingsProvider>
+        </LanguageProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

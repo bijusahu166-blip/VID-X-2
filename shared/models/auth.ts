@@ -45,6 +45,10 @@ export const users = pgTable("users", {
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   twoFactorSecret: varchar("two_factor_secret"),
   coins: integer("coins").default(0),
+  isPro: boolean("is_pro").default(false),
+  subscriptionStatus: varchar("subscription_status").default("inactive"),
+  subscriptionPlan: varchar("subscription_plan"),
+  languagePreference: varchar("language_preference").default("en"),
   blockedUsers: jsonb("blocked_users").default([]), // Array of user IDs
   mutedUsers: jsonb("muted_users").default([]), // Array of user IDs
   closeFriends: jsonb("close_friends").default([]), // Array of user IDs

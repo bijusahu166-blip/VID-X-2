@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { InterstitialAd } from '@/components/ads/InterstitialAd';
+import { useAuth } from '@/hooks/use-auth';
 
 interface AdManagerState {
   videoPlaybackTime: number; // in seconds
@@ -19,6 +20,7 @@ const VIDEO_AD_INTERVAL = 6 * 60; // 6 minutes in seconds
 const STATUS_AD_INTERVAL = 6; // every 6th status
 
 export function AdManagerProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [state, setState] = useState<AdManagerState>({
     videoPlaybackTime: 0,
     statusViewCount: 0,
@@ -72,10 +74,12 @@ export function AdManagerProvider({ children }: { children: ReactNode }) {
       resetStatusCounter,
     }}>
       {children}
-      <InterstitialAd
-        open={state.showAd}
-        onOpenChange={handleAdClose}
-      />
+      {!((user as any)?.isPro || (user as any)?.subscriptionStatus === 'active') && (
+        <InterstitialAd
+          open={state.showAd}
+          onOpenChange={handleAdClose}
+        />
+      )}
     </AdManagerContext.Provider>
   );
 }

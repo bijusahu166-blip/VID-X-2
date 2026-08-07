@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Loader2, Crown, Sparkles, Briefcase } from "lucide-re
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/contexts/LanguageContext";
 
 declare global {
   interface Window {
@@ -25,12 +26,12 @@ function loadRazorpayScript(): Promise<boolean> {
 
 const PLANS = [
   {
-    type: "premium",
-    name: "Premium",
-    price: 99,
+    type: "pro",
+    name: "Pro",
+    price: 50,
     icon: Sparkles,
     color: "#60a5fa",
-    features: ["No ads", "HD/4K uploads", "Profile verification badge", "Extra profile customization"],
+    features: ["No ads", "Pro chat UI modes", "Premium themes", "Priority support"],
   },
   {
     type: "creator_pro",
@@ -38,7 +39,7 @@ const PLANS = [
     price: 299,
     icon: Crown,
     color: "#f472b6",
-    features: ["Everything in Premium", "Advanced analytics (views, followers, reach)", "Higher upload limits", "Early access to new features", "Creator tools", "Priority support"],
+    features: ["Everything in Pro", "Advanced analytics", "Higher upload limits", "Creator tools", "Priority support"],
   },
   {
     type: "business",
@@ -46,7 +47,7 @@ const PLANS = [
     price: 999,
     icon: Briefcase,
     color: "#fbbf24",
-    features: ["Everything in Creator Pro", "Business profile", "Verified business badge", "Advertising tools", "Business analytics"],
+    features: ["Everything in Creator Pro", "Business profile", "Verified business badge", "Advertising tools"],
   },
 ];
 
@@ -55,6 +56,7 @@ export default function Subscription() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [subscribingType, setSubscribingType] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const { data } = useQuery<{ subscription: any }>({
     queryKey: ["/api/subscription/mine"],
@@ -82,6 +84,8 @@ export default function Subscription() {
         description: `${planType} subscription`,
         handler: async () => {
           qc.invalidateQueries({ queryKey: ["/api/subscription/mine"] });
+          qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
+          qc.invalidateQueries({ queryKey: ["/api/profile"] });
           toast({ title: "Subscription activated!" });
           setSubscribingType(null);
         },
@@ -103,6 +107,8 @@ export default function Subscription() {
     try {
       await apiRequest("POST", "/api/subscription/cancel", {});
       qc.invalidateQueries({ queryKey: ["/api/subscription/mine"] });
+      qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      qc.invalidateQueries({ queryKey: ["/api/profile"] });
       toast({ title: "Subscription cancelled" });
     } catch (err: any) {
       toast({ title: "Could not cancel", description: err.message, variant: "destructive" });
@@ -117,17 +123,17 @@ export default function Subscription() {
           <button onClick={() => navigate("/")} className="w-8 h-8 rounded-full bg-white/6 flex items-center justify-center">
             <ArrowLeft className="w-4 h-4 text-white" />
           </button>
-          <h1 className="text-white font-bold text-lg">Subscription Plans</h1>
+          <h1 className="text-white font-bold text-lg">{t("subscription.title")}</h1>
         </div>
 
         {activePlan && (
           <div className="mb-4 p-4 rounded-2xl bg-green-500/10 border border-green-500/30 flex items-center justify-between">
             <div>
-              <p className="text-green-400 text-xs font-bold uppercase">Active Plan</p>
+              <p className="text-green-400 text-xs font-bold uppercase">{t("subscription.active")}</p>
               <p className="text-white font-bold capitalize">{activePlan.replace("_", " ")}</p>
             </div>
             <button onClick={handleCancel} className="text-red-400 text-xs font-semibold px-3 py-1.5 rounded-full border border-red-400/30">
-              Cancel
+              {t("subscription.cancel")}
             </button>
           </div>
         )}
@@ -165,7 +171,7 @@ export default function Subscription() {
                   className="w-full py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
                   style={{ background: isActive ? "#22c55e" : `linear-gradient(135deg, ${plan.color}, ${plan.color}aa)` }}
                 >
-                  {subscribingType === plan.type ? <Loader2 className="w-4 h-4 animate-spin" /> : isActive ? "Current Plan" : activePlan ? "Cancel current plan first" : `Subscribe for ₹${plan.price}`}
+                  {subscribingType === plan.type ? <Loader2 className="w-4 h-4 animate-spin" /> : isActive ? "Current Plan" : activePlan ? "Cancel current plan first" : `${t("subscription.cta")} · ₹${plan.price}`}
                 </button>
               </div>
             );

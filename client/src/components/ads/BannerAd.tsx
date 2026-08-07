@@ -2,12 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ad } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 
 export function BannerAd({ placement = "feed" }: { placement?: string }) {
+  const { user } = useAuth();
   const { data: ads, isLoading } = useQuery<Ad[]>({
     queryKey: [`/api/ads/${placement}`],
   });
 
+  if ((user as any)?.isPro || (user as any)?.subscriptionStatus === "active") return null;
   if (isLoading) return <Skeleton className="w-full h-20 rounded-xl" />;
   if (!ads?.length) return null;
 

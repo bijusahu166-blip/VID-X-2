@@ -37,6 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Camera, Pencil } from "lucide-react";
+import { useTranslation } from "@/contexts/LanguageContext";
 
 const PETS = [
   { name: "Buddy", emoji: "🐶" }, { name: "Charlie", emoji: "🐱" },
@@ -711,6 +712,7 @@ export default function Profile() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { dataSaver, quality, setDataSaver, setQuality } = useVideoSettings();
+  const { t, language, setLanguage } = useTranslation();
   const [selectedPet, setSelectedPet] = useState<{ name: string; emoji: string } | null>(null);
   useEffect(() => {
   if ((user as any)?.pet) {
@@ -988,6 +990,16 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
                   {/* ── MAIN LIST ── */}
                   {!settingsPanel && (
                     <div className="py-4 space-y-5 px-4">
+                      <button
+                        onClick={() => navigate("/Subscription")}
+                        className="flex w-full items-center justify-between rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/15 to-cyan-500/15 px-4 py-3 text-left"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-white">Pro Access</p>
+                          <p className="text-[11px] text-zinc-400">Unlock premium chat, no ads, and pro themes for ₹50</p>
+                        </div>
+                        <Crown className="w-4 h-4 text-purple-400" />
+                      </button>
 
                       {/* Section: How you use LITLink */}
                       <div>
@@ -996,7 +1008,7 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
                           {[
                             { icon: TrendingUp, label: "InsightX", emoji: "📊", color: "#a78bfa", panel: "InsightX" },
                             { icon: Video,      label: "Video",    emoji: "🎬", color: "#34d399", panel: "VideoQuality", sub: dataSaver ? "Data Saver ON" : quality === "auto" ? "Auto" : quality.charAt(0).toUpperCase() + quality.slice(1) },
-                          ].map((s) => (
+                          ].map((s: any) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
                               className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
                               <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
@@ -1016,14 +1028,13 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
                           {[
                             { icon: Wrench,      label: "ProTools Hub",  color: "#f59e0b", panel: "ProTools Hub" },
                             { icon: Wallet,      label: "AdPay Center",  color: "#34d399", panel: "AdPay Center" },
-                          ].map((s) => (
+                          ].map((s: any) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
                               className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
                               <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
                                 <s.icon className="w-6 h-6" style={{ color: s.color }} />
                               </div>
                               <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
-                              {s.sub && <span className="text-[8px] text-emerald-400 font-semibold -mt-1">{s.sub}</span>}
                             </button>
                           ))}
                         </div>
@@ -1081,6 +1092,28 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
                             <p className="text-[11px] text-muted-foreground">Based on your interests</p>
                           </div>
                           <Switch defaultChecked />
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label className="text-sm font-medium">{t("settings.language")}</Label>
+                              <p className="text-[11px] text-muted-foreground">{t("settings.language.desc")}</p>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              onClick={() => setLanguage("en")}
+                              className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${language === "en" ? "bg-white text-black" : "bg-black/30 text-zinc-300"}`}
+                            >
+                              {t("common.english")}
+                            </button>
+                            <button
+                              onClick={() => setLanguage("hi")}
+                              className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${language === "hi" ? "bg-white text-black" : "bg-black/30 text-zinc-300"}`}
+                            >
+                              {t("common.hindi")}
+                            </button>
+                          </div>
                         </div>
                       </div>
                      <Separator className="my-3" />
