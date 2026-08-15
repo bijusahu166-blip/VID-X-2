@@ -522,29 +522,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       `);
 
       // Resend se email bhejo
-      const { Resend } = await import("resend");
-      const resend = new Resend(process.env.RESEND_API_KEY);
+     const nodemailer = await import("nodemailer");
+const transporter = nodemailer.default.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
-      await resend.emails.send({
-        from: "VID-X <onboarding@resend.dev>",
-        to: email,
-        subject: "Your VID-X Password Reset Code",
-        html: `
-          <div style="background:#1a1a1a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #ff2d55;">
-            <h1 style="background:linear-gradient(90deg,#ff2d55,#ff6b9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:32px;font-weight:900;margin:0 0 8px;">VID-X</h1>
-            <p style="color:#9b9b9b;font-size:14px;">The next generation social platform</p>
-            <hr style="border:1px solid #2a2a2a;margin:20px 0;">
-            <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
-            <div style="background:linear-gradient(90deg,#ff2d55,#f97316);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
-              <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
-            </div>
-            <p style="color:#ff6b9d;font-size:13px;">⏱ Valid for 10 minutes only</p>
-            <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
-            <p style="color:#ff2d55;font-weight:bold;margin-top:20px;">— VID-X Team</p>
-          </div>
-        `,
-      });
-
+await transporter.sendMail({
+  from: `"IQpartner" <${process.env.SMTP_USER}>`,
+  to: email,
+  subject: "Your IQpartner Password Reset Code",
+  html: `
+    <div style="background:#0a0a0a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #a855f7;">
+      <h1 style="color:#a855f7;font-size:28px;font-weight:900;margin:0 0 8px;">IQpartner</h1>
+      <p style="color:#9b9b9b;font-size:14px;">Connect. Learn. Grow.</p>
+      <hr style="border:1px solid #222;margin:20px 0;">
+      <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
+      <div style="background:linear-gradient(90deg,#a855f7,#ec4899);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
+        <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
+      </div>
+      <p style="color:#a855f7;font-size:13px;">⏱ Valid for 10 minutes only</p>
+      <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
+      <p style="color:#a855f7;font-weight:bold;margin-top:20px;">— IQpartner Team</p>
+    </div>
+  `,
+});
       res.json({ message: "OTP sent" });
     } catch (err: any) {
       console.error("[forgot-password]", err.message);
