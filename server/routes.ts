@@ -523,12 +523,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Resend se email bhejo
    const nodemailer = await import("nodemailer");
+const dns = await import("dns");
+
+const { address: smtpIp } = await new Promise<{ address: string }>((resolve, reject) => {
+  dns.default.lookup("smtp.gmail.com", { family: 4 }, (err, address) => {
+    if (err) reject(err); else resolve({ address });
+  });
+});
+
 const transporter = nodemailer.default.createTransport({
-  host: "smtp.gmail.com",
+  host: smtpIp,                          // ← ab actual resolved IPv4 IP use ho raha hai
   port: 465,
   secure: true,
-  family: 4,              // IPv4 force — IPv6 ENETUNREACH fix
-  connectionTimeout: 10000, // 10s max, 120s ka hang nahi
+  tls: { servername: "smtp.gmail.com" }, // TLS cert check ke liye zaroori — servername original domain hi rakhna
+  connectionTimeout: 10000,
   greetingTimeout: 10000,
   socketTimeout: 10000,
   auth: {
