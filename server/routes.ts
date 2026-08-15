@@ -522,11 +522,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       `);
 
       // Resend se email bhejo
-     const nodemailer = await import("nodemailer");
+   const nodemailer = await import("nodemailer");
 const transporter = nodemailer.default.createTransport({
   host: "smtp.gmail.com",
   port: 465,
   secure: true,
+  family: 4,              // IPv4 force — IPv6 ENETUNREACH fix
+  connectionTimeout: 10000, // 10s max, 120s ka hang nahi
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,

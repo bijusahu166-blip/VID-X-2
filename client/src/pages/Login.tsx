@@ -59,24 +59,35 @@ function ForgotPasswordView({ onBack }: { onBack: () => void }) {
   const expired = secondsLeft <= 0;
 
   const sendOtp = useMutation({
-    mutationFn: async () => {
-      const trimmed = email.toLowerCase().trim();
-      if (!trimmed) throw new Error("Please enter your email address");
-      if (!isValidEmail(trimmed)) throw new Error("Please enter a valid email address");
-      const checkRes = await fetch(`/api/users/check-email?email=${encodeURIComponent(trimmed)}`, { credentials: "include" });
-      const checkData = await checkRes.json();
-      if (!checkRes.ok) throw new Error(checkData.message || "No account found");
-      const otpRes = await fetch("/api/auth/forgot-password", {
+  mutationFn: async () => {
+    const trimmed = email.toLowerCase().trim();
+    if (!trimmed) throw new Error("Please enter your email address");
+    if (!isValidEmail(trimmed)) throw new Error("Please enter a valid email address");
+    const checkRes = await fetch(`/api/users/check-email?email=${encodeURIComponent(trimmed)}`, { credentials: "include" });
+    const checkData = await checkRes.json();
+    if (!checkRes.ok) throw new Error(checkData.message || "No account found");
+
+    let otpRes: Response;
+    try {
+      otpRes = await fetch("/api/auth/forgot-password", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ email: trimmed }),
+        signal: AbortSignal.timeout(15000),
       });
-      const otpData = await otpRes.json();
-      if (!otpRes.ok) throw new Error(otpData.message || "Failed to send OTP");
-      return otpData;
-    },
-    onSuccess: () => { setEmailError(""); setSecondsLeft(600); setStep("otp"); },
-    onError: (err: Error) => setEmailError(err.message),
-  });
+    } catch (err: any) {
+      if (err.name === "TimeoutError" || err.name === "AbortError") {
+        throw new Error("Server is taking too long. Please try again.");
+      }
+      throw new Error("Network error. Please check your connection.");
+    }
+
+    const otpData = await otpRes.json();
+    if (!otpRes.ok) throw new Error(otpData.message || "Failed to send OTP");
+    return otpData;
+  },
+  onSuccess: () => { setEmailError(""); setSecondsLeft(600); setStep("otp"); },
+  onError: (err: Error) => setEmailError(err.message),
+});
 
   const verifyOtp = useMutation({
     mutationFn: async (code: string) => {
