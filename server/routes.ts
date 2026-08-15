@@ -501,77 +501,62 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/auth/forgot-password", async (req, res) => {
-    try {
-      const { email } = req.body as { email?: string };
-      if (!email) return res.status(400).json({ message: "Email required" });
-
-      const found = await db.select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, email.toLowerCase().trim()))
-        .limit(1);
-      if (!found.length) return res.status(404).json({ message: "No account found" });
-
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiry = new Date(Date.now() + 10 * 60 * 1000);
-
-      await db.execute(sql`
-        INSERT INTO otp_tokens (email, otp, expires_at)
-        VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
-        ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
-      `);
-
-      // Resend se email bhejo
-   const nodemailer = await import("nodemailer");
-const dns = await import("dns");
-
-const { address: smtpIp } = await new Promise<{ address: string }>((resolve, reject) => {
-  dns.default.lookup("smtp.gmail.com", { family: 4 }, (err, address) => {
-    if (err) reject(err); else resolve({ address });
-  });
-});
-
-const transporter = nodemailer.default.createTransport({
-  host: smtpIp,                          // ← ab actual resolved IPv4 IP use ho raha hai
-  port: 465,
-  secure: true,
-  tls: { servername: "smtp.gmail.com" }, // TLS cert check ke liye zaroori — servername original domain hi rakhna
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 10000,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-await transporter.sendMail({
-  from: `"IQpartner" <${process.env.SMTP_USER}>`,
-  to: email,
-  subject: "Your IQpartner Password Reset Code",
-  html: `
-    <div style="background:#0a0a0a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #a855f7;">
-      <h1 style="color:#a855f7;font-size:28px;font-weight:900;margin:0 0 8px;">IQpartner</h1>
-      <p style="color:#9b9b9b;font-size:14px;">Connect. Learn. Grow.</p>
-      <hr style="border:1px solid #222;margin:20px 0;">
-      <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
-      <div style="background:linear-gradient(90deg,#a855f7,#ec4899);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
-        <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
-      </div>
-      <p style="color:#a855f7;font-size:13px;">⏱ Valid for 10 minutes only</p>
-      <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
-      <p style="color:#a855f7;font-weight:bold;margin-top:20px;">— IQpartner Team</p>
-    </div>
-  `,
-});
-      res.json({ message: "OTP sent" });
-    } catch (err: any) {
-      console.error("[forgot-password]", err.message);
-      res.status(500).json({ message: err.message || "Failed to send OTP" });
-    }
-  });
 app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
+  try {app.post("/api/auth/forgot-password", async (req, res) => {
   try {
+    const { email } = req.body as { email?: string };
+    if (!email) return res.status(400).json({ message: "Email required" });
+
+    const found = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email.toLowerCase().trim()))
+      .limit(1);
+    if (!found.length) return res.status(404).json({ message: "No account found" });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    await db.execute(sql`
+      INSERT INTO otp_tokens (email, otp, expires_at)
+      VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
+      ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
+    `);
+
+    // Resend HTTP API se email bhejo (Render SMTP block karta hai isliye)
+    const { Resend } = await import("resend");
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    const { error: resendError } = await resend.emails.send({
+      from: "IQpartner <onboarding@resend.dev>",
+      to: email,
+      subject: "Your IQpartner Password Reset Code",
+      html: `
+        <div style="background:#0a0a0a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #a855f7;">
+          <h1 style="color:#a855f7;font-size:28px;font-weight:900;margin:0 0 8px;">IQpartner</h1>
+          <p style="color:#9b9b9b;font-size:14px;">Connect. Learn. Grow.</p>
+          <hr style="border:1px solid #222;margin:20px 0;">
+          <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
+          <div style="background:linear-gradient(90deg,#a855f7,#ec4899);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
+            <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
+          </div>
+          <p style="color:#a855f7;font-size:13px;">⏱ Valid for 10 minutes only</p>
+          <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
+          <p style="color:#a855f7;font-weight:bold;margin-top:20px;">— IQpartner Team</p>
+        </div>
+      `,
+    });
+
+    if (resendError) {
+      console.error("[forgot-password] Resend error:", resendError);
+      throw new Error(resendError.message || "Failed to send email");
+    }
+
+    res.json({ message: "OTP sent" });
+  } catch (err: any) {
+    console.error("[forgot-password]", err.message);
+    res.status(500).json({ message: err.message || "Failed to send OTP" });
+  }
+});
     const userId = (req.session as any).userId;
     await db.execute(sql`DELETE FROM likes WHERE user_id = ${userId}`);
     await db.execute(sql`DELETE FROM comments WHERE user_id = ${userId}`);

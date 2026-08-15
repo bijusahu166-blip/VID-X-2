@@ -102,7 +102,7 @@
     "react-youtube": "^10.1.0",
     "recharts": "^2.15.2",
     "redis": "^5.12.1",
-    "resend": "^6.16.0",
+    "resend": "^6.20.0",
     "sharp": "^0.34.5",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
