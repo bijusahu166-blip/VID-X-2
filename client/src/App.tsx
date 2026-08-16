@@ -1,3 +1,4 @@
+import { SplashScreen } from '@capacitor/splash-screen';
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -121,7 +122,9 @@ function App() {
   if (typeof document !== "undefined") {
     document.documentElement.classList.add("dark");
   }
-
+useEffect(() => {
+  SplashScreen.hide();
+}, []);
   useEffect(() => {
     const listener = CapacitorApp.addListener('appUrlOpen', async (data) => {
       if (data.url.includes('auth-callback')) {

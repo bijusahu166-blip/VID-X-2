@@ -1,4 +1,4 @@
-package com.VAMPIRE
+package com.iqpartner
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -49,8 +49,6 @@ fun RobotIcon(
             )
             .padding(48.dp)
     ) {
-        // R is imported automatically from the package or needs to be referenced if in another package.
-        // Since we changed the package to com.VAMPIRE and namespace is also com.VAMPIRE, it should be fine.
         val contentDescription = stringResource(id = R.string.robot_icon_content_description)
         Canvas(
             modifier = Modifier
@@ -59,7 +57,7 @@ fun RobotIcon(
             val strokeWidth = 14.dp.toPx()
             val white = Color.White
 
-            // Head outline - drawing it slightly "wobbly" for hand-drawn effect
+            // Head outline
             val headPath = Path().apply {
                 moveTo(size.width * 0.22f, size.height * 0.35f)
                 quadraticBezierTo(size.width * 0.18f, size.height * 0.55f, size.width * 0.22f, size.height * 0.78f)

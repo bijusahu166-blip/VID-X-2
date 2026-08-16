@@ -5,8 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
-import { Browser } from '@capacitor/browser';
-import { Capacitor } from '@capacitor/core';
+
 
 type Tab = "login" | "signup";
 type View = "auth" | "forgot";
@@ -295,23 +294,10 @@ export default function Login() {
   const [form, setForm] = useState<AuthForm>({ email: "", password: "" });
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
-const handleGoogleLogin = async () => {
-  setGoogleLoading(true);
-  try {
-    if (Capacitor.isNativePlatform()) {
-      await Browser.open({ url: 'https://iqpartner.xyz/api/auth/google?platform=app' });
-    } else {
-      window.location.href = "https://iqpartner.xyz/api/auth/google";
-    }
-  } finally {
-    setGoogleLoading(false);
-  }
-};
 
 
   const mutation = useMutation({
@@ -369,22 +355,6 @@ const handleGoogleLogin = async () => {
                   </button>
                 ))}
               </div>
-
-              {/* Google Login */}
-              <button type="button" onClick={handleGoogleLogin} disabled={googleLoading}
-                className="w-full h-12 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-3 border border-zinc-700 hover:bg-zinc-900 transition-all mb-4 disabled:opacity-50">
-                {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-                  <>
-                    <svg width="18" height="18" viewBox="0 0 18 18">
-                      <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/>
-                      <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/>
-                      <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/>
-                      <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.3z"/>
-                    </svg>
-                    Continue with Google
-                  </>
-                )}
-              </button>
 
               {/* Divider */}
               <div className="flex items-center gap-3 mb-4">

@@ -3,10 +3,10 @@ apply plugin: 'com.google.gms.google-services'
 apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
-    namespace = "com.VAMPIRE"
+    namespace = "com.iqpartner"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.VAMPIRE"
+        applicationId "com.iqpartner"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

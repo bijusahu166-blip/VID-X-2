@@ -1,24 +1,3 @@
-package com.IQPartner;
+package com.VAMPIRE;
 
-import android.os.Bundle;
-import android.webkit.WebView;
-import com.getcapacitor.BridgeActivity;
-
-public class IQPartner extends BridgeActivity {
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
-
-    @Override
-    public void onBackPressed() {
-        WebView webView = bridge.getWebView();
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
-    }
-}
-
+// This file was renamed to IQPartner.java to match the public class name.

@@ -1,4 +1,4 @@
-package com.VAMPIRE;
+package com.iqpartner;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
