@@ -22,7 +22,8 @@ export function useAuth() {
   const { data: user, isLoading } = useQuery<User | null>({
     queryKey: ["/api/auth/user"],
     queryFn: fetchUser,
-    retry: false,
+    retry: 2,
+    retryDelay: (attempt) => 1000 * (attempt + 1),
     staleTime: 1000 * 60 * 5,
   });
 
@@ -47,4 +48,3 @@ export function useAuth() {
     isLoggingOut: logoutMutation.isPending,
   };
 }
-

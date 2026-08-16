@@ -14,6 +14,7 @@ import { Share } from "@capacitor/share";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useLocation } from "wouter";
 import { precacheVideo } from "@/lib/videoPrecache";
+import { usePosts } from "@/hooks/use-posts";
 
 interface ReelPost {
   id: number;
@@ -388,9 +389,9 @@ export default function Reels() {
   const [isMuted, setIsMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<number | null>(null);
-
-  const { data: allPosts, isLoading } = useQuery<ReelPost[]>({ queryKey: ["/api/posts"] });
-const reels = (allPosts ?? [])
+  
+const { data: allPosts, isLoading } = usePosts();
+  const reels = (Array.isArray(allPosts) ? allPosts : [])
   .filter(p => p.type === "reel")
   .sort((a, b) => {
     const scoreA = (a.likesCount ?? 0) * 2 + (a.commentsCount ?? 0) * 3;

@@ -26,6 +26,8 @@ export function usePosts() {
     staleTime: 30000,
     gcTime: 60000,
     refetchOnWindowFocus: false,
+    retry: 3,
+    retryDelay: (attempt) => 1000 * (attempt + 1),   // 1s, 2s, 3s
   });
 }
 

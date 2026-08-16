@@ -467,11 +467,16 @@ export default function Home() {
 
   const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
     queryKey: ["/api/stories"],
-    queryFn: () => fetch("/api/posts", { credentials: "include" })
-      .then(r => r.json())
-      .then(data => Array.isArray(data) ? data.filter((p: any) => p.type === "story") : []),
+    queryFn: async () => {
+      const res = await fetch("/api/posts", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch stories");
+      const data = await res.json();
+      return Array.isArray(data) ? data.filter((p: any) => p.type === "story") : [];
+    },
     refetchInterval: 10000,
     staleTime: 5000,
+    retry: 2,
+    retryDelay: (attempt) => 1000 * (attempt + 1),
   });
   const stories = storiesData ?? [];
 
@@ -479,20 +484,24 @@ export default function Home() {
     queryKey: ["/api/voice-rooms"],
     queryFn: async () => {
       const res = await fetch("/api/voice-rooms", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Failed to fetch voice rooms");
       return res.json();
     },
     refetchInterval: 8000,
+    retry: 2,
+    retryDelay: (attempt) => 1000 * (attempt + 1),
   });
 
   const { data: allBooks = [] } = useQuery<any[]>({
     queryKey: ["/api/books"],
     queryFn: async () => {
       const res = await fetch("/api/books", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Failed to fetch books");
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
+    retry: 2,
+    retryDelay: (attempt) => 1000 * (attempt + 1),
   });
 
   const userGoal = (user as any)?.goal || localStorage.getItem("user_goal") || "";

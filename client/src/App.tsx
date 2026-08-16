@@ -34,15 +34,31 @@ import Jobs from "@/pages/Jobs";
 import Subscription from "@/pages/Subscription";
 
 function IntroVideo({ onFinish }: { onFinish: () => void }) {
+  const [ready,setReady] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.play().catch(() => {
+      // Autoplay with sound blocked — fall back to muted so it still plays
+      video.muted = true;
+      video.play().catch(() => {});
+    });
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
       <video
         src={introVideo}
         autoPlay
-        muted
         playsInline
+        preload="auto"
+        onCanPlay={() => setReady(true)}
         onEnded={onFinish}
+        onError={onFinish}
         className="w-full h-full object-cover"
+        style={{ opacity: ready ? 1 : 0 }}
       />
     </div>
   );
