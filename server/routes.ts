@@ -1,5 +1,3 @@
-Content is user-generated and unverified.
-Learn about artifacts
 import { generateAgoraToken } from "./agora";
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
