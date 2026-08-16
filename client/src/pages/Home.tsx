@@ -416,7 +416,6 @@ function RecommendedVideoCard({ video, onSkip }: { video: any; onSkip: (videoId:
     };
   }, [video.videoId]);
 
-  // Card kabhi bhi poori tarah blank nahi hoga — thumbnail hamesha fallback rahega
   return (
     <div className="mb-1 rounded-3xl overflow-hidden border border-white/5 bg-zinc-950">
       <div className="relative w-full aspect-video bg-black">
@@ -472,7 +471,7 @@ export default function Home() {
       .then(r => r.json())
       .then(data => Array.isArray(data) ? data.filter((p: any) => p.type === "story") : []),
     refetchInterval: 10000,
-    staleTime: 0,
+    staleTime: 5000,
   });
   const stories = storiesData ?? [];
 

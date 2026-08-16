@@ -1,9 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">IQPartner</string>
-    <string name="title_activity_main">IQPartner</string>
-    <string name="package_name">com.IQPartner</string>
-    <string name="custom_url_scheme">com.IQPartner</string>
+    <string name="app_name">IQPARTNER</string>
+    <string name="title_activity_main">IQPARTNER</string>
+    <string name="package_name">com.iqpartner</string>
+    <string name="custom_url_scheme">com.iqpartner</string>
     <string name="robot_icon_content_description">Hand-drawn robot head with a crown on a rainbow gradient background</string>
 </resources>
-

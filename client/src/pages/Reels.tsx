@@ -13,6 +13,7 @@ import { getGoalSubjects } from "@/lib/goal-subjects";
 import { Share } from "@capacitor/share";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useLocation } from "wouter";
+import { precacheVideo } from "@/lib/videoPrecache";
 
 interface ReelPost {
   id: number;
@@ -234,11 +235,12 @@ function ReelCard({
       {reel.videoUrl ? (
         <video
           ref={videoRef}
+          poster={reel.imageUrl}
           className="w-full h-full object-cover"
           loop 
           playsInline 
           muted={isMuted} 
-          preload="metadata" // Changed to metadata for lighter initial payload
+          preload="metadata"
           onWaiting={() => setIsBuffering(true)}
           onPlaying={() => setIsBuffering(false)}
           onClick={() => {
@@ -404,6 +406,14 @@ const filteredReels = reels.filter((r) => {
 });
 const displayReels = filteredReels.length > 0 ? filteredReels : reels; // fallback
 const visibleReels = displayReels.slice(0, 15);
+
+  // Precache the next 1-2 reels so swiping forward doesn't hit a cold buffer
+  useEffect(() => {
+    const nextReel = visibleReels[activeIndex + 1];
+    if (nextReel?.videoUrl) precacheVideo(toCloudinaryVideoUrl(nextReel.videoUrl));
+    const nextNextReel = visibleReels[activeIndex + 2];
+    if (nextNextReel?.videoUrl) precacheVideo(toCloudinaryVideoUrl(nextNextReel.videoUrl));
+  }, [activeIndex, visibleReels]);
 
   // IMPROVEMENT 4: Debounced Scroll Detection (Massive UI Thread frame improvement)
   const handleScroll = useCallback(() => {

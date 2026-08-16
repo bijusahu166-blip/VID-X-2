@@ -150,7 +150,7 @@ export function VideoPlayer({
   // ────────────────────────────────────────────────────────────────────────────
 
   // preload="none" unless actively playing — prevents background bandwidth drain
-  const preloadAttr = "none";
+  const preloadAttr = "metadata";
 
   // Smart play: claim global slot → wait for canplay → play
   const playWhenReady = useCallback((video: HTMLVideoElement) => {

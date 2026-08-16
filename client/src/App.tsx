@@ -11,10 +11,11 @@ import { VideoSettingsProvider } from "@/contexts/VideoSettingsContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
 import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 
+import introVideo from "@/assets/intro.mp4";
 import VoiceRoomCreate from "@/pages/VoiceRoomCreate";
 import BuyCoins from "@/pages/BuyCoins";
 import VoiceRoomScreen from "@/pages/VoiceRoomScreen";
@@ -32,8 +33,21 @@ import Notifications from "@/pages/Notifications";
 import Jobs from "@/pages/Jobs";
 import Subscription from "@/pages/Subscription";
 
-// Polls the server version every 30s. When the server restarts (new code deployed),
-// the version changes and the browser hard-reloads to pick up the latest bundle.
+function IntroVideo({ onFinish }: { onFinish: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+      <video
+        src={introVideo}
+        autoPlay
+        muted
+        playsInline
+        onEnded={onFinish}
+        className="w-full h-full object-cover"
+      />
+    </div>
+  );
+}
+
 function useServerVersionWatcher() {
   const knownVersion = useRef<string | null>(null);
 
@@ -119,12 +133,18 @@ function Router() {
 }
 
 function App() {
+  const [videoEnded, setVideoEnded] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
+  const { isLoading: authLoading } = useAuth();
+
   if (typeof document !== "undefined") {
     document.documentElement.classList.add("dark");
   }
-useEffect(() => {
-  SplashScreen.hide();
-}, []);
+
+  useEffect(() => {
+    SplashScreen.hide();
+  }, []);
+
   useEffect(() => {
     const listener = CapacitorApp.addListener('appUrlOpen', async (data) => {
       if (data.url.includes('auth-callback')) {
@@ -135,6 +155,33 @@ useEffect(() => {
     return () => { listener.then(l => l.remove()); };
   }, []);
 
+  // Prefetch the core feed data in the background while the intro video
+  // plays, so by the time the video ends the home page is already ready.
+  useEffect(() => {
+    Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: ["/api/posts"],
+        queryFn: () => fetch("/api/posts", { credentials: "include" }).then(r => r.json()),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["/api/stories"],
+        queryFn: () => fetch("/api/posts", { credentials: "include" })
+          .then(r => r.json())
+          .then(data => Array.isArray(data) ? data.filter((p: any) => p.type === "story") : []),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["/api/voice-rooms"],
+        queryFn: () => fetch("/api/voice-rooms", { credentials: "include" }).then(r => r.ok ? r.json() : []),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["/api/books"],
+        queryFn: () => fetch("/api/books", { credentials: "include" }).then(r => r.ok ? r.json() : []),
+      }),
+    ]).finally(() => setDataReady(true));
+  }, []);
+
+  const showIntro = !videoEnded || authLoading || !dataReady;
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -143,6 +190,7 @@ useEffect(() => {
             <CallProvider>
               <Toaster />
               <Router />
+              {showIntro && <IntroVideo onFinish={() => setVideoEnded(true)} />}
             </CallProvider>
           </VideoSettingsProvider>
         </LanguageProvider>
