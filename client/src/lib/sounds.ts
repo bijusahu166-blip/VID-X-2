@@ -98,3 +98,4 @@ export function playShutter() {
   playTone(2000, "square", 0.02, 0.1);
   playTone(1000, "square", 0.03, 0.08, 0.02);
 }
+

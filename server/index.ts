@@ -139,7 +139,14 @@ app.use(helmet({
 app.use(compression());
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || process.env.NODE_ENV === "production" ? "*" : "*",
+  origin: [
+    "https://iqpartner.xyz",
+    "https://www.iqpartner.xyz",
+    "capacitor://localhost",
+    "https://localhost",
+    "http://localhost",
+    process.env.FRONTEND_URL,
+  ].filter(Boolean),
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -259,7 +266,12 @@ process.on("SIGINT", () => {
   app.use(passport.session());
 
   app.get("/api/auth/google",
-    passport.authenticate("google", { scope: ["profile", "email"] })
+    (req, res, next) => {
+      passport.authenticate("google", {
+        scope: ["profile", "email"],
+        state: req.query.platform === "app" ? "app" : "web",
+      })(req, res, next);
+    }
   );
 
   app.get("/api/auth/google/callback",
@@ -267,7 +279,11 @@ process.on("SIGINT", () => {
     (req: any, res) => {
       req.session.userId = req.user.id;
       req.session.save(() => {
-        res.redirect("/");
+        if (req.query.state === "app") {
+          res.redirect("iqpartner://auth-callback");
+        } else {
+          res.redirect("/");
+        }
       });
     }
   );

@@ -80,7 +80,7 @@ export default function Subscription() {
       const options = {
         key: orderData.keyId,
         subscription_id: orderData.subscriptionId,
-        name: "VAMPIRE",
+        name: "IQPartner",
         description: `${planType} subscription`,
         handler: async () => {
           qc.invalidateQueries({ queryKey: ["/api/subscription/mine"] });
@@ -181,3 +181,4 @@ export default function Subscription() {
     </div>
   );
 }
+

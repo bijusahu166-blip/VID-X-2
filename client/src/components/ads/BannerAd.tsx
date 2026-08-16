@@ -33,3 +33,4 @@ export function BannerAd({ placement = "feed" }: { placement?: string }) {
     </Card>
   );
 }
+

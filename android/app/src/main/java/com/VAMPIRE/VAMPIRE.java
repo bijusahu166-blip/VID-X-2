@@ -1,10 +1,10 @@
-package com.VAMPIRE;
+package com.IQPartner;
 
 import android.os.Bundle;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
-public class VAMPIRE extends BridgeActivity {
+public class IQPartner extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -21,3 +21,4 @@ public class VAMPIRE extends BridgeActivity {
         }
     }
 }
+

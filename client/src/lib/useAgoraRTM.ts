@@ -100,3 +100,4 @@ export function useAgoraRTM({ channelName, uid, displayName, color = "#60a5fa", 
 
   return { messages, sendMessage, connected };
 }
+

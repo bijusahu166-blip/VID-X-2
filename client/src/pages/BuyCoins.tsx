@@ -64,7 +64,7 @@ export default function BuyCoins() {
         key: orderData.keyId,
         amount: orderData.amount,
         currency: orderData.currency,
-        name: "VAMPIRE",
+        name: "IQPartner",
         description: `${pkg.coins} Coins`,
         order_id: orderData.orderId,
         handler: async (response: any) => {

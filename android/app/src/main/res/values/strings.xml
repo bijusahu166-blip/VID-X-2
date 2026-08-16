@@ -1,8 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">VAMPIRE</string>
-    <string name="title_activity_main">VAMPIRE</string>
-    <string name="package_name">com.VAMPIRE</string>
-    <string name="custom_url_scheme">com.VAMPIRE</string>
+    <string name="app_name">IQPartner</string>
+    <string name="title_activity_main">IQPartner</string>
+    <string name="package_name">com.IQPartner</string>
+    <string name="custom_url_scheme">com.IQPartner</string>
     <string name="robot_icon_content_description">Hand-drawn robot head with a crown on a rainbow gradient background</string>
 </resources>
+

@@ -11,3 +11,4 @@ export async function getAgoraAppId(): Promise<string> {
   }
   return _appId!;
 }
+

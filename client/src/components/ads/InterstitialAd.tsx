@@ -57,3 +57,4 @@ export function InterstitialAd({ open, onOpenChange }: { open: boolean, onOpenCh
     </Dialog>
   );
 }
+

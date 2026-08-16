@@ -90,7 +90,7 @@ export function AIChatDrawer({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-black rounded-full animate-pulse"></div>
             </div>
             <div>
-              <SheetTitle className="text-white font-black text-2xl tracking-tighter italic leading-none">VAMPIRE NEURAL</SheetTitle>
+              <SheetTitle className="text-white font-black text-2xl tracking-tighter italic leading-none">IQPartner NEURAL</SheetTitle>
               <p className="text-[10px] text-cyan-400 font-bold uppercase tracking-widest mt-1">Quantum Logic V1.2</p>
             </div>
           </div>

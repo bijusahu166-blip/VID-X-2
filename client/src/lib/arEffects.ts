@@ -116,3 +116,4 @@ export const EFFECT_CATEGORIES = [
   { label: "Nature",  emoji: "🌿", ids: ["sunset_glow","golden_hour","rain_mood","snow_magic","forest_dream","ocean_breeze","flower_crown","sky_light","moon_shine","vintage_vibe"] },
   { label: "Bonus",   emoji: "💎", ids: ["aurax","vibeshift","glownova","facefusion","dreamify","luxlens","pixelaura","snapmagic","neolook","hyperface"] },
 ];
+

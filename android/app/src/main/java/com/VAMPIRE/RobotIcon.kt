@@ -1,4 +1,4 @@
-package com.VAMPIRE
+package com.IQPartner
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -50,7 +50,7 @@ fun RobotIcon(
             .padding(48.dp)
     ) {
         // R is imported automatically from the package or needs to be referenced if in another package.
-        // Since we changed the package to com.VAMPIRE and namespace is also com.VAMPIRE, it should be fine.
+        // Since we changed the package to com.IQPartner and namespace is also com.IQPartner, it should be fine.
         val contentDescription = stringResource(id = R.string.robot_icon_content_description)
         Canvas(
             modifier = Modifier
@@ -180,3 +180,4 @@ fun RobotIconPreview() {
         )
     }
 }
+

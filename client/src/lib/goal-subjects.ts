@@ -29,3 +29,4 @@ export function getGoalSubjects(goal: string | null | undefined) {
   if (!goal) return [];
   return goalSubjectMap[goal] ?? [];
 }
+

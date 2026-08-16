@@ -14,3 +14,4 @@ export function redirectToLogin(toast?: (options: { title: string; description: 
     window.location.href = "/";
   }, 500);
 }
+

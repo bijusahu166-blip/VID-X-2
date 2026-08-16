@@ -1,11 +1,11 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.vidx.app',
-  appName: 'VAMPIRE',
+  appId: 'com.iqpartner.app',
+  appName: 'IQ PARTNER',
   webDir: 'dist',
   server: {
-    url: process.env.EXPO_PUBLIC_API_URL || 'https://vid-x-2.onrender.com',
+    url: process.env.EXPO_PUBLIC_API_URL || 'https://iqpartner.xyz',
     cleartext: true,
     androidScheme: 'http'
   }

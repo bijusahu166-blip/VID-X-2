@@ -126,3 +126,4 @@ export function useChatStream(conversationId: number | null) {
 
   return { sendMessage, streamingContent, isStreaming };
 }
+

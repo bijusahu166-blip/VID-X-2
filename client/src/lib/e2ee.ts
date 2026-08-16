@@ -82,3 +82,4 @@ export function isEncrypted(content: string): boolean {
     return false;
   }
 }
+

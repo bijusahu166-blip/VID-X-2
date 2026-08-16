@@ -16,7 +16,7 @@ interface PostViewerModalProps {
 
 async function sharePost(post: any) {
   const url = `${window.location.origin}/post/${post.id}`;
-  const title = post.caption || "Check this out on Vampire";
+  const title = post.caption || "Check this out on IQPartner";
   if (navigator.share) {
     try {
       await navigator.share({ title, text: title, url });
@@ -435,3 +435,4 @@ const deleteMutation = useMutation({
     </AnimatePresence>
   );
 }
+

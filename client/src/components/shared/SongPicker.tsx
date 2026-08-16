@@ -330,3 +330,4 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
     </motion.div>
   );
 }
+

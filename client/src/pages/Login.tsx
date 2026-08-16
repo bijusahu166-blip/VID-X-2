@@ -305,7 +305,7 @@ export default function Login() {
   const googleUrl = "https://vid-x-2.onrender.com/api/auth/google";
   
   if (Capacitor.isNativePlatform()) {
-    await Browser.open({ url: googleUrl });
+       await Browser.open({ url: 'https://iqpartner.xyz/api/auth/google?platform=app' });
   } else {
     window.location.href = googleUrl;
   }

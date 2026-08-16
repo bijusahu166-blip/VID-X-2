@@ -43,3 +43,4 @@ export function VideoSettingsProvider({ children }: { children: React.ReactNode 
 export function useVideoSettings() {
   return useContext(VideoSettingsContext);
 }
+

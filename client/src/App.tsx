@@ -11,6 +11,8 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
 import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
 import { useEffect, useRef } from "react";
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 
 import VoiceRoomCreate from "@/pages/VoiceRoomCreate";
 import BuyCoins from "@/pages/BuyCoins";
@@ -119,6 +121,16 @@ function App() {
   if (typeof document !== "undefined") {
     document.documentElement.classList.add("dark");
   }
+
+  useEffect(() => {
+    const listener = CapacitorApp.addListener('appUrlOpen', async (data) => {
+      if (data.url.includes('auth-callback')) {
+        await Browser.close();
+        window.location.href = '/';
+      }
+    });
+    return () => { listener.then(l => l.remove()); };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
