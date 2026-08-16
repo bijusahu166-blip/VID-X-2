@@ -133,10 +133,6 @@ function Router() {
 }
 
 function App() {
-  const [videoEnded, setVideoEnded] = useState(false);
-  const [dataReady, setDataReady] = useState(false);
-  const { isLoading: authLoading } = useAuth();
-
   if (typeof document !== "undefined") {
     document.documentElement.classList.add("dark");
   }
@@ -155,8 +151,27 @@ function App() {
     return () => { listener.then(l => l.remove()); };
   }, []);
 
-  // Prefetch the core feed data in the background while the intro video
-  // plays, so by the time the video ends the home page is already ready.
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <LanguageProvider>
+          <VideoSettingsProvider>
+            <CallProvider>
+              <Toaster />
+              <AppContent />
+            </CallProvider>
+          </VideoSettingsProvider>
+        </LanguageProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+function AppContent() {
+  const [videoEnded, setVideoEnded] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
+  const { isLoading: authLoading } = useAuth();
+
   useEffect(() => {
     Promise.all([
       queryClient.prefetchQuery({
@@ -183,20 +198,12 @@ function App() {
   const showIntro = !videoEnded || authLoading || !dataReady;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <LanguageProvider>
-          <VideoSettingsProvider>
-            <CallProvider>
-              <Toaster />
-              <Router />
-              {showIntro && <IntroVideo onFinish={() => setVideoEnded(true)} />}
-            </CallProvider>
-          </VideoSettingsProvider>
-        </LanguageProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <>
+      <Router />
+      {showIntro && <IntroVideo onFinish={() => setVideoEnded(true)} />}
+    </>
   );
 }
+
 
 export default App;
