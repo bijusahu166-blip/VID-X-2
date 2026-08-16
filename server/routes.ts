@@ -1,3 +1,5 @@
+Content is user-generated and unverified.
+Learn about artifacts
 import { generateAgoraToken } from "./agora";
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
@@ -228,8 +230,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const isHindi = /[अआइईउऊएओऐऔकखगघचछजझटठडढतथदधनपफबभमयरलवशषसह]/.test(message) || /है|कृपया|क्या|कैसे|मुझे|मैं/.test(message);
       const reply = isHindi
-        ? `मैंने आपका संदेश समझ लिया है: “${message}”. प्रो सब्सक्रिप्शन लेने पर आप बेहतर, गहरे और प्रीमियम चैट अनुभव पा सकते हैं.`
-        : `I received your message: “${message}”. Pro access unlocks richer premium chat responses and a more polished experience.`;
+        ? `मैंने आपका संदेश समझ लिया है: "${message}". प्रो सब्सक्रिप्शन लेने पर आप बेहतर, गहरे और प्रीमियम चैट अनुभव पा सकते हैं.`
+        : `I received your message: "${message}". Pro access unlocks richer premium chat responses and a more polished experience.`;
 
       res.json({ reply });
     } catch (error: any) {
@@ -501,151 +503,80 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-app.post("/api/auth/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body as { email?: string };
-    if (!email) return res.status(400).json({ message: "Email required" });
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body as { email?: string };
+      if (!email) return res.status(400).json({ message: "Email required" });
 
-    const found = await db.select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
-      .limit(1);
-    if (!found.length) return res.status(404).json({ message: "No account found" });
+      const found = await db.select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email.toLowerCase().trim()))
+        .limit(1);
+      if (!found.length) return res.status(404).json({ message: "No account found" });
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    await db.execute(sql`
-      INSERT INTO otp_tokens (email, otp, expires_at)
-      VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
-      ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
-    `);
+      await db.execute(sql`
+        INSERT INTO otp_tokens (email, otp, expires_at)
+        VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
+        ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
+      `);
 
-    const nodemailer = await import("nodemailer");
-    const transporter = nodemailer.default.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+      // Resend HTTP API se email bhejo (Render SMTP block karta hai isliye)
+      const { Resend } = await import("resend");
+      const resend = new Resend(process.env.RESEND_API_KEY);
 
-    await transporter.sendMail({
-      from: `"IQpartner" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: "Your IQpartner Password Reset Code",
-      html: `
-        <div style="background:#0a0a0a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #a855f7;">
-          <h1 style="color:#a855f7;font-size:28px;font-weight:900;margin:0 0 8px;">IQpartner</h1>
-          <p style="color:#9b9b9b;font-size:14px;">Connect. Learn. Grow.</p>
-          <hr style="border:1px solid #222;margin:20px 0;">
-          <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
-          <div style="background:linear-gradient(90deg,#a855f7,#ec4899);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
-            <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
+      const { error: resendError } = await resend.emails.send({
+        from: "IQpartner <onboarding@resend.dev>",
+        to: email,
+        subject: "Your IQpartner Password Reset Code",
+        html: `
+          <div style="background:#0a0a0a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #a855f7;">
+            <h1 style="color:#a855f7;font-size:28px;font-weight:900;margin:0 0 8px;">IQpartner</h1>
+            <p style="color:#9b9b9b;font-size:14px;">Connect. Learn. Grow.</p>
+            <hr style="border:1px solid #222;margin:20px 0;">
+            <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
+            <div style="background:linear-gradient(90deg,#a855f7,#ec4899);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
+              <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
+            </div>
+            <p style="color:#a855f7;font-size:13px;">⏱ Valid for 10 minutes only</p>
+            <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
+            <p style="color:#a855f7;font-weight:bold;margin-top:20px;">— IQpartner Team</p>
           </div>
-          <p style="color:#a855f7;font-size:13px;">⏱ Valid for 10 minutes only</p>
-          <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
-          <p style="color:#a855f7;font-weight:bold;margin-top:20px;">— IQpartner Team</p>
-        </div>
-      `,
-    });
+        `,
+      });
 
-    res.json({ message: "OTP sent" });
-  } catch (err: any) {
-    console.error("[forgot-password]", err.message);
-    res.status(500).json({ message: err.message || "Failed to send OTP" });
-  }
-});
+      if (resendError) {
+        console.error("[forgot-password] Resend error:", resendError);
+        throw new Error(resendError.message || "Failed to send email");
+      }
 
-app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
-  try {
-    const userId = (req.session as any).userId;
-    await db.execute(sql`DELETE FROM likes WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM comments WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM saved_posts WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM notifications WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM follows WHERE follower_id = ${userId} OR following_id = ${userId}`);
-    await db.execute(sql`DELETE FROM posts WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM direct_messages WHERE sender_id = ${userId}`);
-    await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
-    (req.session as any).destroy?.();
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ message: err.message || "Delete failed" });
-  }
-});
-
-  try {
-    const { email } = req.body as { email?: string };
-    if (!email) return res.status(400).json({ message: "Email required" });
-
-    const found = await db.select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email.toLowerCase().trim()))
-      .limit(1);
-    if (!found.length) return res.status(404).json({ message: "No account found" });
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = new Date(Date.now() + 10 * 60 * 1000);
-
-    await db.execute(sql`
-      INSERT INTO otp_tokens (email, otp, expires_at)
-      VALUES (${email.toLowerCase().trim()}, ${otp}, ${expiry})
-      ON CONFLICT (email) DO UPDATE SET otp = ${otp}, expires_at = ${expiry}
-    `);
-
-    // Resend HTTP API se email bhejo (Render SMTP block karta hai isliye)
-    const { Resend } = await import("resend");
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
-    const { error: resendError } = await resend.emails.send({
-      from: "IQpartner <onboarding@resend.dev>",
-      to: email,
-      subject: "Your IQpartner Password Reset Code",
-      html: `
-        <div style="background:#0a0a0a;padding:40px;font-family:Arial;max-width:600px;margin:0 auto;border-radius:16px;border:1px solid #a855f7;">
-          <h1 style="color:#a855f7;font-size:28px;font-weight:900;margin:0 0 8px;">IQpartner</h1>
-          <p style="color:#9b9b9b;font-size:14px;">Connect. Learn. Grow.</p>
-          <hr style="border:1px solid #222;margin:20px 0;">
-          <p style="color:#ffffff;font-size:16px;">Your Password Reset Code:</p>
-          <div style="background:linear-gradient(90deg,#a855f7,#ec4899);border-radius:12px;padding:20px;text-align:center;margin:20px 0;">
-            <h1 style="color:white;font-size:42px;font-weight:900;letter-spacing:12px;margin:0;">${otp}</h1>
-          </div>
-          <p style="color:#a855f7;font-size:13px;">⏱ Valid for 10 minutes only</p>
-          <p style="color:#9b9b9b;font-size:12px;">If you didn't request this, ignore this email.</p>
-          <p style="color:#a855f7;font-weight:bold;margin-top:20px;">— IQpartner Team</p>
-        </div>
-      `,
-    });
-
-    if (resendError) {
-      console.error("[forgot-password] Resend error:", resendError);
-      throw new Error(resendError.message || "Failed to send email");
+      res.json({ message: "OTP sent" });
+    } catch (err: any) {
+      console.error("[forgot-password]", err.message);
+      res.status(500).json({ message: err.message || "Failed to send OTP" });
     }
+  });
 
-    res.json({ message: "OTP sent" });
-  } catch (err: any) {
-    console.error("[forgot-password]", err.message);
-    res.status(500).json({ message: err.message || "Failed to send OTP" });
-  }
-});
-    const userId = (req.session as any).userId;
-    await db.execute(sql`DELETE FROM likes WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM comments WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM saved_posts WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM notifications WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM follows WHERE follower_id = ${userId} OR following_id = ${userId}`);
-    await db.execute(sql`DELETE FROM posts WHERE user_id = ${userId}`);
-    await db.execute(sql`DELETE FROM direct_messages WHERE sender_id = ${userId}`);
-    await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
-    (req.session as any).destroy?.();
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ message: err.message || "Delete failed" });
-  }
-});
+  app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      await db.execute(sql`DELETE FROM likes WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM comments WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM saved_posts WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM notifications WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM follows WHERE follower_id = ${userId} OR following_id = ${userId}`);
+      await db.execute(sql`DELETE FROM posts WHERE user_id = ${userId}`);
+      await db.execute(sql`DELETE FROM direct_messages WHERE sender_id = ${userId}`);
+      await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
+      (req.session as any).destroy?.();
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Delete failed" });
+    }
+  });
+
   app.post("/api/auth/verify-reset-otp", async (req, res) => {
     try {
       const { email, otp } = req.body;
@@ -1718,7 +1649,8 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
     const typers = await storage.getTyping(Number(req.params.id), userId);
     res.json({ typers });
   });
-// ══════════════════════════════════════════════════════════════════════════
+
+  // ══════════════════════════════════════════════════════════════════════════
   // AGORA VOICE TOKEN
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -1733,7 +1665,8 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       res.status(500).json({ message: err.message || "Token generation failed" });
     }
   });
-// ══════════════════════════════════════════════════════════════════════════
+
+  // ══════════════════════════════════════════════════════════════════════════
   // RECOMMENDED VIDEOS FEED (goal-based, cached to save API quota)
   // ══════════════════════════════════════════════════════════════════════════
   const youtubeCache = new Map<string, { data: any[]; expiresAt: number }>();
@@ -1863,7 +1796,8 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       res.status(500).json({ message: err.message });
     }
   });
-// ══════════════════════════════════════════════════════════════════════════
+
+  // ══════════════════════════════════════════════════════════════════════════
   // GIFTS & COIN PURCHASE (Razorpay)
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -2042,6 +1976,7 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
       res.status(500).json({ message: err.message });
     }
   });
+
   // ══════════════════════════════════════════════════════════════════════════
   // SUBSCRIPTIONS
   // ══════════════════════════════════════════════════════════════════════════
@@ -2117,56 +2052,54 @@ app.delete("/api/profile/delete", isAuthenticated, async (req, res) => {
   });
 
   // Razorpay Dashboard → Webhooks me ye URL add karni hogi (Step 6 me detail)
-app.post(
-  "/api/subscription/webhook",
-  express.raw({ type: "application/json" }), // raw buffer, NOT parsed JSON
-  async (req: any, res) => {
-    try {
-      const signature = req.headers["x-razorpay-signature"];
-      const rawBody = req.body as Buffer; // raw bytes exactly as Razorpay sent
+  app.post(
+    "/api/subscription/webhook",
+    express.raw({ type: "application/json" }), // raw buffer, NOT parsed JSON
+    async (req: any, res) => {
+      try {
+        const signature = req.headers["x-razorpay-signature"];
+        const rawBody = req.body as Buffer; // raw bytes exactly as Razorpay sent
 
-      const expectedSignature = crypto
-        .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
-        .update(rawBody)
-        .digest("hex");
+        const expectedSignature = crypto
+          .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
+          .update(rawBody)
+          .digest("hex");
 
-      if (signature !== expectedSignature) {
-        return res.status(400).json({ message: "Invalid webhook signature" });
+        if (signature !== expectedSignature) {
+          return res.status(400).json({ message: "Invalid webhook signature" });
+        }
+
+        const payload = JSON.parse(rawBody.toString("utf8"));
+        const event = payload.event;
+        const subEntity = payload.payload?.subscription?.entity;
+        if (!subEntity) return res.json({ received: true });
+
+        if (event === "subscription.activated" || event === "subscription.charged") {
+          await db.execute(sql`
+            UPDATE users
+            SET is_pro = TRUE,
+                subscription_status = 'active',
+                updated_at = NOW()
+            WHERE id = ${payload.payload?.subscription?.entity?.notes?.user_id || payload.payload?.subscription?.entity?.customer_id || ''}
+          `);
+        }
+        if (event === "subscription.cancelled" || event === "subscription.completed" || event === "subscription.halted") {
+          await db.execute(sql`
+            UPDATE users
+            SET is_pro = FALSE,
+                subscription_status = 'inactive',
+                updated_at = NOW()
+            WHERE id = ${payload.payload?.subscription?.entity?.notes?.user_id || payload.payload?.subscription?.entity?.customer_id || ''}
+          `);
+        }
+
+        res.json({ received: true });
+      } catch (err: any) {
+        console.error("[subscription webhook]", err);
+        res.status(500).json({ message: "Webhook processing failed" });
       }
-
-      const payload = JSON.parse(rawBody.toString("utf8"));
-      const event = payload.event;
-      const subEntity = payload.payload?.subscription?.entity;
-      if (!subEntity) return res.json({ received: true });
-
-      if (event === "subscription.activated" || event === "subscription.charged") {
-        await db.execute(sql`
-          UPDATE users
-          SET is_pro = TRUE,
-              subscription_status = 'active',
-              updated_at = NOW()
-          WHERE id = ${payload.payload?.subscription?.entity?.notes?.user_id || payload.payload?.subscription?.entity?.customer_id || ''}
-        `);
-      }
-      if (event === "subscription.cancelled" || event === "subscription.completed" || event === "subscription.halted") {
-        await db.execute(sql`
-          UPDATE users
-          SET is_pro = FALSE,
-              subscription_status = 'inactive',
-              updated_at = NOW()
-          WHERE id = ${payload.payload?.subscription?.entity?.notes?.user_id || payload.payload?.subscription?.entity?.customer_id || ''}
-        `);
-      }
-
-      res.json({ received: true });
-    } catch (err: any) {
-      console.error("[subscription webhook]", err);
-      res.status(500).json({ message: "Webhook processing failed" });
     }
-  }
-);
-
-
+  );
 
   app.post("/api/subscription/cancel", isAuthenticated, async (req: any, res) => {
     try {
@@ -2189,6 +2122,7 @@ app.post(
       res.status(500).json({ message: err.message });
     }
   });
+
   // ══════════════════════════════════════════════════════════════════════════
   // VOICE ROOMS
   // ══════════════════════════════════════════════════════════════════════════
@@ -2579,6 +2513,7 @@ app.post(
       res.status(500).json({ message: err.message });
     }
   });
+
   // ══════════════════════════════════════════════════════════════════════════
   // LIVE STREAM ROUTES
   // ══════════════════════════════════════════════════════════════════════════
