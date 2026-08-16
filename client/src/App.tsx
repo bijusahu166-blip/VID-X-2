@@ -14,6 +14,7 @@ import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
 import { useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
 
 import introVideo from "@/assets/intro.mp4";
 import VoiceRoomCreate from "@/pages/VoiceRoomCreate";
@@ -158,14 +159,16 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const listener = CapacitorApp.addListener('appUrlOpen', async (data) => {
-      if (data.url.includes('auth-callback')) {
-        await Browser.close();
-        window.location.href = '/';
-      }
-    });
-    return () => { listener.then(l => l.remove()); };
-  }, []);
+  if (!Capacitor.isNativePlatform()) return;   // 👈 sirf real app mein chalao, web/browser mein nahi
+
+  const listener = CapacitorApp.addListener('appUrlOpen', async (data) => {
+    if (data.url.includes('auth-callback')) {
+      await Browser.close();
+      window.location.href = '/';
+    }
+  });
+  return () => { listener.then(l => l.remove()); };
+}, []);
 
   return (
     <QueryClientProvider client={queryClient}>
