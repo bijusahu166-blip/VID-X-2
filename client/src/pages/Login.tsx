@@ -349,9 +349,9 @@ export default function Login() {
             <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="flex flex-col items-center mb-10">
               <div className="relative w-20 h-20 mb-4">
                 <div className="absolute inset-0 rounded-[22px] rotate-6 opacity-60" style={{ background: "linear-gradient(135deg, #ef4444, #f97316)" }} />
-                <img src={logoSrc} alt="Vampire" className="relative w-full h-full rounded-[18px] object-cover shadow-2xl" style={{ boxShadow: "0 0 30px rgba(239,68,68,0.35)" }} />
+                <img src={logoSrc} alt="IQ PARTNER" className="relative w-full h-full rounded-[18px] object-cover shadow-2xl" style={{ boxShadow: "0 0 30px rgba(239,68,68,0.35)" }} />
               </div>
-              <h1 className="text-3xl font-black text-white tracking-tight">Vampire</h1>
+              <h1 className="text-3xl font-black text-white tracking-tight">IQ PARTNER</h1>
               <p className="text-zinc-500 text-sm mt-1">The next generation social platform</p>
             </motion.div>
 
@@ -463,7 +463,7 @@ export default function Login() {
 <button type="button" onClick={() => window.open("/privacy", "_self")}
   className="text-red-400 font-semibold hover:text-red-300 transition-colors">Privacy</button>
 <span>•</span>
-<button type="button" onClick={() => window.open("mailto:vampireofficial00@gmail.com")}
+<button type="button" onClick={() => window.open("mailto:iqpartnerhelp@gmail.com")}
   className="text-red-400 font-semibold hover:text-red-300 transition-colors">Help</button>
   </div>
               <p className="text-center text-zinc-600 text-xs mt-5">
