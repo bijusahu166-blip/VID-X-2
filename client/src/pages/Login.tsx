@@ -300,16 +300,19 @@ export default function Login() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
- const handleGoogleLogin = async () => {
+const handleGoogleLogin = async () => {
   setGoogleLoading(true);
-  const googleUrl = "https://vid-x-2.onrender.com/api/auth/google";
-  
-  if (Capacitor.isNativePlatform()) {
-       await Browser.open({ url: 'https://iqpartner.xyz/api/auth/google?platform=app' });
-  } else {
-    window.location.href = googleUrl;
+  try {
+    if (Capacitor.isNativePlatform()) {
+      await Browser.open({ url: 'https://iqpartner.xyz/api/auth/google?platform=app' });
+    } else {
+      window.location.href = "https://iqpartner.xyz/api/auth/google";
+    }
+  } finally {
+    setGoogleLoading(false);
   }
 };
+
 
   const mutation = useMutation({
     mutationFn: (data: AuthForm) => {
