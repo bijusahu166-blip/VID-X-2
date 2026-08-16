@@ -526,7 +526,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const resend = new Resend(process.env.RESEND_API_KEY);
 
       const { error: resendError } = await resend.emails.send({
-        from: "IQpartner <onboarding@resend.dev>",
+        from: "IQpartner <noreply@iqpartner.xyz>",
         to: email,
         subject: "Your IQpartner Password Reset Code",
         html: `
