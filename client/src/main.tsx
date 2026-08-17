@@ -2,6 +2,30 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { Component, type ReactNode } from "react";
+import { Capacitor } from "@capacitor/core";
+
+// ── GLOBAL API FETCH PATCH ───────────────────────────────────────────────
+// Native app (Capacitor) loads from capacitor://localhost, so relative fetch
+// paths like "/api/..." used all over the app (Home.tsx, Profile.tsx, etc.)
+// don't reach the real backend. This intercepts every fetch() call and
+// rewrites relative "/api/..." paths to the full backend URL — but ONLY
+// inside the native app. The website is untouched.
+// ⚠️ Set this to your real backend domain.
+const API_BASE = "https://iqpartner.xyz";
+
+if (Capacitor.isNativePlatform()) {
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    if (typeof input === "string" && input.startsWith("/api/")) {
+      input = `${API_BASE}${input}`;
+    } else if (input instanceof Request && input.url.startsWith("/api/")) {
+      input = new Request(`${API_BASE}${input.url}`, input);
+    }
+    return originalFetch(input, init);
+  };
+}
+// ── END PATCH ─────────────────────────────────────────────────────────────
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -11,9 +35,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
-    console.error("[LITLink] Runtime error caught by ErrorBoundary:", error.message);
-    console.error("[LITLink] Stack:", error.stack);
-    console.error("[LITLink] Component stack:", info.componentStack);
+    console.error("[iqpartner] Runtime error caught by ErrorBoundary:", error.message);
+    console.error("[iqpartner] Stack:", error.stack);
+    console.error("[iqpartner] Component stack:", info.componentStack);
   }
 
   render() {
@@ -44,4 +68,3 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </ErrorBoundary>
 );
-

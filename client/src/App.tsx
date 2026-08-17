@@ -34,6 +34,14 @@ import Notifications from "@/pages/Notifications";
 import Jobs from "@/pages/Jobs";
 import Subscription from "@/pages/Subscription";
 
+// ── API BASE ──────────────────────────────────────────────────────────────
+// Native app (Capacitor) loads from capacitor://localhost, so relative fetch
+// paths like "/api/..." don't reach your real backend. On web the app is
+// already served from the backend domain, so a relative path is fine there.
+// ⚠️ Replace the URL below with your actual backend domain if different.
+// ⚠️ Keep this identical to the API_BASE used in Login.tsx / use-auth.ts / etc.
+const API_BASE = Capacitor.isNativePlatform() ? "https://iqpartner.xyz" : "";
+
 function IntroVideo({ onFinish }: { onFinish: () => void }) {
   const [ready,setReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -73,7 +81,7 @@ function useServerVersionWatcher() {
 
     const check = async () => {
       try {
-        const res = await fetch("/api/version", { cache: "no-store" });
+        const res = await fetch(`${API_BASE}/api/version`, { cache: "no-store" });
         if (!res.ok) return;
         const { v } = await res.json();
         if (knownVersion.current === null) {
@@ -195,21 +203,21 @@ function AppContent() {
     Promise.all([
       queryClient.prefetchQuery({
         queryKey: ["/api/posts"],
-        queryFn: () => fetch("/api/posts", { credentials: "include" }).then(r => r.json()),
+        queryFn: () => fetch(`${API_BASE}/api/posts`, { credentials: "include" }).then(r => r.json()),
       }),
       queryClient.prefetchQuery({
         queryKey: ["/api/stories"],
-        queryFn: () => fetch("/api/posts", { credentials: "include" })
+        queryFn: () => fetch(`${API_BASE}/api/posts`, { credentials: "include" })
           .then(r => r.json())
           .then(data => Array.isArray(data) ? data.filter((p: any) => p.type === "story") : []),
       }),
       queryClient.prefetchQuery({
         queryKey: ["/api/voice-rooms"],
-        queryFn: () => fetch("/api/voice-rooms", { credentials: "include" }).then(r => r.ok ? r.json() : []),
+        queryFn: () => fetch(`${API_BASE}/api/voice-rooms`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
       }),
       queryClient.prefetchQuery({
         queryKey: ["/api/books"],
-        queryFn: () => fetch("/api/books", { credentials: "include" }).then(r => r.ok ? r.json() : []),
+        queryFn: () => fetch(`${API_BASE}/api/books`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
       }),
     ]).finally(() => setDataReady(true));
   }, []);
