@@ -36,7 +36,46 @@ const CATEGORIES = [
   { label: "Tech", icon: Cpu },
   { label: "World", icon: Globe },
 ];
+function FollowButtonSmall({ userId, currentUserId }: { userId: string; currentUserId?: string }) {
+  const isOwn = String(userId) === String(currentUserId);
 
+  const { data: followStatus } = useQuery<{ following: boolean }>({
+    queryKey: ["/api/users", userId, "follow-status"],
+    queryFn: () => fetch(`/api/users/${userId}/follow-status`, { credentials: "include" }).then(r => r.json()),
+    enabled: !isOwn && !!currentUserId,
+  });
+
+  const [loading, setLoading] = useState(false);
+  const isFollowing = followStatus?.following ?? false;
+
+  if (isOwn || !currentUserId) return null;
+
+  const toggleFollow = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoading(true);
+    try {
+      const method = isFollowing ? "DELETE" : "POST";
+      await fetch(`/api/users/${userId}/follow`, { method, credentials: "include" });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "follow-status"] });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={toggleFollow}
+      disabled={loading}
+      className={`text-[9px] font-bold px-2 py-0.5 rounded-full transition-colors disabled:opacity-50 shrink-0 ${
+        isFollowing
+          ? "bg-zinc-800 text-zinc-400 border border-zinc-700"
+          : "bg-red-500 text-white"
+      }`}
+    >
+      {loading ? "…" : isFollowing ? "Following ✓" : "Follow"}
+    </button>
+  );
+}
 const REELS = [
   { id: 1, user: "Alex_Gamer", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex", thumb: "https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=200&h=350&fit=crop", live: false },
   { id: 2, user: "TravelQueen", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Travel", thumb: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=200&h=350&fit=crop", live: true },
@@ -887,6 +926,7 @@ filteredPosts.forEach((post, i) => {
                           @{(post.user as any)?.username || post.user?.firstName?.toLowerCase()}
                           {post.user?.isCelebrity && <CheckCircle2 className="w-3 h-3 text-blue-400 fill-blue-400" />}
                         </button>
+                           <FollowButtonSmall userId={post.userId} currentUserId={user?.id} />
                         <span>·</span>
                         <span>{post.likesCount || 0} likes</span>
                         <span>·</span>

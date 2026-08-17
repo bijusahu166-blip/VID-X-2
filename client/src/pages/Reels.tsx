@@ -29,7 +29,47 @@ interface ReelPost {
   hasLiked?: boolean;
   hasSaved?: boolean;
 }
+function FollowButtonSmall({ userId, currentUserId }: { userId: string; currentUserId?: string }) {
+  const isOwn = String(userId) === String(currentUserId);
+  const queryClient = useQueryClient();
 
+  const { data: followStatus } = useQuery<{ following: boolean }>({
+    queryKey: ["/api/users", userId, "follow-status"],
+    queryFn: () => fetch(`/api/users/${userId}/follow-status`, { credentials: "include" }).then(r => r.json()),
+    enabled: !isOwn && !!currentUserId,
+  });
+
+  const [loading, setLoading] = useState(false);
+  const isFollowing = followStatus?.following ?? false;
+
+  if (isOwn || !currentUserId) return null;
+
+  const toggleFollow = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoading(true);
+    try {
+      const method = isFollowing ? "DELETE" : "POST";
+      await fetch(`/api/users/${userId}/follow`, { method, credentials: "include" });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "follow-status"] });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={toggleFollow}
+      disabled={loading}
+      className={`text-[11px] font-bold px-2.5 py-1 rounded-full transition-colors disabled:opacity-50 shrink-0 ${
+        isFollowing
+          ? "bg-white/10 text-zinc-300 border border-white/20"
+          : "bg-red-500 text-white"
+      }`}
+    >
+      {loading ? "…" : isFollowing ? "Following ✓" : "Follow"}
+    </button>
+  );
+}
 function ReelCard({ 
   reel, 
   isActive, 
@@ -310,26 +350,29 @@ function ReelCard({
 
       {/* Caption Layout */}
       <div className="absolute left-4 bottom-24 right-16 z-20 flex flex-col gap-2 pointer-events-auto">
-        <div 
-          onClick={() => reel.userId && navigate(`/profile/${reel.userId}`)} 
-          className="flex items-center gap-2 cursor-pointer w-fit"
-        >
-          {reel.user?.profileImageUrl ? (
-            <img 
-              src={reel.user.profileImageUrl} 
-              alt="" 
-              className="w-9 h-9 rounded-full border border-white/30 object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center border border-white/20">
-              <User className="w-4 h-4 text-zinc-400" />
-            </div>
-          )}
-          <span className="font-bold text-white text-base drop-shadow-md hover:underline">
-            @{reel.user?.username || "user"}
-          </span>
-        </div>
+        <div className="flex items-center gap-2 w-fit">
+  <div
+    onClick={() => reel.userId && navigate(`/profile/${reel.userId}`)}
+    className="flex items-center gap-2 cursor-pointer"
+  >
+    {reel.user?.profileImageUrl ? (
+      <img
+        src={reel.user.profileImageUrl}
+        alt=""
+        className="w-9 h-9 rounded-full border border-white/30 object-cover"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    ) : (
+      <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center border border-white/20">
+        <User className="w-4 h-4 text-zinc-400" />
+      </div>
+    )}
+    <span className="font-bold text-white text-base drop-shadow-md hover:underline">
+      @{reel.user?.username || "user"}
+    </span>
+  </div>
+  <FollowButtonSmall userId={reel.userId} currentUserId={user?.id} />
+</div>
         <p className="text-sm text-white/90 line-clamp-3 drop-shadow-md pl-0.5 leading-relaxed">
           {reel.caption}
         </p>
@@ -389,8 +432,7 @@ export default function Reels() {
   const [isMuted, setIsMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<number | null>(null);
-  
-const { data: allPosts, isLoading } = usePosts();
+  const { data: allPosts, isLoading } = usePosts();
   const reels = (Array.isArray(allPosts) ? allPosts : [])
   .filter(p => p.type === "reel")
   .sort((a, b) => {
