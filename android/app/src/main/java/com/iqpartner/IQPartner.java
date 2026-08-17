@@ -1,23 +1,14 @@
 package com.iqpartner;
 
 import android.os.Bundle;
-import android.webkit.WebView;
+import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 
 public class IQPartner extends BridgeActivity {
-
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
+        // Install the splash screen before super.onCreate()
+        SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
-    }
-
-    @Override
-    public void onBackPressed() {
-        WebView webView = bridge.getWebView();
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
     }
 }
