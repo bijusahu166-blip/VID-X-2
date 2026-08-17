@@ -472,7 +472,84 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ══════════════════════════════════════════════════════════════════════════
   // AUTH ROUTES
   // ══════════════════════════════════════════════════════════════════════════
+// ── LOGIN ──────────────────────────────────────────────────────────────
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body as { email?: string; password?: string };
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
 
+    const found = await db.select().from(users)
+      .where(eq(users.email, email.toLowerCase().trim()))
+      .limit(1);
+
+    if (!found.length) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    const user = found[0];
+    const bcrypt = await import("bcryptjs");
+    const valid = await bcrypt.compare(password, user.password);
+
+    if (!valid) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    (req.session as any).userId = user.id;
+
+    const { password: _pw, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (err: any) {
+    console.error("[login]", err);
+    res.status(500).json({ message: err.message || "Login failed" });
+  }
+});
+
+// ── REGISTER ───────────────────────────────────────────────────────────
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const { firstName, lastName, email, password } = req.body as {
+      firstName?: string; lastName?: string; email?: string; password?: string;
+    };
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const existing = await db.select({ id: users.id }).from(users)
+      .where(eq(users.email, email.toLowerCase().trim()))
+      .limit(1);
+    if (existing.length) {
+      return res.status(409).json({ message: "An account with this email already exists" });
+    }
+
+    const bcrypt = await import("bcryptjs");
+    const hashed = await bcrypt.hash(password, 10);
+
+    const usernameBase = email.split("@")[0].toLowerCase();
+    const username = `${usernameBase}${Math.floor(Math.random() * 10000)}`;
+
+    const [newUser] = await db.insert(users).values({
+      email: email.toLowerCase().trim(),
+      password: hashed,
+      firstName: firstName || "",
+      lastName: lastName || "",
+      username,
+      profileImageUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+    }).returning();
+
+    (req.session as any).userId = newUser.id;
+
+    const { password: _pw, ...safeUser } = newUser;
+    res.json(safeUser);
+  } catch (err: any) {
+    console.error("[register]", err);
+    res.status(500).json({ message: err.message || "Registration failed" });
+  }
+});
   app.get("/api/users/check-email", async (req, res) => {
     try {
       const email = ((req.query.email as string) || "").toLowerCase().trim();
