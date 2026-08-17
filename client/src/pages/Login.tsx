@@ -4,8 +4,15 @@ import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound, CheckCircle2, Mail } from "l
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { Capacitor } from "@capacitor/core";
 import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
 
+// ── API BASE ──────────────────────────────────────────────────────────────
+// Native app (Capacitor) loads from capacitor://localhost, so relative fetch
+// paths like "/api/..." don't reach your real backend. On web the app is
+// already served from the backend domain, so a relative path is fine there.
+// ⚠️ Replace the URL below with your actual backend domain if different.
+const API_BASE = Capacitor.isNativePlatform() ? "https://iqpartner.xyz" : "";
 
 type Tab = "login" | "signup";
 type View = "auth" | "forgot";
@@ -19,7 +26,7 @@ interface AuthForm {
 }
 
 async function apiPost(path: string, body: object) {
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -62,13 +69,13 @@ function ForgotPasswordView({ onBack }: { onBack: () => void }) {
     const trimmed = email.toLowerCase().trim();
     if (!trimmed) throw new Error("Please enter your email address");
     if (!isValidEmail(trimmed)) throw new Error("Please enter a valid email address");
-    const checkRes = await fetch(`/api/users/check-email?email=${encodeURIComponent(trimmed)}`, { credentials: "include" });
+    const checkRes = await fetch(`${API_BASE}/api/users/check-email?email=${encodeURIComponent(trimmed)}`, { credentials: "include" });
     const checkData = await checkRes.json();
     if (!checkRes.ok) throw new Error(checkData.message || "No account found");
 
     let otpRes: Response;
     try {
-      otpRes = await fetch("/api/auth/forgot-password", {
+      otpRes = await fetch(`${API_BASE}/api/auth/forgot-password`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ email: trimmed }),
         signal: AbortSignal.timeout(15000),
@@ -90,7 +97,7 @@ function ForgotPasswordView({ onBack }: { onBack: () => void }) {
 
   const verifyOtp = useMutation({
     mutationFn: async (code: string) => {
-      const res = await fetch("/api/auth/verify-reset-otp", {
+      const res = await fetch(`${API_BASE}/api/auth/verify-reset-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ email: email.toLowerCase().trim(), otp: code }),
       });
