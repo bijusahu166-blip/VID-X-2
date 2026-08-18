@@ -1,3 +1,4 @@
+import { OneSignal, LogLevel } from 'react-native-onesignal';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
@@ -169,7 +170,18 @@ function App() {
     SplashScreen.hide();
   }, []);
 
+
   useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return; // sirf native app (Android/iOS) mein chalao, web browser mein nahi
+
+    OneSignal.Debug.setLogLevel(LogLevel.Verbose);
+    OneSignal.initialize(import.meta.env.VITE_ONESIGNAL_APP_ID);
+    OneSignal.Notifications.requestPermission(true);
+  }, []);
+
+ 
+   
+ useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
     const listener = CapacitorApp.addListener('appUrlOpen', async (data) => {
@@ -180,6 +192,7 @@ function App() {
     });
     return () => { listener.then(l => l.remove()); };
   }, []);
+
 
   return (
     <QueryClientProvider client={queryClient}>
