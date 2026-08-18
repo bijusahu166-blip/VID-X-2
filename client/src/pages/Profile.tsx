@@ -797,7 +797,21 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   };
 
   const profileBooksArray = profileBooksData as any[];
-const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.type !== "story").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
+  const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.type !== "story").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
+
+// ── Real InsightX calculations ──
+const totalViews = myPosts.reduce((sum, p: any) => sum + (p.viewerCount ?? 0), 0);
+const totalLikes = myPosts.reduce((sum, p: any) => sum + (p.likesCount ?? 0), 0);
+const totalComments = myPosts.reduce((sum, p: any) => sum + (p.commentsCount ?? 0), 0);
+const engagementRate = totalViews > 0 ? (((totalLikes + totalComments) / totalViews) * 100).toFixed(1) : "0.0";
+
+const photoCount = myPosts.filter((p: any) => p.type === "post" || p.type === "image").length;
+const videoCount = myPosts.filter((p: any) => p.type === "video" || p.type === "reel").length;
+const liveCount = myPosts.filter((p: any) => p.type === "live").length;
+const totalContentCount = photoCount + videoCount + liveCount || 1;
+const photoPercent = Math.round((photoCount / totalContentCount) * 100);
+const videoPercent = Math.round((videoCount / totalContentCount) * 100);
+const livePercent = Math.round((liveCount / totalContentCount) * 100);
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
 
@@ -1256,66 +1270,61 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
                   )}
 
                   {/* ── SUB: GROW ── */}
-                  {settingsPanel === "InsightX" && (
-                    <div className="p-5 space-y-4">
-                      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400">Grow</p>
-                            <h3 className="text-base font-bold text-white">Live growth pulse</h3>
-                          </div>
-                          <div className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-semibold text-emerald-300">● Live</div>
-                        </div>
-                        <div className="h-24 rounded-xl bg-zinc-950/70 p-3">
-                          <div className="flex h-full items-end gap-2">
-                            {[42, 58, 49, 72, 68, 84, 91].map((height, index) => (
-                              <div key={index} className="flex-1 rounded-t-full bg-gradient-to-t from-emerald-500 to-lime-400" style={{ height: `${height}%` }} />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                 {settingsPanel === "InsightX" && (
+  <div className="p-5 space-y-4">
+    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400">Grow</p>
+          <h3 className="text-base font-bold text-white">Your real stats</h3>
+        </div>
+        <div className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-semibold text-emerald-300">● Live</div>
+      </div>
+    </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        {[
-                          { label: "Views", value: "12.4K", change: "+18%" },
-                          { label: "Likes", value: "3.2K", change: "+9%" },
-                          { label: "Followers", value: "1.2K", change: "+24%" },
-                          { label: "Engagement", value: "6.8%", change: "+2.1%" },
-                        ].map((item) => (
-                          <div key={item.label} className="rounded-xl border border-white/10 bg-zinc-900/70 p-3">
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{item.label}</p>
-                            <p className="mt-1 text-lg font-black text-white">{item.value}</p>
-                            <p className="text-[11px] text-emerald-400">{item.change}</p>
-                          </div>
-                        ))}
-                      </div>
+    <div className="grid grid-cols-2 gap-3">
+      {[
+        { label: "Views", value: fmtN(totalViews) },
+        { label: "Likes", value: fmtN(totalLikes) },
+        { label: "Followers", value: fmtN(currentStats?.followersCount) },
+        { label: "Engagement", value: `${engagementRate}%` },
+      ].map((item) => (
+        <div key={item.label} className="rounded-xl border border-white/10 bg-zinc-900/70 p-3">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{item.label}</p>
+          <p className="mt-1 text-lg font-black text-white">{item.value}</p>
+        </div>
+      ))}
+    </div>
 
-                      <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <p className="text-sm font-semibold text-white">Content performance</p>
-                          <p className="text-[11px] text-zinc-500">Today</p>
-                        </div>
-                        <div className="space-y-2">
-                          {[
-                            { type: "Photos", count: 24, percent: "72%" },
-                            { type: "Videos", count: 11, percent: "21%" },
-                            { type: "Live", count: 3, percent: "7%" },
-                          ].map((item) => (
-                            <div key={item.type}>
-                              <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-400">
-                                <span>{item.type}</span>
-                                <span>{item.count} · {item.percent}</span>
-                              </div>
-                              <div className="h-2 rounded-full bg-zinc-800">
-                                <div className="h-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400" style={{ width: item.percent }} />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
+    <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-sm font-semibold text-white">Content performance</p>
+        <p className="text-[11px] text-zinc-500">All time</p>
+      </div>
+      {myPosts.length === 0 ? (
+        <p className="text-[11px] text-zinc-600 text-center py-4">No posts yet to show performance.</p>
+      ) : (
+        <div className="space-y-2">
+          {[
+            { type: "Photos", count: photoCount, percent: `${photoPercent}%` },
+            { type: "Videos", count: videoCount, percent: `${videoPercent}%` },
+            { type: "Live", count: liveCount, percent: `${livePercent}%` },
+          ].map((item) => (
+            <div key={item.type}>
+              <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-400">
+                <span>{item.type}</span>
+                <span>{item.count} · {item.percent}</span>
+              </div>
+              <div className="h-2 rounded-full bg-zinc-800">
+                <div className="h-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400" style={{ width: item.percent }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+)}
                   {/* ── SUB: PRIVACYLOCK ── */}
                   {settingsPanel === "PrivacyLock" && (
                     <div className="p-5 space-y-5">
