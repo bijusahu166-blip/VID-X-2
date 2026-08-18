@@ -1,3 +1,6 @@
+import { users, posts, comments, savedPosts, reports, notifications, conversations, messages, pendingBlocks, blocks, follows, directChats, directMessages } from "@shared/schema";
+import { db } from "./db";
+import { sql, eq, desc, and, or } from "drizzle-orm";
 import { generateAgoraToken } from "./agora";
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
@@ -6,14 +9,12 @@ import { authStorage } from "./replit_integrations/auth/storage";
 import { setupAuth, registerAuthRoutes, registerSmsOtpRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { api } from "@shared/routes";
-import { users, posts, comments, savedPosts, reports, notifications, conversations, messages, pendingBlocks, blocks } from "@shared/schema";
-import { db } from "./db";
-import { sql, eq, desc, and } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { v2 as cloudinary } from "cloudinary";
 import { wsClients } from "./realtime";
+
 
 // --- CONFIGURATION ---
 const uploadsDir = path.join(process.cwd(), "uploads", "videos");
@@ -810,27 +811,101 @@ app.post("/api/auth/register", async (req, res) => {
     }
   });
 
-  app.post("/api/posts/:id/comments", isAuthenticated, async (req, res) => {
-    try {
-      const postId = Number(req.params.id);
-      const userId = (req.session as any).userId;
-      const { content } = req.body;
-      if (!content) return res.status(400).json({ message: "Comment empty" });
-      const comment = await storage.createComment(postId, userId, content);
-      const post = await storage.getPost(postId);
-      if (post && post.userId !== userId) {
-        const sender = await authStorage.getUser(userId);
-        await db.insert(notifications).values({
-          userId: post.userId, fromUserId: userId, type: "comment",
-          message: `${sender?.firstName || "Someone"} commented on your post`, postId,
-        });
-      }
-      res.status(201).json(comment);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
+app.get("/api/user/saved", isAuthenticated, async (req, res) => {
+  try {
+    const userId = (req.session as any).userId;
+    const rows = await db
+      .select({ post: posts })
+      .from(savedPosts)
+      .innerJoin(posts, eq(savedPosts.postId, posts.id))
+      .where(eq(savedPosts.userId, userId))
+      .orderBy(desc(savedPosts.createdAt));
 
+    res.json(rows.map(r => r.post));
+  } catch (err: any) {
+    console.error("Fetch saved posts error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get("/api/posts/:id", async (req, res) => {
+  try {
+    const postId = Number(req.params.id);
+    const [post] = await db.select().from(posts).where(eq(posts.id, postId));
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    res.json(post);
+  } catch (err: any) {
+    console.error("Fetch post error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get("/api/users/following", isAuthenticated, async (req, res) => {
+  try {
+    const userId = (req.session as any).userId;
+    const rows = await db
+      .select({ user: users })
+      .from(follows)
+      .innerJoin(users, eq(follows.followingId, users.id))
+      .where(eq(follows.followerId, userId));
+    res.json(rows.map(r => r.user));
+  } catch (err: any) {
+    console.error("Fetch following error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
+  try {
+    const senderId = (req.session as any).userId;
+    const postId = Number(req.params.id);
+    const { userIds } = req.body as { userIds: string[] };
+
+    if (!userIds || userIds.length === 0) {
+      return res.status(400).json({ message: "No recipients selected" });
+    }
+
+    const [post] = await db.select().from(posts).where(eq(posts.id, postId));
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    for (const otherUserId of userIds) {
+      let [chat] = await db
+        .select()
+        .from(directChats)
+        .where(
+          or(
+            and(eq(directChats.user1Id, senderId), eq(directChats.user2Id, otherUserId)),
+            and(eq(directChats.user1Id, otherUserId), eq(directChats.user2Id, senderId))
+          )
+        );
+
+      if (!chat) {
+        [chat] = await db
+          .insert(directChats)
+          .values({ user1Id: senderId, user2Id: otherUserId })
+          .returning();
+      }
+
+      await db.insert(directMessages).values({
+        chatId: chat.id,
+        senderId,
+        content: post.caption || "Shared a post",
+        type: "post_share",
+        mediaUrl: post.videoUrl ? post.videoUrl : post.imageUrl,
+      });
+
+      const receiverWs = wsClients.get(String(otherUserId));
+      if (receiverWs && receiverWs.readyState === 1) {
+        receiverWs.send(JSON.stringify({ type: "new_message", chatId: chat.id }));
+      }
+    }
+
+    res.json({ success: true, sentTo: userIds.length });
+  } catch (err: any) {
+    console.error("Send post error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
   app.get("/api/posts/:id/comments", isAuthenticated, async (req, res) => {
     try {
       const postId = Number(req.params.id);
@@ -857,23 +932,23 @@ app.post("/api/auth/register", async (req, res) => {
     }
   });
 
-  app.post("/api/posts/:id/save", isAuthenticated, async (req, res) => {
-    try {
-      const userId = (req.session as any).userId;
-      const postId = Number(req.params.id);
-      const existing = await db.select().from(savedPosts)
-        .where(and(eq(savedPosts.userId, userId), eq(savedPosts.postId, postId))).limit(1);
-      if (existing.length > 0) {
-        await db.delete(savedPosts).where(eq(savedPosts.id, existing[0].id));
-        return res.json({ saved: false });
-      } else {
-        await db.insert(savedPosts).values({ userId, postId });
-        return res.json({ saved: true });
-      }
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+ app.post("/api/posts/:id/save", isAuthenticated, async (req, res) => {
+  try {
+    const userId = (req.session as any).userId;
+    const postId = Number(req.params.id);
+    const existing = await db.select().from(savedPosts)
+      .where(and(eq(savedPosts.userId, userId), eq(savedPosts.postId, postId))).limit(1);
+    if (existing.length > 0) {
+      await db.delete(savedPosts).where(eq(savedPosts.id, existing[0].id));
+      return res.json({ saved: false });
+    } else {
+      await db.insert(savedPosts).values({ userId, postId });
+      return res.json({ saved: true });
     }
-  });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
   app.post("/api/posts/:id/report", isAuthenticated, async (req, res) => {
     try {

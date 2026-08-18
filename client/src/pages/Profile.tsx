@@ -741,7 +741,16 @@ export default function Profile() {
     refetchInterval: 15000,
     staleTime: 5000,
   });
-
+const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
+  queryKey: ["/api/user/saved"],
+  queryFn: async () => {
+    const res = await fetch("/api/user/saved", { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to fetch saved posts");
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
+  enabled: !params.id, // only fetch on own profile
+});
   const { data: history, error: historyError, isLoading: historyLoading } = useQuery<any[]>({ 
     queryKey: ["/api/history"],
     queryFn: () => apiRequest("GET", "/api/history").then((res) => res.json()),
@@ -1848,10 +1857,44 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
             )}
           </TabsContent>
 
-          <TabsContent value="saved" className="py-20 text-center">
-            <div className="text-4xl mb-3">📁</div>
-            <p className="text-zinc-600 text-sm font-mono">ARCHIVE EMPTY</p>
-          </TabsContent>
+          <TabsContent value="saved" className="mt-0">
+  {savedLoading ? (
+    <div className="grid grid-cols-3 gap-0.5">
+      {Array(6).fill(0).map((_, i) => (
+        <div key={i} className="aspect-square bg-zinc-900 animate-pulse" />
+      ))}
+    </div>
+  ) : !savedPosts || savedPosts.length === 0 ? (
+    <div className="py-20 text-center">
+      <div className="text-4xl mb-3">📁</div>
+      <p className="text-zinc-600 text-sm font-mono">ARCHIVE EMPTY</p>
+    </div>
+  ) : (
+    <div className="grid grid-cols-3 gap-0.5">
+      {savedPosts.map((post: any) => (
+        <button
+          key={post.id}
+          className="aspect-square bg-zinc-900 relative overflow-hidden text-left w-full"
+          onClick={() => setViewingMyPost(post)}
+        >
+          {post.imageUrl && !String(post.imageUrl).startsWith("blob:") ? (
+            <img src={post.imageUrl} className="w-full h-full object-cover" />
+          ) : (
+            <div
+              className="w-full h-full flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, hsl(${(post.id * 47) % 360}, 40%, 14%), hsl(${(post.id * 47 + 120) % 360}, 50%, 20%))` }}
+            />
+          )}
+          {(post.type === "video" || post.type === "reel") && (
+            <div className="absolute top-1 right-1 w-4 h-4 rounded bg-black/60 flex items-center justify-center">
+              <span className="text-[7px] text-white">▶</span>
+            </div>
+          )}
+        </button>
+      ))}
+    </div>
+  )}
+</TabsContent>
 
           <TabsContent value="history" className="p-4 space-y-2">
             {history && history.length > 0 ? (

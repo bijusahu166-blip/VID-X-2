@@ -27,6 +27,7 @@ import Search from "@/pages/Search";
 import Reading from "@/pages/Reading";
 import AimSelection from "@/pages/AimSelection";
 import Reels from "@/pages/Reels";
+import PostView from "@/pages/PostView";
 
 import Profile from "@/pages/Profile";
 import Messages from "@/pages/Messages";
@@ -35,26 +36,31 @@ import Jobs from "@/pages/Jobs";
 import Subscription from "@/pages/Subscription";
 
 // ── API BASE ──────────────────────────────────────────────────────────────
-// Native app (Capacitor) loads from capacitor://localhost, so relative fetch
-// paths like "/api/..." don't reach your real backend. On web the app is
-// already served from the backend domain, so a relative path is fine there.
-// ⚠️ Replace the URL below with your actual backend domain if different.
-// ⚠️ Keep this identical to the API_BASE used in Login.tsx / use-auth.ts / etc.
 const API_BASE = Capacitor.isNativePlatform() ? "https://iqpartner.xyz" : "";
 
 function IntroVideo({ onFinish }: { onFinish: () => void }) {
-  const [ready,setReady] = useState(false);
+  const [ready, setReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.play().catch(() => {
-      // Autoplay with sound blocked — fall back to muted so it still plays
       video.muted = true;
-      video.play().catch(() => {});
+      video.play().catch(() => {
+        // Video bilkul play hi nahi ho paya — turant finish kar do
+        onFinish();
+      });
     });
   }, []);
+
+  // Safety net: agar 4 second me video khatam ya start hi nahi hui, force finish
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      onFinish();
+    }, 4000);
+    return () => clearTimeout(timeout);
+  }, [onFinish]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
@@ -87,16 +93,13 @@ function useServerVersionWatcher() {
         if (knownVersion.current === null) {
           knownVersion.current = v;
         } else if (knownVersion.current !== v) {
-          // Server restarted — force a full reload to get latest JS
           window.location.reload();
         }
-      } catch {
-        // Ignore network errors (server may be restarting)
-      }
+      } catch {}
     };
 
-    check(); // Initial check
-    timer = setInterval(check, 30_000); // Re-check every 30s
+    check();
+    timer = setInterval(check, 30_000);
     return () => clearInterval(timer);
   }, []);
 }
@@ -127,8 +130,7 @@ function Router() {
     return <Login />;
   }
 
-  // Goal set nahi hai toh AimSelection screen dikhao
- const localGoal = localStorage.getItem("user_goal");
+  const localGoal = localStorage.getItem("user_goal");
   if (!(user as any).goal && !localGoal) {
     return <AimSelection />;
   }
@@ -143,6 +145,7 @@ function Router() {
         <Route path="/search" component={Search} />
         <Route path="/reading" component={Reading} />
         <Route path="/reels" component={Reels} />
+        <Route path="/post/:id" component={PostView} />
         <Route path="/jobs" component={Jobs} />
         <Route path="/messages" component={Messages} />
         <Route path="/notifications" component={Notifications} />
@@ -167,16 +170,16 @@ function App() {
   }, []);
 
   useEffect(() => {
-  if (!Capacitor.isNativePlatform()) return;   // 👈 sirf real app mein chalao, web/browser mein nahi
+    if (!Capacitor.isNativePlatform()) return;
 
-  const listener = CapacitorApp.addListener('appUrlOpen', async (data) => {
-    if (data.url.includes('auth-callback')) {
-      await Browser.close();
-      window.location.href = '/';
-    }
-  });
-  return () => { listener.then(l => l.remove()); };
-}, []);
+    const listener = CapacitorApp.addListener('appUrlOpen', async (data) => {
+      if (data.url.includes('auth-callback')) {
+        await Browser.close();
+        window.location.href = '/';
+      }
+    });
+    return () => { listener.then(l => l.remove()); };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -231,6 +234,5 @@ function AppContent() {
     </>
   );
 }
-
 
 export default App;
