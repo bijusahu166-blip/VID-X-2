@@ -325,7 +325,113 @@ export const ads = pgTable("ads", {
   index("IDX_ads_placement").on(table.placement),
   index("IDX_ads_created_at").on(table.createdAt),
 ]);
+// ── RESTRICTED ACCOUNTS (BlockShield) ──
+export const restrictedAccounts = pgTable("restricted_accounts", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  restrictedUserId: text("restricted_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+},
+(table) => [
+  index("IDX_restricted_user_id").on(table.userId),
+  uniqueIndex("IDX_restricted_pair").on(table.userId, table.restrictedUserId),
+]);
 
+// ── HIDDEN WORDS (BlockShield) ──
+export const hiddenWords = pgTable("hidden_words", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  word: text("word").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+},
+(table) => [
+  index("IDX_hidden_words_user_id").on(table.userId),
+]);
+
+// ── CLOSE FRIENDS (InnerCircle) ──
+export const closeFriends = pgTable("close_friends", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  friendId: text("friend_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+},
+(table) => [
+  index("IDX_close_friends_user_id").on(table.userId),
+  uniqueIndex("IDX_close_friends_pair").on(table.userId, table.friendId),
+]);
+
+// ── POST DRAFTS (ProTools Hub) ──
+export const postDrafts = pgTable("post_drafts", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  caption: text("caption"),
+  imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  type: text("type").default("post"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+},
+(table) => [
+  index("IDX_post_drafts_user_id").on(table.userId),
+]);
+
+// ── SCHEDULED POSTS (ProTools Hub) ──
+export const scheduledPosts = pgTable("scheduled_posts", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  caption: text("caption"),
+  imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  type: text("type").default("post"),
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  status: text("status").default("pending"), // pending, published, failed, cancelled
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+},
+(table) => [
+  index("IDX_scheduled_posts_user_id").on(table.userId),
+  index("IDX_scheduled_posts_scheduled_for").on(table.scheduledFor),
+  index("IDX_scheduled_posts_status").on(table.status),
+]);
+
+// ── PROFILE VIEWS (InsightX analytics) ──
+export const profileViews = pgTable("profile_views", {
+  id: serial("id").primaryKey(),
+  viewerId: text("viewer_id").notNull(),
+  viewedUserId: text("viewed_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+},
+(table) => [
+  index("IDX_profile_views_viewed_user").on(table.viewedUserId),
+  index("IDX_profile_views_created_at").on(table.createdAt),
+]);
+
+// ── LOGIN SESSIONS (Security → Devices) ──
+export const loginSessions = pgTable("login_sessions", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  deviceInfo: text("device_info"),
+  ipAddress: text("ip_address"),
+  location: text("location"),
+  lastActive: timestamp("last_active").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+},
+(table) => [
+  index("IDX_login_sessions_user_id").on(table.userId),
+  index("IDX_login_sessions_last_active").on(table.lastActive),
+]);
+
+// ── AD PREFERENCES (Ad Topics / Hide Advertiser) ──
+export const adPreferences = pgTable("ad_preferences", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(), // "topic" | "advertiser"
+  value: text("value").notNull(),
+  hidden: boolean("hidden").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+},
+(table) => [
+  index("IDX_ad_preferences_user_id").on(table.userId),
+]);
 // 6. RELATIONS
 export const postsRelations = relations(posts, ({ one, many }) => ({
   user: one(users, { fields: [posts.userId], references: [users.id] }),

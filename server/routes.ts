@@ -1,4 +1,9 @@
-import { users, posts, comments, savedPosts, reports, notifications, conversations, messages, pendingBlocks, blocks, follows, directChats, directMessages } from "@shared/schema";
+import {
+  users, posts, comments, savedPosts, reports, notifications, conversations, messages,
+  pendingBlocks, blocks, follows, directChats, directMessages,
+  restrictedAccounts, hiddenWords, closeFriends, postDrafts, scheduledPosts,
+  profileViews, loginSessions, adPreferences
+} from "@shared/schema";
 import { db } from "./db";
 import { sql, eq, desc, and, or } from "drizzle-orm";
 import { generateAgoraToken } from "./agora";
@@ -499,6 +504,13 @@ app.post("/api/auth/login", async (req, res) => {
 
     (req.session as any).userId = user.id;
 
+    await db.insert(loginSessions).values({
+      userId: user.id,
+      deviceInfo: req.headers["user-agent"] || "Unknown device",
+      ipAddress: req.ip || req.headers["x-forwarded-for"]?.toString() || "Unknown",
+    });
+
+
     const { password: _pw, ...safeUser } = user;
     res.json(safeUser);
   } catch (err: any) {
@@ -906,6 +918,313 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+  // RESTRICTED ACCOUNTS
+  // ══════════════════════════════════════════════════════════════════════════
+  app.get("/api/restricted", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.select({ user: users })
+        .from(restrictedAccounts)
+        .innerJoin(users, eq(restrictedAccounts.restrictedUserId, users.id))
+        .where(eq(restrictedAccounts.userId, userId));
+      res.json(rows.map(r => r.user));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/restricted/:userId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const targetId = req.params.userId;
+      if (userId === targetId) return res.status(400).json({ message: "Cannot restrict yourself" });
+      await db.insert(restrictedAccounts).values({ userId, restrictedUserId: targetId }).onConflictDoNothing();
+      res.json({ restricted: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/restricted/:userId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const targetId = req.params.userId;
+      await db.delete(restrictedAccounts).where(and(eq(restrictedAccounts.userId, userId), eq(restrictedAccounts.restrictedUserId, targetId)));
+      res.json({ restricted: false });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // HIDDEN WORDS
+  // ══════════════════════════════════════════════════════════════════════════
+  app.get("/api/hidden-words", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.select().from(hiddenWords).where(eq(hiddenWords.userId, userId));
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/hidden-words", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { word } = req.body;
+      if (!word?.trim()) return res.status(400).json({ message: "Word required" });
+      const [row] = await db.insert(hiddenWords).values({ userId, word: word.trim().toLowerCase() }).returning();
+      res.status(201).json(row);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/hidden-words/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      await db.delete(hiddenWords).where(and(eq(hiddenWords.id, Number(req.params.id)), eq(hiddenWords.userId, userId)));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CLOSE FRIENDS (InnerCircle)
+  // ══════════════════════════════════════════════════════════════════════════
+  app.get("/api/close-friends", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.select({ user: users })
+        .from(closeFriends)
+        .innerJoin(users, eq(closeFriends.friendId, users.id))
+        .where(eq(closeFriends.userId, userId));
+      res.json(rows.map(r => r.user));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/close-friends/:userId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const friendId = req.params.userId;
+      if (userId === friendId) return res.status(400).json({ message: "Cannot add yourself" });
+      await db.insert(closeFriends).values({ userId, friendId }).onConflictDoNothing();
+      res.json({ added: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/close-friends/:userId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const friendId = req.params.userId;
+      await db.delete(closeFriends).where(and(eq(closeFriends.userId, userId), eq(closeFriends.friendId, friendId)));
+      res.json({ added: false });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // POST DRAFTS (ProTools Hub)
+  // ══════════════════════════════════════════════════════════════════════════
+  app.get("/api/drafts", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.select().from(postDrafts).where(eq(postDrafts.userId, userId)).orderBy(desc(postDrafts.updatedAt));
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/drafts", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { caption, imageUrl, videoUrl, type } = req.body;
+      const [row] = await db.insert(postDrafts).values({ userId, caption, imageUrl, videoUrl, type }).returning();
+      res.status(201).json(row);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/drafts/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { caption, imageUrl, videoUrl, type } = req.body;
+      const [row] = await db.update(postDrafts)
+        .set({ caption, imageUrl, videoUrl, type, updatedAt: new Date() })
+        .where(and(eq(postDrafts.id, Number(req.params.id)), eq(postDrafts.userId, userId)))
+        .returning();
+      if (!row) return res.status(404).json({ message: "Draft not found" });
+      res.json(row);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/drafts/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      await db.delete(postDrafts).where(and(eq(postDrafts.id, Number(req.params.id)), eq(postDrafts.userId, userId)));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SCHEDULED POSTS (ProTools Hub)
+  // ══════════════════════════════════════════════════════════════════════════
+  app.get("/api/scheduled-posts", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.select().from(scheduledPosts).where(eq(scheduledPosts.userId, userId)).orderBy(scheduledPosts.scheduledFor);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/scheduled-posts", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { caption, imageUrl, videoUrl, type, scheduledFor } = req.body;
+      if (!scheduledFor) return res.status(400).json({ message: "scheduledFor required" });
+      const [row] = await db.insert(scheduledPosts).values({
+        userId, caption, imageUrl, videoUrl, type, scheduledFor: new Date(scheduledFor),
+      }).returning();
+      res.status(201).json(row);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/scheduled-posts/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      await db.update(scheduledPosts)
+        .set({ status: "cancelled" })
+        .where(and(eq(scheduledPosts.id, Number(req.params.id)), eq(scheduledPosts.userId, userId)));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Background job — har 5 min me due scheduled posts publish karo
+  setInterval(async () => {
+    try {
+      const due = await db.select().from(scheduledPosts)
+        .where(and(eq(scheduledPosts.status, "pending"), sql`${scheduledPosts.scheduledFor} <= NOW()`));
+      for (const sp of due) {
+        await storage.createPost({
+          userId: sp.userId, caption: sp.caption, imageUrl: sp.imageUrl || "", videoUrl: sp.videoUrl, type: sp.type || "post",
+        });
+        await db.update(scheduledPosts).set({ status: "published" }).where(eq(scheduledPosts.id, sp.id));
+      }
+    } catch (err) {
+      console.error("[scheduled posts publisher]", err);
+    }
+  }, 5 * 60 * 1000);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PROFILE VIEWS (InsightX)
+  // ══════════════════════════════════════════════════════════════════════════
+  app.post("/api/users/:id/view-profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const viewerId = req.session.userId;
+      const viewedUserId = req.params.id;
+      if (viewerId === viewedUserId) return res.json({ success: true });
+      await db.insert(profileViews).values({ viewerId, viewedUserId });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/insights/profile-views", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const totalRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM profile_views WHERE viewed_user_id = ${userId}`);
+      const total = parseInt(((totalRows as any).rows ?? totalRows)[0]?.cnt ?? "0");
+      const last7Rows = await db.execute(sql`
+        SELECT COUNT(*) as cnt FROM profile_views
+        WHERE viewed_user_id = ${userId} AND created_at > NOW() - INTERVAL '7 days'
+      `);
+      const last7Days = parseInt(((last7Rows as any).rows ?? last7Rows)[0]?.cnt ?? "0");
+      res.json({ total, last7Days });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // LOGIN SESSIONS (Security → Devices)
+  // ══════════════════════════════════════════════════════════════════════════
+  app.get("/api/sessions", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.select().from(loginSessions).where(eq(loginSessions.userId, userId)).orderBy(desc(loginSessions.lastActive));
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/sessions/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      await db.delete(loginSessions).where(and(eq(loginSessions.id, Number(req.params.id)), eq(loginSessions.userId, userId)));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // AD PREFERENCES
+  // ══════════════════════════════════════════════════════════════════════════
+  app.get("/api/ad-preferences", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rows = await db.select().from(adPreferences).where(eq(adPreferences.userId, userId));
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/ad-preferences", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { type, value } = req.body;
+      if (!type || !value) return res.status(400).json({ message: "type and value required" });
+      const [row] = await db.insert(adPreferences).values({ userId, type, value }).returning();
+      res.status(201).json(row);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/ad-preferences/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      await db.delete(adPreferences).where(and(eq(adPreferences.id, Number(req.params.id)), eq(adPreferences.userId, userId)));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/posts/:id/comments", isAuthenticated, async (req, res) => {
     try {
       const postId = Number(req.params.id);
