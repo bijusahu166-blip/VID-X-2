@@ -23,7 +23,7 @@ interface ReelPost {
   caption: string | null;
   type: string | null;
   videoUrl: string | null;
-  user?: { id: string; username?: string; profileImageUrl?: string };
+  user?: { id: string; username?: string; profileImageUrl?: string; isFollowing?: boolean };
   likesCount?: number;
   commentsCount?: number;
   hasLiked?: boolean;
@@ -56,6 +56,7 @@ function ReelCard({
   const [liked, setLiked] = useState(reel.hasLiked ?? false);
   const [likeCount, setLikeCount] = useState(reel.likesCount ?? 0);
   const [saved, setSaved] = useState(reel.hasSaved ?? false);
+  const [following, setFollowing] = useState(reel.user?.isFollowing ?? false);
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -139,6 +140,26 @@ function ReelCard({
       queryClient.invalidateQueries({ queryKey: ["/api/user/saved"] });
     },
     onError: () => toast({ title: "Couldn't save post", variant: "destructive" }),
+  });
+
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/users/${reel.userId}/follow`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Follow failed");
+      return res.json();
+    },
+    onMutate: () => {
+      const wasFollowing = following;
+      setFollowing(!wasFollowing);
+      return { wasFollowing };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx) setFollowing(ctx.wasFollowing);
+      toast({ title: "Couldn't update follow", variant: "destructive" });
+    },
   });
 
   const reportMutation = useMutation({
@@ -291,26 +312,43 @@ function ReelCard({
       </div>
 
       <div className="absolute left-4 bottom-24 right-16 z-20 flex flex-col gap-2 pointer-events-auto">
-        <div
-          onClick={() => reel.userId && navigate(`/profile/${reel.userId}`)}
-          className="flex items-center gap-2 cursor-pointer w-fit"
-        >
-          {reel.user?.profileImageUrl ? (
-            <img
-              src={reel.user.profileImageUrl}
-              alt=""
-              className="w-9 h-9 rounded-full border border-white/30 object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center border border-white/20">
-              <User className="w-4 h-4 text-zinc-400" />
-            </div>
-          )}
-          <span className="font-bold text-white text-base drop-shadow-md hover:underline">
-            @{reel.user?.username || "user"}
-          </span>
+        <div className="flex items-center gap-2 w-fit">
+          <div
+            onClick={() => reel.userId && navigate(`/profile/${reel.userId}`)}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            {reel.user?.profileImageUrl ? (
+              <img
+                src={reel.user.profileImageUrl}
+                alt=""
+                className="w-9 h-9 rounded-full border border-white/30 object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center border border-white/20">
+                <User className="w-4 h-4 text-zinc-400" />
+              </div>
+            )}
+            <span className="font-bold text-white text-base drop-shadow-md hover:underline">
+              @{reel.user?.username || "user"}
+            </span>
+          </div>
         </div>
+
+        {user?.id !== reel.userId && (
+          <button
+            onClick={() => followMutation.mutate()}
+            disabled={followMutation.isPending}
+            className={`w-fit px-4 py-1.5 rounded-md text-xs font-bold text-white active:scale-95 transition-all disabled:opacity-60 ${
+              following ? "bg-zinc-700/80 border border-white/20" : "bg-red-500"
+            }`}
+          >
+            {followMutation.isPending ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : following ? "Following" : "Follow"}
+          </button>
+        )}
+
         <p className="text-sm text-white/90 line-clamp-3 drop-shadow-md pl-0.5 leading-relaxed">
           {reel.caption}
         </p>
@@ -396,27 +434,71 @@ function ReelCard({
   );
 }
 
+// Extracts hashtags (e.g. #travel) and normalized words from a caption/title
+function extractTags(caption: string | null | undefined): string[] {
+  if (!caption) return [];
+  const hashtags = (caption.match(/#[\w]+/g) || []).map(t => t.slice(1).toLowerCase());
+  const words = caption
+    .toLowerCase()
+    .replace(/#[\w]+/g, "")
+    .split(/\s+/)
+    .map(w => w.replace(/[^a-z0-9]/g, ""))
+    .filter(w => w.length > 3);
+  return Array.from(new Set([...hashtags, ...words]));
+}
+
+// Fisher-Yates shuffle for genuine randomness
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 export default function Reels() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<number | null>(null);
   const { data: allPosts, isLoading } = usePosts();
-  const reels = (Array.isArray(allPosts) ? allPosts : [])
-    .filter(p => p.type === "reel")
-    .sort((a, b) => {
-      const scoreA = (a.likesCount ?? 0) * 2 + (a.commentsCount ?? 0) * 3;
-      const scoreB = (b.likesCount ?? 0) * 2 + (b.commentsCount ?? 0) * 3;
-      return scoreB - scoreA;
-    });
+
+  const reels = (Array.isArray(allPosts) ? allPosts : []).filter(p => p.type === "reel");
+
   const userGoal = localStorage.getItem("user_goal") || "";
   const allowedSubjects = getGoalSubjects(userGoal);
+
   const filteredReels = reels.filter((r) => {
     if (allowedSubjects.length === 0) return true;
     const text = `${r.caption ?? ""}`.toLowerCase();
     return allowedSubjects.some(subject => text.includes(subject));
   });
-  const displayReels = filteredReels.length > 0 ? filteredReels : reels;
+  const baseReels = filteredReels.length > 0 ? filteredReels : reels;
+
+  // Build a "what this user tends to watch" tag set from recently liked/saved reels,
+  // plus their goal subjects, so similar hashtag/title videos surface more often.
+  const interestTags = new Set<string>(allowedSubjects.map(s => s.toLowerCase()));
+  reels.forEach(r => {
+    if (r.hasLiked || r.hasSaved) {
+      extractTags(r.caption).forEach(t => interestTags.add(t));
+    }
+  });
+
+  // Score = light engagement weight + interest-tag matches. Randomized within
+  // that so the feed doesn't feel statically ranked every time it loads.
+  const scoredReels = baseReels.map(r => {
+    const tags = extractTags(r.caption);
+    const matchCount = tags.filter(t => interestTags.has(t)).length;
+    const engagementScore = (r.likesCount ?? 0) * 0.5 + (r.commentsCount ?? 0) * 0.5;
+    const score = matchCount * 10 + engagementScore + Math.random() * 8;
+    return { reel: r, score };
+  });
+
+  const displayReels = shuffle(scoredReels)
+    .sort((a, b) => b.score - a.score)
+    .map(s => s.reel);
+
   const visibleReels = displayReels.slice(0, 15);
 
   useEffect(() => {
