@@ -1857,21 +1857,21 @@ const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.ty
             )}
           </TabsContent>
 
-          <TabsContent value="saved" className="mt-0">
+        <TabsContent value="saved" className="mt-0">
   {savedLoading ? (
     <div className="grid grid-cols-3 gap-0.5">
       {Array(6).fill(0).map((_, i) => (
         <div key={i} className="aspect-square bg-zinc-900 animate-pulse" />
       ))}
     </div>
-  ) : !savedPosts || savedPosts.length === 0 ? (
+  ) : !savedPostsData || savedPostsData.length === 0 ? (
     <div className="py-20 text-center">
       <div className="text-4xl mb-3">📁</div>
       <p className="text-zinc-600 text-sm font-mono">ARCHIVE EMPTY</p>
     </div>
   ) : (
     <div className="grid grid-cols-3 gap-0.5">
-      {savedPosts.map((post: any) => (
+      {savedPostsData.map((post: any) => (
         <button
           key={post.id}
           className="aspect-square bg-zinc-900 relative overflow-hidden text-left w-full"
