@@ -1,0 +1,5 @@
+[33mcommit 85e47e33ef2b8d0256f40d2166a386767239bdae[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Tumhara Naam <tumhara-email@gmail.com>
+Date:   Tue Aug 18 15:12:37 2026 +0530
+
+    add missing route handlers for settings tables
