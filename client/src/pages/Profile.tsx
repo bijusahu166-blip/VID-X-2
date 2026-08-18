@@ -14,7 +14,11 @@ import {
   MessageSquare, AtSign, MessageCircle, Share2,
   LogOut, Menu, Zap, Trophy, Flame, Shield, Sword, Target,
   Crown, Cpu, BadgeCheck, BarChart3, Lock, Video, WifiOff, Gauge,
-  MoreVertical, Flag, Trash2, Copy, Link as LinkIcon, X
+  MoreVertical, Flag, Trash2, Copy, Link as LinkIcon, X,
+  UserCircle2, Smartphone, Bell, Palette, FileText, HelpCircle,
+  Download as DownloadIcon, Repeat2, EyeOff, DollarSign, CalendarClock,
+  FolderCog, LineChart, ShieldAlert, Fingerprint, Sun, Moon, Monitor,
+  Type, Sparkles, Megaphone, Languages, LifeBuoy, PlusCircle
 } from "lucide-react";
 import { useVideoSettings, VideoQuality } from "@/contexts/VideoSettingsContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,6 +65,23 @@ const ACHIEVEMENTS = [
   { icon: Crown, label: "Royalty", color: "#f472b6" },
 ];
 
+// ══════════════════════════════════════════════════════════════════════════
+// Smart default avatar — round, gender-aware (boys get a male preset,
+// girls get a female preset). Falls back to a neutral style if gender
+// isn't set. Used anywhere a user has no uploaded profileImageUrl.
+// ══════════════════════════════════════════════════════════════════════════
+function getDefaultAvatar(gender: string | undefined | null, seed: string): string {
+  const safeSeed = encodeURIComponent(seed || "litlink-user");
+  if (gender === "female" || gender === "woman" || gender === "girl") {
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeSeed}&top=longHairStraight,longHairCurly,longHairBun,longHairBob&hairColor=2c1b18,4a312c,724133,a55728,b58143&facialHairProbability=0&clothesColor=ff6f91,ff9ff3,e84393,fd79a8&backgroundColor=ffe0ec,ffd1e8`;
+  }
+  if (gender === "male" || gender === "man" || gender === "boy") {
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeSeed}&top=shortHairShortFlat,shortHairShortRound,shortHairTheCaesar,shortHairFrizzle&facialHairProbability=30&clothesColor=3498db,2d98da,0984e3,00b894&backgroundColor=d9f0ff,dceeff`;
+  }
+  // Gender not set — neutral smart avatar
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${safeSeed}&backgroundColor=eeeeee,e3f2fd,f3e5f5`;
+}
+
 function SettingRow({ icon: Icon, label, sub, onClick }: { icon: any; label: string; sub?: string; onClick?: () => void }) {
   return (
     <button onClick={onClick} className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 rounded-xl transition-colors text-left active:bg-white/10">
@@ -74,6 +95,34 @@ function SettingRow({ icon: Icon, label, sub, onClick }: { icon: any; label: str
         </div>
       </div>
       <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+    </button>
+  );
+}
+
+// Reusable toggle row used across the new settings panels below
+function ToggleRow({ icon: Icon, label, sub, checked, onCheckedChange }: { icon: any; label: string; sub?: string; checked: boolean; onCheckedChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/40 border border-border/30">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+          <Icon className="w-3.5 h-3.5" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-medium truncate">{label}</div>
+          {sub && <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>}
+        </div>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} className="shrink-0 ml-2" />
+    </div>
+  );
+}
+
+// Simple selectable option row (radio-style, no backend wiring needed)
+function OptionRow({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors">
+      <span className="text-sm">{label}</span>
+      {selected && <div className="w-2 h-2 rounded-full bg-pink-400" />}
     </button>
   );
 }
@@ -267,9 +316,9 @@ function BlockedAccountsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               blocked.map((u: any) => (
                 <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
                   <div className="flex items-center gap-3 min-w-0">
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={u.profileImageUrl || undefined} />
-                      <AvatarFallback>{u.firstName?.[0]}</AvatarFallback>
+                    <Avatar className="w-8 h-8 rounded-full">
+                      <AvatarImage src={u.profileImageUrl || getDefaultAvatar(u.gender, u.username || u.id)} className="rounded-full" />
+                      <AvatarFallback className="rounded-full">{u.firstName?.[0]}</AvatarFallback>
                     </Avatar>
                     <span className="text-sm font-medium truncate">@{u.username || u.firstName}</span>
                   </div>
@@ -509,6 +558,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
   const u = profileData;
   const name = u ? `${u.firstName} ${u.lastName}` : "User";
   const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase();
+  const avatarSrc = u?.profileImageUrl || getDefaultAvatar(u?.gender, u?.username || u?.id || userId);
 const sortedUserPosts = (userPosts ?? [])
   .filter((p: any) => String(p.userId) === String(userId))
   .slice()
@@ -568,13 +618,14 @@ const sortedUserPosts = (userPosts ?? [])
         <div className="h-36 w-full" style={{ background: "linear-gradient(135deg, #1a0030, #0d001a)" }} />
         <div className="absolute -bottom-10 left-4">
          <div className="relative">
+  {/* Round avatar (smart gender-based default when no photo uploaded) */}
   <div className="w-20 h-20 rounded-full border-4 border-black overflow-hidden bg-zinc-800">
     {u?.profileImageUrl
-      ? <img src={u.profileImageUrl} className="w-full h-full object-cover" />
-      : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-600 to-pink-600 text-2xl font-black text-white">{initials}</div>
+      ? <img src={u.profileImageUrl} className="w-full h-full object-cover rounded-full" />
+      : <img src={avatarSrc} className="w-full h-full object-cover rounded-full" alt={initials} />
     }
   </div>
-  {/* ✅ NAYA: Pet overlay for other user's profile */}
+  {/* Pet overlay for other user's profile */}
   {u?.pet && (() => {
     try {
       const pet = JSON.parse(u.pet);
@@ -797,7 +848,14 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   };
 
   const profileBooksArray = profileBooksData as any[];
-  const myPosts = posts?.filter(p => String(p.userId) === String(user?.id) && p.type !== "story").slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
+
+  // ── FIX: guard against posts not being an array (was crashing with
+  // "l?.filter is not a function" whenever the API returned something
+  // other than a plain array, e.g. an error object or undefined) ──
+  const myPosts = (Array.isArray(posts) ? posts : [])
+    .filter((p: any) => String(p.userId) === String(user?.id) && p.type !== "story")
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
 // ── Real InsightX calculations ──
 const totalViews = myPosts.reduce((sum, p: any) => sum + (p.viewerCount ?? 0), 0);
@@ -837,6 +895,62 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
   const [allowComments, setAllowComments] = useState(true);
   const [allowTags, setAllowTags] = useState(true);
 
+  // ── NEW: state for the settings sections added from the master table ──
+  // Interactions → Notifications
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [notifyMessages, setNotifyMessages] = useState(true);
+  const [notifyRequests, setNotifyRequests] = useState(true);
+  const [notifyLikes, setNotifyLikes] = useState(true);
+  const [notifyComments, setNotifyComments] = useState(true);
+  const [notifyMentions, setNotifyMentions] = useState(true);
+  const [notifyFollowers, setNotifyFollowers] = useState(true);
+  const [quietMode, setQuietMode] = useState(false);
+
+  // Account & Security → Account
+  const [accountType, setAccountType] = useState<"Personal" | "Professional">("Personal");
+
+  // Account & Security → Security
+  const [twoFA, setTwoFA] = useState(false);
+  const [loginAlerts, setLoginAlerts] = useState(true);
+
+  // Account & Security → Appearance
+  const [theme, setTheme] = useState<"Dark" | "Light" | "System">("Dark");
+  const [fontSize, setFontSize] = useState<"Small" | "Default" | "Large">("Default");
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  // Privacy → PrivacyLock extras
+  const [whoCanFollow, setWhoCanFollow] = useState<"Everyone" | "Approval">("Everyone");
+  const [whoCanSeePosts, setWhoCanSeePosts] = useState<"Everyone" | "Followers">("Everyone");
+  const [activityStatus, setActivityStatus] = useState(true);
+  const [readReceipts, setReadReceipts] = useState(true);
+  const [findByPhone, setFindByPhone] = useState(true);
+  const [findByEmail, setFindByEmail] = useState(true);
+
+  // Privacy → ShareSync
+  const [postSharing, setPostSharing] = useState(true);
+  const [storySharing, setStorySharing] = useState(true);
+  const [reelSharing, setReelSharing] = useState(true);
+  const [allowDownloads, setAllowDownloads] = useState(true);
+  const [allowRemix, setAllowRemix] = useState(true);
+  const [externalSharing, setExternalSharing] = useState(true);
+  const [allowCopyLink, setAllowCopyLink] = useState(true);
+
+  // Privacy → GhostView
+  const [activityVisibility, setActivityVisibility] = useState(true);
+  const [profileVisitVisibility, setProfileVisitVisibility] = useState(true);
+  const [storyViewPrivacy, setStoryViewPrivacy] = useState(true);
+  const [searchVisibility, setSearchVisibility] = useState(true);
+
+  // Privacy → FriendPulse
+  const [pulseRequests, setPulseRequests] = useState(true);
+  const [pulsePosts, setPulsePosts] = useState(true);
+  const [pulseStories, setPulseStories] = useState(true);
+  const [pulseReels, setPulseReels] = useState(true);
+  const [pulseMentions, setPulseMentions] = useState(true);
+
+  // For Professionals → ProTools Hub / AdPay Center
+  const [autoScheduleReminders, setAutoScheduleReminders] = useState(false);
+
   // ── Edit Profile ──────────────────────────────────────────────────────────
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editFirstName, setEditFirstName] = useState("");
@@ -844,6 +958,7 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
   const [editUsername, setEditUsername] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [editGender, setEditGender] = useState<string>("");
   const [viewingMyPost, setViewingMyPost] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -853,11 +968,12 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
     setEditUsername((user as any)?.username || "");
     setEditBio((user as any)?.bio || "");
     setEditAvatarUrl(user?.profileImageUrl || "");
+    setEditGender((user as any)?.gender || "");
     setShowEditProfile(true);
   };
 
   const updateProfileMutation = useMutation({
-    mutationFn: (data: { firstName: string; lastName: string; username?: string; bio?: string; profileImageUrl?: string }) =>
+    mutationFn: (data: { firstName: string; lastName: string; username?: string; bio?: string; profileImageUrl?: string; gender?: string }) =>
       apiRequest("PATCH", "/api/profile", data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
@@ -880,6 +996,7 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
       username: editUsername.trim() || undefined,
       bio: editBio.trim() || undefined,
       profileImageUrl: editAvatarUrl || undefined,
+      gender: editGender || undefined,
     });
   };
 
@@ -946,6 +1063,9 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
   if (params?.id && params.id !== user?.id) {
     return <OtherUserProfile userId={params.id} />;
   }
+
+  // Smart round default avatar for own profile (used when no photo uploaded)
+  const ownAvatarSrc = currentProfileUser?.profileImageUrl || getDefaultAvatar((currentProfileUser as any)?.gender, (currentProfileUser as any)?.username || user?.id || "me");
 
   return (
     <div className="min-h-screen bg-black pb-28 relative">
@@ -1096,6 +1216,7 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                             { icon: AtSign,        label: "Tags",      color: "#60a5fa", panel: "Tags and mentions" },
                             { icon: MessageCircle, label: "Comments",  color: "#f59e0b", panel: "Comments" },
                             { icon: Share2,        label: "Sharing",   color: "#a78bfa", panel: "Sharing and reuse" },
+                            { icon: Bell,          label: "Notifications", color: "#fb7185", panel: "Notifications" },
                           ].map((s) => (
                             <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
                               className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
@@ -1107,38 +1228,47 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                           ))}
                         </div>
                       </div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-5 pt-4 pb-1">Ads preferences</p>
-                      <div className="px-5 py-3 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label className="text-sm font-medium">Personalized Ads</Label>
-                            <p className="text-[11px] text-muted-foreground">Based on your interests</p>
-                          </div>
-                          <Switch defaultChecked />
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <Label className="text-sm font-medium">{t("settings.language")}</Label>
-                              <p className="text-[11px] text-muted-foreground">{t("settings.language.desc")}</p>
-                            </div>
-                          </div>
-                          <div className="mt-3 flex gap-2">
-                            <button
-                              onClick={() => setLanguage("en")}
-                              className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${language === "en" ? "bg-white text-black" : "bg-black/30 text-zinc-300"}`}
-                            >
-                              {t("common.english")}
+
+                      {/* Section: Account & Security */}
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">👤 Account & Security</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { icon: UserCircle2, label: "Account",  color: "#60a5fa", panel: "Account" },
+                            { icon: Fingerprint, label: "Security", color: "#34d399", panel: "Security" },
+                            { icon: Palette,     label: "Appearance", color: "#c084fc", panel: "Appearance" },
+                          ].map((s) => (
+                            <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
+                              className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-6 h-6" style={{ color: s.color }} />
+                              </div>
+                              <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
                             </button>
-                            <button
-                              onClick={() => setLanguage("hi")}
-                              className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${language === "hi" ? "bg-white text-black" : "bg-black/30 text-zinc-300"}`}
-                            >
-                              {t("common.hindi")}
-                            </button>
-                          </div>
+                          ))}
                         </div>
                       </div>
+
+                      {/* Section: Other */}
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-3">🌐 Other</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { icon: Megaphone, label: "Ads",       color: "#fbbf24", panel: "AdsPrefs" },
+                            { icon: Languages, label: "Language",  color: "#38bdf8", panel: "LanguagePrefs" },
+                            { icon: LifeBuoy,  label: "Help & Safety", color: "#f87171", panel: "HelpSafety" },
+                          ].map((s) => (
+                            <button key={s.panel} onClick={() => setSettingsPanel(s.panel)}
+                              className="flex flex-col items-center gap-3 pt-4 pb-3 px-2 rounded-2xl border border-white/8 bg-white/4 hover:bg-white/8 active:scale-95 transition-all">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}>
+                                <s.icon className="w-6 h-6" style={{ color: s.color }} />
+                              </div>
+                              <span className="text-[9px] font-bold text-center leading-tight text-zinc-300">{s.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                      <Separator className="my-3" />
 
 <button onClick={() => window.open("/privacy-policy.html", "_blank")}
@@ -1269,7 +1399,7 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                     </div>
                   )}
 
-                  {/* ── SUB: GROW ── */}
+                  {/* ── SUB: GROW (InsightX) ── */}
                  {settingsPanel === "InsightX" && (
   <div className="p-5 space-y-4">
     <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
@@ -1325,9 +1455,10 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
     </div>
   </div>
 )}
-                  {/* ── SUB: PRIVACYLOCK ── */}
+
+                  {/* ── SUB: PRIVACYLOCK (fully expanded per master table) ── */}
                   {settingsPanel === "PrivacyLock" && (
-                    <div className="p-5 space-y-5">
+                    <div className="p-5 space-y-3">
                       <div className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/30">
                         <div>
                           <div className="text-sm font-semibold">Private account</div>
@@ -1338,6 +1469,25 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                       <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400">
                         {accountPrivate ? "🔒 Your account is private. New followers must be approved." : "🌐 Your account is public. Anyone can see your posts."}
                       </div>
+
+                      <div className="space-y-1 pt-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Who can follow me</p>
+                        {(["Everyone", "Approval"] as const).map((opt) => (
+                          <OptionRow key={opt} label={opt} selected={whoCanFollow === opt} onClick={() => setWhoCanFollow(opt)} />
+                        ))}
+                      </div>
+
+                      <div className="space-y-1 pt-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Who can see my posts</p>
+                        {(["Everyone", "Followers"] as const).map((opt) => (
+                          <OptionRow key={opt} label={opt} selected={whoCanSeePosts === opt} onClick={() => setWhoCanSeePosts(opt)} />
+                        ))}
+                      </div>
+
+                      <ToggleRow icon={Activity} label="Activity Status" sub="Online-status visibility" checked={activityStatus} onCheckedChange={setActivityStatus} />
+                      <ToggleRow icon={CheckCheckIconPlaceholder} label="Read Receipts" sub="Message read status" checked={readReceipts} onCheckedChange={setReadReceipts} />
+                      <ToggleRow icon={Smartphone} label="Find Me by Phone" sub="Phone discoverability" checked={findByPhone} onCheckedChange={setFindByPhone} />
+                      <ToggleRow icon={AtSign} label="Find Me by Email" sub="Email discoverability" checked={findByEmail} onCheckedChange={setFindByEmail} />
                     </div>
                   )}
 
@@ -1407,6 +1557,141 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                     </div>
                   )}
 
+                  {/* ── SUB: NOTIFICATIONS (new, from master table) ── */}
+                  {settingsPanel === "Notifications" && (
+                    <div className="p-5 space-y-3">
+                      <ToggleRow icon={Bell} label="Push Notifications" sub="Master notification control" checked={pushEnabled} onCheckedChange={setPushEnabled} />
+                      <ToggleRow icon={MessageSquare} label="Messages" sub="DM alerts" checked={notifyMessages} onCheckedChange={setNotifyMessages} />
+                      <ToggleRow icon={Users} label="Friend Requests" sub="Request alerts" checked={notifyRequests} onCheckedChange={setNotifyRequests} />
+                      <ToggleRow icon={Heart} label="Likes" sub="Like alerts" checked={notifyLikes} onCheckedChange={setNotifyLikes} />
+                      <ToggleRow icon={MessageCircle} label="Comments" sub="Comment alerts" checked={notifyComments} onCheckedChange={setNotifyComments} />
+                      <ToggleRow icon={AtSign} label="Mentions & Tags" sub="Mention/tag alerts" checked={notifyMentions} onCheckedChange={setNotifyMentions} />
+                      <ToggleRow icon={UserCircle2} label="New Followers" sub="Follower alerts" checked={notifyFollowers} onCheckedChange={setNotifyFollowers} />
+                      <ToggleRow icon={Moon} label="Quiet Mode" sub="Temporarily silence alerts" checked={quietMode} onCheckedChange={setQuietMode} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: ACCOUNT (new) ── */}
+                  {settingsPanel === "Account" && (
+                    <div className="p-5 space-y-3">
+                      <SettingRow icon={Pencil} label="Edit Profile" sub="Profile information" onClick={() => { setSettingsPanel(null); openEditProfile(); }} />
+                      <SettingRow icon={AtSign} label="Username" sub={`@${(user as any)?.username || "not set"}`} onClick={() => { setSettingsPanel(null); openEditProfile(); }} />
+                      <SettingRow icon={MessageSquare} label="Email" sub={(user as any)?.email || "Change email address"} />
+                      <SettingRow icon={Smartphone} label="Phone Number" sub="Change phone number" />
+                      <SettingRow icon={KeyRound} label="Password" sub="Change account password" />
+                      <div className="space-y-1 pt-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Account Type</p>
+                        {(["Personal", "Professional"] as const).map((opt) => (
+                          <OptionRow key={opt} label={opt} selected={accountType === opt} onClick={() => setAccountType(opt)} />
+                        ))}
+                      </div>
+                      <Separator className="my-2" />
+                      <button className="w-full h-10 rounded-xl border border-yellow-500/30 text-yellow-400 text-sm font-semibold hover:bg-yellow-500/10 transition-colors">
+                        Deactivate Account
+                      </button>
+                      <button
+                        onClick={() => { setSettingsPanel(null); setRemoveAccountOpen(true); }}
+                        className="w-full h-10 rounded-xl border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-500/10 transition-colors"
+                      >
+                        Delete Account
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── SUB: SECURITY (new) ── */}
+                  {settingsPanel === "Security" && (
+                    <div className="p-5 space-y-3">
+                      <SettingRow icon={KeyRound} label="Change Password" sub="Password management" />
+                      <ToggleRow icon={Fingerprint} label="2FA" sub="Extra login security" checked={twoFA} onCheckedChange={setTwoFA} />
+                      <SettingRow icon={HistoryIcon} label="Login Activity" sub="View recent logins" />
+                      <SettingRow icon={Smartphone} label="Devices" sub="Manage logged-in devices" />
+                      <ToggleRow icon={ShieldAlert} label="Login Alerts" sub="New/suspicious login alerts" checked={loginAlerts} onCheckedChange={setLoginAlerts} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: APPEARANCE (new) ── */}
+                  {settingsPanel === "Appearance" && (
+                    <div className="p-5 space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Theme</p>
+                        {([
+                          { key: "Dark", icon: Moon },
+                          { key: "Light", icon: Sun },
+                          { key: "System", icon: Monitor },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.key}
+                            onClick={() => setTheme(opt.key)}
+                            className="w-full flex items-center justify-between px-4 py-3 rounded-xl hover:bg-white/5 transition-colors"
+                          >
+                            <span className="flex items-center gap-2 text-sm"><opt.icon className="w-3.5 h-3.5" /> {opt.key}</span>
+                            {theme === opt.key && <div className="w-2 h-2 rounded-full bg-pink-400" />}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="space-y-1 pt-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Font Size</p>
+                        {(["Small", "Default", "Large"] as const).map((opt) => (
+                          <OptionRow key={opt} label={opt} selected={fontSize === opt} onClick={() => setFontSize(opt)} />
+                        ))}
+                      </div>
+                      <ToggleRow icon={Sparkles} label="Reduce Motion" sub="Reduce animations" checked={reduceMotion} onCheckedChange={setReduceMotion} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: ADS PREFERENCES (new panel, real content) ── */}
+                  {settingsPanel === "AdsPrefs" && (
+                    <div className="p-5 space-y-3">
+                      <ToggleRow icon={Megaphone} label="Personalized Ads" sub="Interest-based advertising" checked={true} onCheckedChange={() => {}} />
+                      <SettingRow icon={Grid} label="Ad Topics" sub="Manage preferred ad categories" />
+                      <SettingRow icon={EyeOff} label="Hide Advertiser" sub="Hide unwanted advertisers" />
+                      <SettingRow icon={HelpCircle} label="Why This Ad?" sub="Ad explanation" />
+                      <SettingRow icon={RefreshCw} label="Reset Ad Preferences" sub="Reset ad personalization" />
+                    </div>
+                  )}
+
+                  {/* ── SUB: LANGUAGE (new panel) ── */}
+                  {settingsPanel === "LanguagePrefs" && (
+                    <div className="p-5 space-y-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label className="text-sm font-medium">{t("settings.language")}</Label>
+                            <p className="text-[11px] text-muted-foreground">{t("settings.language.desc")}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => setLanguage("en")}
+                            className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${language === "en" ? "bg-white text-black" : "bg-black/30 text-zinc-300"}`}
+                          >
+                            {t("common.english")}
+                          </button>
+                          <button
+                            onClick={() => setLanguage("hi")}
+                            className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${language === "hi" ? "bg-white text-black" : "bg-black/30 text-zinc-300"}`}
+                          >
+                            {t("common.hindi")}
+                          </button>
+                        </div>
+                      </div>
+                      <SettingRow icon={FileText} label="Content Languages" sub="Preferred content languages" />
+                      <ToggleRow icon={Languages} label="Auto Translation" sub="Translate content automatically" checked={true} onCheckedChange={() => {}} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: HELP & SAFETY (new panel) ── */}
+                  {settingsPanel === "HelpSafety" && (
+                    <div className="p-5 space-y-3">
+                      <SettingRow icon={HelpCircle} label="Help Center" sub="Help articles" onClick={() => window.open("mailto:IQPartneroffical00@gmail.com")} />
+                      <SettingRow icon={Flag} label="Report a Problem" sub="Technical issues" onClick={() => window.open("mailto:IQPartneroffical00@gmail.com")} />
+                      <SettingRow icon={UserX} label="Report Account" sub="Report a user" />
+                      <SettingRow icon={Flag} label="Report Content" sub="Report post/reel" />
+                      <SettingRow icon={ShieldCheck} label="Safety Center" sub="Safety information" />
+                      <SettingRow icon={MessageSquare} label="Contact Support" sub="Get in touch" onClick={() => window.open("mailto:IQPartneroffical00@gmail.com")} />
+                    </div>
+                  )}
+
                   {/* ── SUB: BLOCKED ── */}
                   {settingsPanel === "BlockShield" && (
                     <div className="p-5 space-y-3">
@@ -1417,10 +1702,15 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                       >
                         Open Blocked Accounts
                       </button>
+                      <SettingRow icon={UserX} label="Restricted Accounts" sub="Limit interactions" />
+                      <SettingRow icon={Grid} label="Hidden Words" sub="Filter specific words" />
+                      <ToggleRow icon={MessageCircle} label="Comment Filtering" sub="Filter unwanted comments" checked={true} onCheckedChange={() => {}} />
+                      <ToggleRow icon={MessageSquare} label="Message Filtering" sub="Filter message requests" checked={true} onCheckedChange={() => {}} />
+                      <SettingRow icon={AtSign} label="Mention & Tag Control" sub="Control unwanted tags" />
                     </div>
                   )}
 
-                  {/* ── SUB: CLOSE FRIENDS ── */}
+                  {/* ── SUB: CLOSE FRIENDS (InnerCircle) ── */}
                   {settingsPanel === "InnerCircle" && (
                     <div className="p-5 space-y-3">
                       <p className="text-[11px] text-muted-foreground">Your close friends list is only visible to you.</p>
@@ -1437,6 +1727,81 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                       ))}
                       <button className="w-full h-10 rounded-xl border border-dashed border-white/20 text-[12px] text-muted-foreground hover:bg-white/5 transition-colors">
                         + Add more friends
+                      </button>
+                      <ToggleRow icon={Bell} label="Circle Notifications" sub="Circle activity alerts" checked={true} onCheckedChange={() => {}} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: SHARESYNC (expanded per master table) ── */}
+                  {settingsPanel === "ShareSync" && (
+                    <div className="p-5 space-y-3">
+                      <ToggleRow icon={Share2} label="Post Sharing" sub="Allow post sharing" checked={postSharing} onCheckedChange={setPostSharing} />
+                      <ToggleRow icon={Share2} label="Story Sharing" sub="Allow story sharing" checked={storySharing} onCheckedChange={setStorySharing} />
+                      <ToggleRow icon={Video} label="Reel Sharing" sub="Allow reel sharing" checked={reelSharing} onCheckedChange={setReelSharing} />
+                      <ToggleRow icon={DownloadIcon} label="Downloads" sub="Allow downloads" checked={allowDownloads} onCheckedChange={setAllowDownloads} />
+                      <ToggleRow icon={Repeat2} label="Remix" sub="Allow remixing" checked={allowRemix} onCheckedChange={setAllowRemix} />
+                      <ToggleRow icon={LinkIcon} label="External Sharing" sub="Sharing outside LITLink" checked={externalSharing} onCheckedChange={setExternalSharing} />
+                      <ToggleRow icon={Copy} label="Copy Link" sub="Allow link copying" checked={allowCopyLink} onCheckedChange={setAllowCopyLink} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: GHOSTVIEW (expanded per master table) ── */}
+                  {settingsPanel === "GhostView" && (
+                    <div className="p-5 space-y-3">
+                      <ToggleRow icon={Activity} label="Activity Visibility" sub="Activity visibility" checked={activityVisibility} onCheckedChange={setActivityVisibility} />
+                      <ToggleRow icon={Users} label="Profile Visit Visibility" sub="Profile-visit visibility" checked={profileVisitVisibility} onCheckedChange={setProfileVisitVisibility} />
+                      <ToggleRow icon={EyeOff} label="Story Viewing Privacy" sub="Story-view visibility" checked={storyViewPrivacy} onCheckedChange={setStoryViewPrivacy} />
+                      <ToggleRow icon={Grid} label="Search Visibility" sub="Search/suggestion visibility" checked={searchVisibility} onCheckedChange={setSearchVisibility} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: FRIENDPULSE (expanded per master table) ── */}
+                  {settingsPanel === "FriendPulse" && (
+                    <div className="p-5 space-y-3">
+                      <ToggleRow icon={Users} label="Friend Requests" sub="Request notifications" checked={pulseRequests} onCheckedChange={setPulseRequests} />
+                      <ToggleRow icon={Grid} label="Friend Posts" sub="Friend-post notifications" checked={pulsePosts} onCheckedChange={setPulsePosts} />
+                      <ToggleRow icon={CalendarClock} label="Friend Stories" sub="Story notifications" checked={pulseStories} onCheckedChange={setPulseStories} />
+                      <ToggleRow icon={Video} label="Friend Reels" sub="Reel notifications" checked={pulseReels} onCheckedChange={setPulseReels} />
+                      <ToggleRow icon={AtSign} label="Friend Mentions" sub="Mention notifications" checked={pulseMentions} onCheckedChange={setPulseMentions} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: PROTOOLS HUB (expanded per master table) ── */}
+                  {settingsPanel === "ProTools Hub" && (
+                    <div className="p-5 space-y-3">
+                      <SettingRow icon={FileText} label="Drafts" sub="Manage saved content" />
+                      <SettingRow icon={CalendarClock} label="Schedule Content" sub="Publish content later" />
+                      <SettingRow icon={FolderCog} label="Content Management" sub="Archive / delete published content" />
+                      <SettingRow icon={Wrench} label="Creator Tools" sub="Professional tools" />
+                      <SettingRow icon={LineChart} label="Advanced Insights" sub="Detailed analytics" />
+                      <ToggleRow icon={Bell} label="Schedule Reminders" sub="Get notified before scheduled posts go live" checked={autoScheduleReminders} onCheckedChange={setAutoScheduleReminders} />
+                    </div>
+                  )}
+
+                  {/* ── SUB: ADPAY CENTER (expanded per master table) ── */}
+                  {settingsPanel === "AdPay Center" && (
+                    <div className="p-5 space-y-3">
+                      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400">Balance</p>
+                        <p className="text-2xl font-black text-white mt-1">₹0.00</p>
+                        <p className="text-[11px] text-zinc-400 mt-1">Available earnings</p>
+                      </div>
+                      <SettingRow icon={LineChart} label="Earnings" sub="Monetization income" />
+                      <SettingRow icon={Wallet} label="Payment Method" sub="Manage UPI/bank details" />
+                      <SettingRow icon={DollarSign} label="Withdraw" sub="Transfer eligible earnings" />
+                      <SettingRow icon={HistoryIcon} label="Transactions" sub="Payment history" />
+                    </div>
+                  )}
+
+                  {/* ── SUB: SHARING (own separate box → merged into ShareSync per your requested structure, kept for back-compat) ── */}
+                  {settingsPanel === "Sharing and reuse" && (
+                    <div className="p-5 space-y-3">
+                      <p className="text-[11px] text-muted-foreground">Sharing permissions now live under Privacy → ShareSync.</p>
+                      <button
+                        onClick={() => setSettingsPanel("ShareSync")}
+                        className="w-full h-10 rounded-xl border border-white/15 text-sm font-semibold hover:bg-white/5 transition-colors"
+                      >
+                        Open ShareSync
                       </button>
                     </div>
                   )}
@@ -1462,19 +1827,6 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                           </div>
                         </div>
                       ))}
-                    </div>
-                  )}
-
-                  {/* ── SUB: GENERIC (ProTools Hub, ShareSync, GhostView, FriendPulse, Sharing, AdPay Center) ── */}
-                  {["ProTools Hub", "ShareSync", "GhostView", "FriendPulse", "Sharing and reuse", "AdPay Center"].includes(settingsPanel ?? "") && (
-                    <div className="p-5 space-y-4">
-                      <div className="flex flex-col items-center gap-3 py-8 text-center text-muted-foreground">
-                        <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                          <Settings className="w-7 h-7 opacity-40" />
-                        </div>
-                        <div className="text-sm font-medium">More options coming soon</div>
-                        <div className="text-[11px] opacity-60 max-w-[200px]">This feature is being built. Check back in the next update.</div>
-                      </div>
                     </div>
                   )}
 
@@ -1563,19 +1915,19 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
           <div className="p-4 pt-5">
             {/* Avatar + name row */}
             <div className="flex items-start gap-4">
-              {/* Hexagonal-style avatar with glow ring */}
+              {/* Round avatar with glow ring — smart gender-based default when no photo uploaded */}
               <div className="relative shrink-0">
-                <div className="w-[72px] h-[72px] rounded-2xl p-[3px] relative"
+                <div className="w-[72px] h-[72px] rounded-full p-[3px] relative"
                   style={{
                     background: "linear-gradient(135deg, #7c3aed, #db2777, #db2777, #7c3aed)",
                     backgroundSize: "300% 300%",
                     animation: "gradientShift 3s ease infinite",
                     boxShadow: "0 0 20px rgba(124,58,237,0.6), 0 0 40px rgba(219,39,119,0.3)",
                   }}>
-                  <div className="w-full h-full rounded-xl overflow-hidden bg-black">
-                    <Avatar className="w-full h-full rounded-xl">
-                      <AvatarImage src={currentProfileUser?.profileImageUrl || undefined} className="rounded-xl" />
-                      <AvatarFallback className="text-2xl rounded-xl bg-gradient-to-br from-purple-900 to-pink-900">
+                  <div className="w-full h-full rounded-full overflow-hidden bg-black">
+                    <Avatar className="w-full h-full rounded-full">
+                      <AvatarImage src={ownAvatarSrc} className="rounded-full object-cover" />
+                      <AvatarFallback className="text-2xl rounded-full bg-gradient-to-br from-purple-900 to-pink-900">
                         {currentProfileUser?.firstName?.[0]}
                       </AvatarFallback>
                     </Avatar>
@@ -1957,18 +2309,15 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
             </div>
 
             <div className="p-5 space-y-5 overflow-y-auto max-h-[80vh]">
-              {/* Avatar picker */}
+              {/* Avatar picker — round, smart gender-based default when empty */}
               <div className="flex flex-col items-center gap-3">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-violet-500/50"
+                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-violet-500/50"
                     style={{ boxShadow: "0 0 20px rgba(124,58,237,0.4)" }}>
-                    {editAvatarUrl ? (
-                      <img src={editAvatarUrl} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-violet-900 to-pink-900 flex items-center justify-center text-2xl font-black text-white">
-                        {editFirstName?.[0] || user?.firstName?.[0] || "?"}
-                      </div>
-                    )}
+                    <img
+                      src={editAvatarUrl || getDefaultAvatar(editGender, editUsername || editFirstName || "me")}
+                      className="w-full h-full object-cover rounded-full"
+                    />
                   </div>
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -1989,6 +2338,36 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                   className="text-sm font-semibold text-violet-400 hover:text-violet-300 transition-colors">
                   Change photo
                 </button>
+                {editAvatarUrl && (
+                  <button
+                    onClick={() => setEditAvatarUrl("")}
+                    className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors">
+                    Use smart default avatar instead
+                  </button>
+                )}
+              </div>
+
+              {/* Gender — drives which smart default avatar is shown */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Avatar Style</Label>
+                <div className="flex gap-2">
+                  {([
+                    { key: "male", label: "Boy" },
+                    { key: "female", label: "Girl" },
+                    { key: "", label: "Neutral" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.label}
+                      onClick={() => setEditGender(opt.key)}
+                      className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                        editGender === opt.key ? "bg-white text-black" : "bg-white/5 text-zinc-300 border border-white/10"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-zinc-600">Used for your smart default avatar when no photo is uploaded</p>
               </div>
 
               {/* Name fields */}
@@ -2108,3 +2487,8 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
   );
 }
 
+// Small inline icon placeholder used for "Read Receipts" row (kept separate
+// so it doesn't clash with the lucide-react CheckCheck import used elsewhere)
+function CheckCheckIconPlaceholder(props: any) {
+  return <MessageSquare {...props} />;
+}
