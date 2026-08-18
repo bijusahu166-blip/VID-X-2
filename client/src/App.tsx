@@ -1,4 +1,4 @@
-import { OneSignal, LogLevel } from 'react-native-onesignal';
+import OneSignal from 'onesignal-cordova-plugin';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
@@ -171,13 +171,12 @@ function App() {
   }, []);
 
 
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return; // sirf native app (Android/iOS) mein chalao, web browser mein nahi
+useEffect(() => {
+  if (!Capacitor.isNativePlatform()) return;
 
-    OneSignal.Debug.setLogLevel(LogLevel.Verbose);
-    OneSignal.initialize(import.meta.env.VITE_ONESIGNAL_APP_ID);
-    OneSignal.Notifications.requestPermission(true);
-  }, []);
+  OneSignal.initialize(import.meta.env.VITE_ONESIGNAL_APP_ID);
+  OneSignal.Notifications.requestPermission(true);
+}, []);
 
  
    
