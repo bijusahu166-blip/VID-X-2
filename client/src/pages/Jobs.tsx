@@ -1,3 +1,4 @@
+import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Header } from "@/components/layout/Header";
@@ -75,6 +76,7 @@ export default function Jobs() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [toastMsg, setToastMsg] = useState("");
   const [toastColor, setToastColor] = useState("#4afa8a");
+  const [loadingJobs, setLoadingJobs] = useState(true);
 
   // Form data
   const [postForm, setPostForm] = useState({
@@ -106,20 +108,44 @@ export default function Jobs() {
   const [loginPin, setLoginPin] = useState(["", "", "", ""]);
   const [loginError, setLoginError] = useState("");
 
-  // Load jobs from localStorage on mount
+  // Maps a raw Supabase row (snake_case columns) to the Job shape the UI expects (camelCase)
+  const mapRowToJob = (row: any): Job => ({
+    id: row.id,
+    title: row.title,
+    company: row.company,
+    email: row.email,
+    pin: row.pin,
+    location: row.location,
+    salary: row.salary,
+    type: row.type,
+    emoji: row.emoji,
+    desc: row.description ?? "",
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    ejsPubkey: row.ejs_pubkey ?? "",
+    ejsService: row.ejs_service ?? "",
+    ejsTemplate: row.ejs_template ?? "",
+    postedAt: row.posted_at ?? "",
+    active: row.active,
+  });
+
+  // Fetch jobs from Supabase + load EmailJS script (combined into a single effect)
   useEffect(() => {
-    try {
-      const savedJobs = JSON.parse(localStorage.getItem("vidx_jobs") || "[]") as Job[];
-      setJobs(savedJobs.filter((job) => job.active !== false));
-    } catch {
-      setJobs([]);
-    }
-    try {
-      const savedApplications = JSON.parse(localStorage.getItem("vidx_job_applications") || "[]") as Application[];
-      setApplications(savedApplications);
-    } catch {
-      setApplications([]);
-    }
+    const fetchJobs = async () => {
+      const { data, error } = await supabase!
+        .from("jobs")
+        .select("*")
+        .eq("active", true)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setJobs(data.map(mapRowToJob));
+      } else if (error) {
+        showToast("❌ Jobs load nahi hue: " + error.message, "#ff6060");
+      }
+      setLoadingJobs(false);
+    };
+    fetchJobs();
+
     // Load EmailJS from CDN
     if (!window.emailjs) {
       const script = document.createElement("script");
@@ -138,10 +164,11 @@ export default function Jobs() {
     }
   }, []);
 
-  // Save jobs to localStorage whenever they change
+  // Save jobs to localStorage whenever they change (skip the initial empty state before fetch resolves)
   useEffect(() => {
+    if (loadingJobs) return;
     localStorage.setItem("vidx_jobs", JSON.stringify(jobs));
-  }, [jobs]);
+  }, [jobs, loadingJobs]);
 
   // Save applications to localStorage whenever they change
   useEffect(() => {
@@ -155,7 +182,7 @@ export default function Jobs() {
   };
 
   // ── POST JOB ──
-  const handlePostJob = () => {
+  const handlePostJob = async () => {
     if (!postForm.title.trim() || !postForm.company.trim() || !postForm.email.trim()) {
       showToast("⚠️ Title, Company & Email are required!", "#ff9900");
       return;
@@ -165,28 +192,34 @@ export default function Jobs() {
       return;
     }
 
-    const newJob: Job = {
-      id: Date.now(),
-      title: postForm.title,
-      company: postForm.company,
-      email: postForm.email,
-      pin: postForm.pin,
-      location: postForm.location || "Remote",
-      salary: postForm.salary || "Negotiable",
-      type: postForm.type,
-      emoji: postForm.emoji || "💼",
-      desc: postForm.desc,
-      tags: postForm.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-      ejsPubkey: postForm.ejsPubkey,
-      ejsService: postForm.ejsService,
-      ejsTemplate: postForm.ejsTemplate,
-      postedAt: new Date().toLocaleDateString("en-IN"),
-      active: true,
-    };
+    const { data, error } = await supabase!
+      .from("jobs")
+      .insert([{
+        title: postForm.title,
+        company: postForm.company,
+        email: postForm.email,
+        pin: postForm.pin,
+        location: postForm.location || "Remote",
+        salary: postForm.salary || "Negotiable",
+        type: postForm.type,
+        emoji: postForm.emoji || "💼",
+        description: postForm.desc,
+        tags: postForm.tags.split(",").map(t => t.trim()).filter(Boolean),
+        ejs_pubkey: postForm.ejsPubkey,
+        ejs_service: postForm.ejsService,
+        ejs_template: postForm.ejsTemplate,
+        posted_at: new Date().toLocaleDateString("en-IN"),
+        active: true,
+      }])
+      .select()
+      .single();
 
+    if (error || !data) {
+      showToast("❌ Job post nahi hua: " + (error?.message ?? "unknown error"), "#ff6060");
+      return;
+    }
+
+    const newJob = mapRowToJob(data);
     setJobs([newJob, ...jobs]);
     showToast("✅ Job posted successfully!");
     setPostForm({
@@ -214,7 +247,7 @@ export default function Jobs() {
     setCurrentJob(job);
     setSelectedSkills([]);
     setCurrentStep(1);
-    setApplyForm({ name: "", email: "", phone: "", exp: "", portfolio: "", note: "" });
+    setApplyForm({ name: "", email: "", phone: "", exp: "", portfolio: "", customSkills: "", note: "" });
     setShowModal(true);
   };
 
@@ -328,8 +361,19 @@ export default function Jobs() {
     setShowConfirmModal(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTargetId) return;
+
+    const { error } = await supabase!
+      .from("jobs")
+      .update({ active: false })
+      .eq("id", deleteTargetId);
+
+    if (error) {
+      showToast("❌ Delete nahi hua: " + error.message, "#ff6060");
+      return;
+    }
+
     setJobs(jobs.map((job) => job.id === deleteTargetId ? { ...job, active: false } : job));
     setMyJobs(myJobs.filter((j) => j.id !== deleteTargetId));
     setShowConfirmModal(false);
@@ -976,4 +1020,3 @@ export default function Jobs() {
     </div>
   );
 }
-
