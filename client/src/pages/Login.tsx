@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Capacitor } from "@capacitor/core";
+import OneSignal from "onesignal-cordova-plugin";
 import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
 
 // ── API BASE ──────────────────────────────────────────────────────────────
@@ -319,8 +320,14 @@ export default function Login() {
         });
       }
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       queryClient.setQueryData(["/api/auth/user"], data);
+
+      // 👇 OneSignal ko batao ye device kis user ka hai (login + signup dono ke liye)
+      if (Capacitor.isNativePlatform() && data?.id) {
+        OneSignal.login(String(data.id));
+      }
+
       navigate("/");
     },
     onError: (err: Error) => toast({ title: err.message, variant: "destructive" }),
