@@ -26,6 +26,7 @@ import filterIconSrc from "@assets/image_1774511462472.png";
 import heroIconSrc from "@assets/image_1774512160722.png";
 import { SongPicker, type Song } from "@/components/shared/SongPicker";
 import { compressVideo } from "@/lib/compressvideo";
+import { startBackgroundVideoUpload } from "@/lib/uploadManager";
 
 type UploadType = "post" | "video" | "reel" | "story" | "job" | "editing";
 
@@ -525,8 +526,12 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
     setCameraReady(false);
     setCameraMode(true);
   };
-const MAX_VIDEO_SIZE_MB = 100;
+  const MAX_VIDEO_SIZE_MB = 100;
 const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
+
+// NEW — raw file selection limit (compression happens after, before upload)
+const MAX_RAW_UPLOAD_SIZE_MB = 2000; // 2GB raw file allowed
+const MAX_RAW_UPLOAD_SIZE_BYTES = MAX_RAW_UPLOAD_SIZE_MB * 1024 * 1024;
 const MAX_REEL_DURATION_SECONDS = 60;
 const MAX_VIDEO_DURATION_SECONDS = 1800;
 
@@ -556,15 +561,7 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
   const handleReelVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_VIDEO_SIZE_BYTES) {
-      toast({
-        title: "Video too large",
-        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB.`,
-        variant: "destructive",
-      });
-      e.target.value = "";
-      return;
-    }
+   
     const duration = await getVideoDuration(file);
     if (duration > MAX_REEL_DURATION_SECONDS) {
       toast({
@@ -684,15 +681,6 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_VIDEO_SIZE_BYTES) {
-      toast({
-        title: "Video too large",
-        description: `Your video is ${formatFileSize(file.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
-        variant: "destructive",
-      });
-      e.target.value = "";
-      return;
-    }
     // NEW — duration check for long video
     const duration = await getVideoDuration(file);
     if (duration > MAX_VIDEO_DURATION_SECONDS) {
@@ -758,36 +746,60 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalCaption = uploadType === "video"
-      ? `${videoTitle}${videoDesc ? `\n${videoDesc}` : ""}`
-      : caption;
-    const DEFAULT_THUMB = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
-    
-    // Reject data URLs and blob URLs — images must be properly uploaded to Cloudinary
+
+    const finalCaption =
+      uploadType === "video"
+        ? `${videoTitle}${videoDesc ? `\n${videoDesc}` : ""}`
+        : caption;
+
+    const captionWithCategory =
+      uploadType === "video" && selectedCategory
+        ? `${finalCaption}\n#${selectedCategory}`.trim()
+        : finalCaption;
+
+    const DEFAULT_THUMB =
+      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
+
+    // ---------------------------------------------------------
+    // AUTH
+    // ---------------------------------------------------------
+    if (!user?.id) {
+      toast({
+        title: "Not authenticated",
+        description: "Please log in to post.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // ---------------------------------------------------------
+    // THUMBNAIL
+    // ---------------------------------------------------------
     let finalImageUrl = imageUrl;
-    if (!finalImageUrl || finalImageUrl.startsWith("data:") || finalImageUrl.startsWith("blob:")) {
-      // Use thumbnail if available, otherwise fallback
-      if (thumbnailUrl && !thumbnailUrl.startsWith("data:") && !thumbnailUrl.startsWith("blob:")) {
+
+    if (
+      !finalImageUrl ||
+      finalImageUrl.startsWith("data:") ||
+      finalImageUrl.startsWith("blob:")
+    ) {
+      if (
+        thumbnailUrl &&
+        !thumbnailUrl.startsWith("data:") &&
+        !thumbnailUrl.startsWith("blob:")
+      ) {
         finalImageUrl = thumbnailUrl;
       } else {
         finalImageUrl = DEFAULT_THUMB;
       }
     }
 
-    let videoFileUrl: string | undefined;
-
-    // Determine the correct file to upload:
-    // - Reels always use reelVideoFile (always a video)
-    // - Videos use selectedFile (always a video from handleVideoFileChange)
-    // - Stories: video can come from reelVideoFile (Video tab) or selectedFile if it is a video MIME.
-    //   Photo-stories use imageUrl only — image files must NOT be sent to the video endpoint.
-    // This prevents image/jpeg files from being sent to the video upload endpoint.
+    // ---------------------------------------------------------
+    // FIND VIDEO FILE
+    // ---------------------------------------------------------
     let videoFile: File | null = null;
+
     if (uploadType === "reel") {
-      if (reelVideoFile) {
-        videoFile = reelVideoFile; // user selected a video file
-      }
-      // If reelVideoFile is null the user selected a photo (camera or photo tab) — no video upload needed
+      videoFile = reelVideoFile;
     } else if (uploadType === "video") {
       videoFile = selectedFile;
     } else if (uploadType === "story") {
@@ -795,186 +807,309 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
         videoFile = reelVideoFile;
       } else if (selectedFile) {
         const mime = selectedFile.type;
-        if (mime.startsWith("video/") || mime === "application/octet-stream") {
+
+        if (
+          mime.startsWith("video/") ||
+          mime === "application/octet-stream"
+        ) {
           videoFile = selectedFile;
         }
       }
     }
 
-    // Explicit check: video-type posts require a file
+    // Long video requires a file.
     if (uploadType === "video" && !videoFile) {
-      toast({ title: "No video selected", description: "Tap the upload area to choose a video file.", variant: "destructive" });
+      toast({
+        title: "No video selected",
+        description: "Tap the upload area to choose a video file.",
+        variant: "destructive",
+      });
       return;
     }
 
+    // =========================================================
+    // VIDEO FLOW
+    // =========================================================
     if (videoFile) {
-      // Compress large videos before upload
-      if (videoFile.size > 20 * 1024 * 1024) {
-      setIsCompressing(true);
-        setCompressProgress(0);
-        toast({ title: "Compressing video... please wait" });
-        try {
-          videoFile = await compressVideo(videoFile, 95, (pct: number) => {
-            setCompressProgress(pct);
+      let fileToUpload = videoFile;
+
+      try {
+        // Allow a large ORIGINAL file so it can be compressed first.
+        if (fileToUpload.size > MAX_RAW_UPLOAD_SIZE_BYTES) {
+          toast({
+            title: "Video too large",
+            description: `The original video is ${formatFileSize(
+              fileToUpload.size
+            )}. Maximum original size is ${MAX_RAW_UPLOAD_SIZE_MB} MB.`,
+            variant: "destructive",
           });
-          toast({ title: `Compressed to ${(videoFile?.size ?? 0 / (1024 * 1024)).toFixed(1)}MB ✅` });
-        } catch {
-          toast({ title: "Compression failed, uploading original", variant: "destructive" });
-        } finally {
-          setIsCompressing(false);
+          return;
         }
-      }
 
-      if (!videoFile) {
+        // -------------------------------------------------------
+        // COMPRESS ONLY WHEN ABOVE 100 MB
+        // -------------------------------------------------------
+        if (fileToUpload.size > MAX_VIDEO_SIZE_BYTES) {
+          setIsCompressing(true);
+          setCompressProgress(5);
+
+          toast({
+            title: "Compressing video…",
+            description: `Your ${formatFileSize(
+              fileToUpload.size
+            )} video will be compressed before upload.`,
+          });
+
+          try {
+            /*
+             * compressVideo is imported from @/lib/compressvideo.
+             * Cast to any so this component works with either the
+             * one-argument or optional-progress implementation.
+             */
+            const compressor = compressVideo as any;
+
+            setCompressProgress(15);
+
+            let compressedResult: unknown;
+
+            try {
+              // First try the common File -> File API.
+              compressedResult = await compressor(fileToUpload);
+            } catch (firstError) {
+              // Some implementations accept a progress callback.
+              compressedResult = await compressor(
+                fileToUpload,
+                (progress: number) => {
+                  if (Number.isFinite(progress)) {
+                    setCompressProgress(
+                      Math.max(
+                        0,
+                        Math.min(95, Math.round(progress))
+                      )
+                    );
+                  }
+                }
+              );
+            }
+
+            setCompressProgress(90);
+
+            if (compressedResult instanceof File) {
+              fileToUpload = compressedResult;
+            } else if (compressedResult instanceof Blob) {
+              fileToUpload = new File(
+                [compressedResult],
+                fileToUpload.name.replace(/\.[^/.]+$/, ".mp4"),
+                {
+                  type: compressedResult.type || "video/mp4",
+                }
+              );
+            } else {
+              throw new Error(
+                "compressVideo() did not return a File or Blob."
+              );
+            }
+
+            setCompressProgress(100);
+
+            // ---------------------------------------------------
+            // FINAL 100 MB CHECK AFTER COMPRESSION
+            // ---------------------------------------------------
+            if (fileToUpload.size > MAX_VIDEO_SIZE_BYTES) {
+              toast({
+                title: "Compression not enough",
+                description: `The compressed video is still ${formatFileSize(
+                  fileToUpload.size
+                )}. It must be below ${MAX_VIDEO_SIZE_MB} MB. Please use a shorter video or lower resolution.`,
+                variant: "destructive",
+              });
+              return;
+            }
+
+            toast({
+              title: "Compression complete ✅",
+              description: `${formatFileSize(
+                fileToUpload.size
+              )} — ready to upload.`,
+            });
+          } catch (compressionError: any) {
+            console.error(
+              "Video compression failed:",
+              compressionError
+            );
+
+            toast({
+              title: "Compression failed",
+              description:
+                compressionError?.message ||
+                "Could not compress this video. Please use a shorter or lower-resolution video.",
+              variant: "destructive",
+            });
+            return;
+          } finally {
+            setIsCompressing(false);
+          }
+        }
+
+        // -------------------------------------------------------
+        // FINAL SAFETY CHECK
+        // -------------------------------------------------------
+        if (fileToUpload.size > MAX_VIDEO_SIZE_BYTES) {
+          toast({
+            title: "Video too large",
+            description: `Final video size is ${formatFileSize(
+              fileToUpload.size
+            )}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB.`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // -------------------------------------------------------
+        // BACKGROUND UPLOAD
+        // -------------------------------------------------------
+        const uploadFile = fileToUpload;
+
+        setIsUploadingVideo(true);
+        setUploadProgress(0);
+
+        // Upload continues after dialog closes.
+        handleClose();
+
+        startBackgroundVideoUpload(
+          uploadFile,
+
+          // SUCCESS
+          async (videoUrl: string) => {
+            try {
+              let cloudinaryImageUrl = finalImageUrl;
+
+              // Convert generated data-URL thumbnail to a real URL.
+              if (
+                finalImageUrl &&
+                finalImageUrl.startsWith("data:")
+              ) {
+                try {
+                  cloudinaryImageUrl =
+                    await uploadDataURLToCloudinary(
+                      finalImageUrl,
+                      `thumbnail-${Date.now()}.jpg`
+                    );
+                } catch (thumbnailError) {
+                  console.warn(
+                    "Thumbnail Cloudinary upload failed:",
+                    thumbnailError
+                  );
+                  cloudinaryImageUrl = DEFAULT_THUMB;
+                }
+              }
+
+              await createPost.mutateAsync({
+                imageUrl: cloudinaryImageUrl,
+                caption: captionWithCategory,
+                userId: user.id,
+                type:
+                  uploadType === "video"
+                    ? "video"
+                    : uploadType,
+                videoUrl,
+
+                ...(selectedSong
+                  ? {
+                      songTitle: selectedSong.title,
+                      songArtist: selectedSong.artist,
+                      songColor: selectedSong.color,
+                    }
+                  : {}),
+              } as any);
+
+              setIsUploadingVideo(false);
+              setUploadProgress(100);
+
+              toast({
+                title: "Video published ✅",
+                description:
+                  "Your video has been uploaded successfully.",
+              });
+            } catch (err: any) {
+              setIsUploadingVideo(false);
+
+              console.error(
+                "Create post after video upload failed:",
+                err
+              );
+
+              toast({
+                title: "Failed to publish video",
+                description:
+                  err?.message ||
+                  "Video uploaded but post creation failed.",
+                variant: "destructive",
+              });
+            }
+          },
+
+          // ERROR
+          (errMsg: string) => {
+            setIsUploadingVideo(false);
+
+            console.error(
+              "Background video upload failed:",
+              errMsg
+            );
+
+            toast({
+              title: "Upload failed",
+              description:
+                errMsg || "Could not upload the video.",
+              variant: "destructive",
+            });
+          }
+        );
+
         return;
-      }
+      } catch (err: any) {
+        setIsCompressing(false);
+        setIsUploadingVideo(false);
 
-      // Guard: reject oversized files before even starting the upload
-      if (videoFile.size > MAX_VIDEO_SIZE_BYTES) {
+        console.error(
+          "Video upload preparation failed:",
+          err
+        );
+
         toast({
-          title: "Video too large",
-          description: `Your video is ${formatFileSize(videoFile.size)}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB. Try recording in 1080p instead of 4K, or trim the video shorter.`,
+          title: "Upload failed",
+          description:
+            err?.message ||
+            "Something went wrong while preparing the video.",
           variant: "destructive",
         });
+
         return;
-      }
-
-      try {
-        setIsUploadingVideo(true);
-        setUploadProgress(1);
-
-        // ── Chunked upload ────────────────────────────────────────────────────
-        // 1 MB chunks — small enough to pass through the Replit proxy without 413s.
-        // Uploads 4 chunks concurrently for speed. Each chunk retries up to 3 times
-        // before the entire upload is aborted.
-       const CHUNK_SIZE = 1 * 1024 * 1024;
-const CONCURRENCY = 3              // 6 parallel = faster
-const MAX_RETRIES = 3;
-        const totalChunks = Math.ceil(videoFile.size / CHUNK_SIZE);
-        const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        let completedChunks = 0;
-        let aborted = false;
-        let abortReason = "";
-
-        const uploadChunk = async (i: number): Promise<void> => {
-          if (aborted) return;
-          const start = i * CHUNK_SIZE;
-          const end = Math.min(start + CHUNK_SIZE, videoFile.size);
-          const chunk = videoFile.slice(start, end);
-
-          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-            if (aborted) return;
-            try {
-              const fd = new FormData();
-              // Text fields MUST come before the file blob so req.body is populated
-              // before multer's filename callback fires on the server side.
-              fd.append("uploadId", uploadId);
-              fd.append("chunkIndex", String(i));
-              fd.append("totalChunks", String(totalChunks));
-              fd.append("chunk", chunk, videoFile.name);
-
-              const resp = await fetch("/api/upload/chunk", {
-                method: "POST",
-                body: fd,
-                credentials: "include",
-              });
-
-              if (resp.ok) {
-                completedChunks++;
-                // Progress: chunks account for 90%, finalize for the last 10%
-                setUploadProgress(Math.round((completedChunks / totalChunks) * 90));
-                return; // success — stop retrying
-              }
-
-              // Non-OK response
-              let msg = `HTTP ${resp.status}`;
-              try { msg = (await resp.json()).message || msg; } catch {}
-
-              if (attempt === MAX_RETRIES - 1) {
-                aborted = true;
-                abortReason = `${msg} (chunk ${i + 1}/${totalChunks})`;
-              } else {
-                // Brief pause before retry (100ms × attempt)
-               await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-              }
-            } catch (networkErr: any) {
-              if (attempt === MAX_RETRIES - 1) {
-                aborted = true;
-                abortReason = `Network error on chunk ${i + 1}/${totalChunks}: ${networkErr?.message || "connection lost"}`;
-              } else {
-               await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
-              }
-            }
-          }
-        };
-
-        // Upload chunks in batches of CONCURRENCY
-        for (let batch = 0; batch < totalChunks; batch += CONCURRENCY) {
-          if (aborted) break;
-          const batchIndices = Array.from(
-            { length: Math.min(CONCURRENCY, totalChunks - batch) },
-            (_, k) => batch + k
-          );
-          await Promise.all(batchIndices.map(uploadChunk));
-        }
-
-        if (aborted) {
-          toast({ title: "Upload failed", description: abortReason, variant: "destructive" });
-          return;
-        }
-
-        // Ask server to assemble all chunks into the final video file
-        setUploadProgress(92);
-        const finalResp = await fetch("/api/upload/finalize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ uploadId, totalChunks, originalName: videoFile.name }),
-        });
-
-        if (!finalResp.ok) {
-          let msg = "Failed to assemble video";
-          try { msg = (await finalResp.json()).message || msg; } catch {}
-          toast({ 
-  title: "Upload failed", 
-  description: msg.includes("inappropriate") 
-    ? "🚫 This video violates our community guidelines and cannot be uploaded." 
-    : msg, 
-  variant: "destructive" 
-});
-          return;
-        }
-
-        const finalData = await finalResp.json();
-        setUploadProgress(100);
-        // Use the Cloudinary URL (already optimised with f_auto,q_auto)
-        videoFileUrl = finalData.url;
-      } catch (err: any) {
-        toast({ title: "Upload failed", description: err?.message || "Something went wrong", variant: "destructive" });
-        return;
-      } finally {
-        setIsUploadingVideo(false);
       }
     }
 
-    // Include category in caption for video posts
-    const captionWithCategory = (uploadType === "video" && selectedCategory)
-      ? `${finalCaption}\n#${selectedCategory}`.trim()
-      : finalCaption;
-
-    if (!user?.id) {
-      toast({ title: "Not authenticated", description: "Please log in to post.", variant: "destructive" });
-      return;
-    }
-
-    // Convert data URL thumbnails to Cloudinary URLs before posting
+    // =========================================================
+    // PHOTO / NORMAL POST FLOW
+    // =========================================================
     let cloudinaryImageUrl = finalImageUrl;
-    if (finalImageUrl && finalImageUrl.startsWith("data:")) {
+
+    if (
+      cloudinaryImageUrl &&
+      cloudinaryImageUrl.startsWith("data:")
+    ) {
       try {
-        cloudinaryImageUrl = await uploadDataURLToCloudinary(finalImageUrl, `thumbnail-${Date.now()}.jpg`);
+        cloudinaryImageUrl =
+          await uploadDataURLToCloudinary(
+            cloudinaryImageUrl,
+            `image-${Date.now()}.jpg`
+          );
       } catch (err) {
-        console.warn("Failed to convert thumbnail to Cloudinary URL, using placeholder:", err);
-        cloudinaryImageUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
+        console.warn(
+          "Image Cloudinary upload failed:",
+          err
+        );
+        cloudinaryImageUrl = DEFAULT_THUMB;
       }
     }
 
@@ -983,17 +1118,33 @@ const MAX_RETRIES = 3;
         imageUrl: cloudinaryImageUrl,
         caption: captionWithCategory,
         userId: user.id,
-        type: uploadType === "video" ? "video" : uploadType,
-        ...(videoFileUrl ? { videoUrl: videoFileUrl } : {}),
-        ...(selectedSong ? {
-          songTitle: selectedSong.title,
-          songArtist: selectedSong.artist,
-          songColor: selectedSong.color,
-        } : {}),
+        type: uploadType,
+
+        ...(selectedSong
+          ? {
+              songTitle: selectedSong.title,
+              songArtist: selectedSong.artist,
+              songColor: selectedSong.color,
+            }
+          : {}),
       } as any);
+
+      toast({
+        title: "Published ✅",
+        description: "Your post has been published.",
+      });
+
       handleClose();
     } catch (err: any) {
-      toast({ title: "Failed to post", description: err?.message || "Something went wrong. Please try again.", variant: "destructive" });
+      console.error("Create post failed:", err);
+
+      toast({
+        title: "Failed to post",
+        description:
+          err?.message ||
+          "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 

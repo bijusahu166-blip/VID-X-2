@@ -1,19 +1,49 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Header } from "@/components/layout/Header";
-import { ArrowLeft, Mic } from "lucide-react";
+import { ArrowLeft, Mic, Lock } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+const MIN_VIDEOS_OR_POSTS = 20;
+
+interface CreatorStats {
+  videoCount: number;
+  postCount: number;
+}
 
 export default function VoiceRoomCreate() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [title, setTitle] = useState("");
-  const [joinCost, setJoinCost] = useState(0);
   const [loading, setLoading] = useState(false);
+  // Joining a voice room is always free now — no per-room coin cost.
+  // Coins are only spent on gifts inside the room.
+  const joinCost = 0;
+
+  // ── Eligibility check ──
+  // NOTE: this endpoint is a placeholder — swap the URL and field names
+  // below to match whatever your backend actually exposes for a user's
+  // content counts (e.g. GET /api/users/me/stats returning
+  // { videoCount, postCount }). Until confirmed, this fails safe:
+  // on error or while loading, the create button stays disabled rather
+  // than letting an unverified user through.
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<CreatorStats>({
+    queryKey: ["/api/users/me/stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/users/me/stats", { credentials: "include" });
+      if (!res.ok) throw new Error("Could not load creator stats");
+      return res.json();
+    },
+  });
+
+  const videoCount = stats?.videoCount ?? 0;
+  const postCount = stats?.postCount ?? 0;
+  const isEligible = !statsLoading && !statsError && (videoCount >= MIN_VIDEOS_OR_POSTS || postCount >= MIN_VIDEOS_OR_POSTS);
 
   const handleCreate = async () => {
-    if (loading) return;
+    if (loading || !isEligible) return;
     setLoading(true);
     try {
       const res: any = await apiRequest("POST", "/api/voice-rooms", {
@@ -45,39 +75,65 @@ export default function VoiceRoomCreate() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        {/* ── Eligibility notice ── */}
+        {!statsLoading && !isEligible && (
+          <div className="mb-5 rounded-xl border border-orange-500/30 bg-orange-500/10 p-4">
+            <div className="flex items-start gap-3">
+              <Lock className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-orange-300 text-sm font-semibold mb-1">
+                  Voice Rooms unlock at {MIN_VIDEOS_OR_POSTS} videos or {MIN_VIDEOS_OR_POSTS} posts
+                </p>
+                <p className="text-zinc-400 text-xs mb-3">
+                  You currently have {videoCount} video{videoCount === 1 ? "" : "s"} and {postCount} post{postCount === 1 ? "" : "s"}.
+                  Post educational content to unlock hosting.
+                </p>
+                <button
+                  onClick={() => navigate("/educational")}
+                  className="text-xs font-bold text-white bg-orange-500/80 hover:bg-orange-500 rounded-lg px-3 py-2"
+                >
+                  Go to Educational Tab →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {statsError && (
+          <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-red-300 text-xs">
+              Couldn't verify your eligibility right now. Please try again in a moment.
+            </p>
+          </div>
+        )}
+
+        <div className={`space-y-4 ${!isEligible ? "opacity-50 pointer-events-none" : ""}`}>
           <div>
             <label className="text-xs text-zinc-400 font-semibold">Room Title</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Friday Night Talk"
+              disabled={!isEligible}
               className="w-full mt-1 bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-pink-500/50"
             />
           </div>
 
-          <div>
-            <label className="text-xs text-zinc-400 font-semibold">Join Cost (coins)</label>
-            <input
-              type="number"
-              min={0}
-              value={joinCost}
-              onChange={(e) => setJoinCost(Number(e.target.value))}
-              className="w-full mt-1 bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-pink-500/50"
-            />
-            <p className="text-[10px] text-zinc-500 mt-1">
-              Set 0 for a free room. New users get 3 free joins before coins are charged.
+          <div className="rounded-xl border border-green-500/20 bg-green-500/5 px-4 py-3">
+            <p className="text-xs text-green-300 font-semibold">🎉 Free to join</p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">
+              Anyone can join and listen for free. Coins are only used for sending gifts.
             </p>
           </div>
-
-          <button
-            onClick={handleCreate}
-            disabled={loading}
-            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-sm disabled:opacity-50"
-          >
-            {loading ? "Starting..." : "Start Room"}
-          </button>
         </div>
+
+        <button
+          onClick={handleCreate}
+          disabled={loading || !isEligible || statsLoading}
+          className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-sm disabled:opacity-40"
+        >
+          {statsLoading ? "Checking eligibility..." : loading ? "Starting..." : !isEligible ? "Locked — see requirement above" : "Start Room"}
+        </button>
       </main>
     </div>
   );
