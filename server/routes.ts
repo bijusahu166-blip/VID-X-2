@@ -18,6 +18,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { v2 as cloudinary } from "cloudinary";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";  // 👈 DeleteObjectCommand add karo import mein
 import { wsClients } from "./realtime";
 
 
@@ -31,7 +32,43 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
   secure: true,
 });
-
+// ── Cloudflare R2 (S3-compatible) ──
+const r2 = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+});
+async function uploadToR2(
+  buffer: Buffer,
+  folder: string,
+  originalName: string,
+  contentType: string
+): Promise<{ url: string; key: string }> {
+  const ext = originalName.split(".").pop() || "bin";
+  const key = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  await r2.send(new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME!,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+  }));
+  return { url: `${process.env.R2_PUBLIC_URL}/${key}`, key };
+} 
+async function deleteFromR2(mediaUrl: string): Promise<void> {
+  try {
+    if (!process.env.R2_PUBLIC_URL || !mediaUrl.startsWith(process.env.R2_PUBLIC_URL)) return; // R2 ka URL nahi hai, skip
+    const key = mediaUrl.replace(`${process.env.R2_PUBLIC_URL}/`, "");
+    await r2.send(new DeleteObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: key,
+    }));
+  } catch (err) {
+    console.error("[R2 delete] Error:", err);
+  }
+}
 // --- MULTER: All file types (memory storage) ---
 const anyUpload = multer({
   storage: multer.memoryStorage(),
@@ -114,19 +151,16 @@ async function uploadLargeVideoToCloudinary(
     const tempPath = path.join(os.tmpdir(), `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`);
     fs.writeFileSync(tempPath, buffer);
 
-    cloudinary.uploader.upload_large(
-      tempPath,
-      {
-        resource_type: "video",
-        folder,
-        public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        overwrite: false,
-        chunk_size: 6 * 1024 * 1024,
-        eager: [
-          { quality:"auto" , fetch_format:"auto"}
-        ],
-        eager_async:true,
-      },
+  cloudinary.uploader.upload_large(
+  tempPath,
+  {
+    resource_type: "video",
+    folder,
+    public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    overwrite: false,
+    chunk_size: 6 * 1024 * 1024,
+   
+  },
       (error: any, result: any) => {
         try { fs.unlinkSync(tempPath); } catch {}
         if (error) return reject(error);
@@ -161,7 +195,31 @@ async function deleteFromCloudinary(mediaUrl: string): Promise<void> {
     console.error("[cloudinary delete] Error:", err);
   }
 }
+// ── Expired stories cleanup — har 15 min mein chalega ──
+// ── Expired stories cleanup — har 15 min mein chalega ──
+setInterval(async () => {
+  try {
+    const expiredRows = await db.execute(sql`
+      SELECT id, media_url FROM stories WHERE expires_at <= NOW()
+    `);
+    const expired = (expiredRows as any).rows ?? expiredRows;
 
+    for (const story of expired) {
+      await db.execute(sql`DELETE FROM story_likes WHERE story_id = ${story.id}`);
+      await db.execute(sql`DELETE FROM story_comments WHERE story_id = ${story.id}`);
+      await db.execute(sql`DELETE FROM stories WHERE id = ${story.id}`);
+
+      if (story.media_url) {
+        // Dono try karo — jo bhi storage se file hai, wahi se delete ho jayegi.
+        // R2_PUBLIC_URL match na kare to deleteFromR2 apne aap skip kar deta hai.
+        deleteFromR2(story.media_url).catch(() => {});
+        deleteFromCloudinary(story.media_url).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error("[expired stories cleanup]", err);
+  }
+}, 15 * 60 * 1000);
 // --- AUTO-DELETE LOGIC (2 Hours) ---
 setInterval(async () => {
   try {
@@ -307,8 +365,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No image file received" });
       try {
-        const result = await uploadToCloudinary(req.file.buffer, "image", "vid-x/images");
-        res.json({ success: true, url: result.url, imageUrl: result.url, publicId: result.publicId });
+      const result = await uploadToR2(req.file.buffer, "images", req.file.originalname, req.file.mimetype);
+res.json({ success: true, url: result.url, imageUrl: result.url, publicId: result.key });
       } catch (err: any) {
         res.status(500).json({ message: `Image upload failed: ${err.message}` });
       }
@@ -1449,6 +1507,18 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     }
   });
 
+  app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.session.userId;
+    const videoRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM posts WHERE user_id = ${userId} AND type = 'video'`);
+    const postRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM posts WHERE user_id = ${userId} AND type = 'post'`);
+    const videoCount = parseInt(((videoRows as any).rows ?? videoRows)[0]?.cnt ?? "0");
+    const postCount = parseInt(((postRows as any).rows ?? postRows)[0]?.cnt ?? "0");
+    res.json({ videoCount, postCount });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
   // ══════════════════════════════════════════════════════════════════════════
   // USER ROUTES
   // ══════════════════════════════════════════════════════════════════════════
@@ -2390,6 +2460,63 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
         VALUES (${senderId}, ${receiverId}, ${giftId}, ${gift.price_coins}, ${roomId || null})
       `);
 
+      // ── Battle score: gift amount goes to the receiver's team ──
+      if (roomId) {
+        const roomRows = await db.execute(sql`
+          SELECT room_type, battle_status
+          FROM voice_rooms
+          WHERE id = ${roomId}
+        `);
+        const roomInfo = ((roomRows as any).rows ?? roomRows)[0];
+
+        if (roomInfo?.battle_status === "active" &&
+            (roomInfo.room_type === "1v1" || roomInfo.room_type === "2v2")) {
+          const receiverSeatRows = await db.execute(sql`
+            SELECT team
+            FROM voice_room_seats
+            WHERE room_id = ${roomId} AND user_id = ${receiverId}
+            LIMIT 1
+          `);
+          const receiverTeam = ((receiverSeatRows as any).rows ?? receiverSeatRows)[0]?.team;
+
+          if (receiverTeam === "a") {
+            await db.execute(sql`
+              UPDATE voice_rooms
+              SET team_a_score = COALESCE(team_a_score, 0) + ${Number(gift.price_coins)}
+              WHERE id = ${roomId} AND battle_status = 'active'
+            `);
+          } else if (receiverTeam === "b") {
+            await db.execute(sql`
+              UPDATE voice_rooms
+              SET team_b_score = COALESCE(team_b_score, 0) + ${Number(gift.price_coins)}
+              WHERE id = ${roomId} AND battle_status = 'active'
+            `);
+          }
+
+          const updatedRoom = await db.execute(sql`
+            SELECT team_a_score, team_b_score
+            FROM voice_rooms
+            WHERE id = ${roomId}
+          `);
+          const scores = ((updatedRoom as any).rows ?? updatedRoom)[0];
+
+          const allSeats = await db.execute(sql`
+            SELECT user_id FROM voice_room_seats WHERE room_id = ${roomId}
+          `);
+          ((allSeats as any).rows ?? allSeats).forEach((r: any) => {
+            const ws = wsClients.get(String(r.user_id));
+            if (ws && ws.readyState === 1) {
+              ws.send(JSON.stringify({
+                type: "voice_room_battle_score",
+                roomId,
+                teamAScore: Number(scores?.team_a_score || 0),
+                teamBScore: Number(scores?.team_b_score || 0),
+              }));
+            }
+          });
+        }
+      }
+
       // Notification bhejo receiver ko
       const sender = await authStorage.getUser(senderId);
       await db.insert(notifications).values({
@@ -2404,7 +2531,28 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
           type: "gift_received", roomId, gift, sender: { firstName: sender?.firstName, profileImageUrl: sender?.profileImageUrl },
         }));
       }
+
       // Sabko room me bhi dikhao (agar voice room me bheja gaya)
+      if (roomId) {
+  const giftMsgContent = `🎁 sent ${gift.icon} ${gift.name} to ${receiverId === senderId ? "themselves" : ""}`;
+  const msgResult = await db.execute(sql`
+    INSERT INTO voice_room_messages (room_id, user_id, content)
+    VALUES (${roomId}, ${senderId}, ${giftMsgContent})
+    RETURNING *
+  `);
+  const giftMsg = ((msgResult as any).rows ?? msgResult)[0];
+  const seatRows = await db.execute(sql`SELECT user_id FROM voice_room_seats WHERE room_id = ${roomId}`);
+  const memberIds = ((seatRows as any).rows ?? seatRows).map((r: any) => r.user_id);
+  memberIds.forEach((memberId: string) => {
+    const ws = wsClients.get(String(memberId));
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({
+        type: "voice_room_message", roomId,
+        message: { ...giftMsg, first_name: sender?.firstName, profile_image_url: sender?.profileImageUrl },
+      }));
+    }
+  });
+}
       if (roomId) {
         const seatRows = await db.execute(sql`SELECT user_id FROM voice_room_seats WHERE room_id = ${roomId}`);
         const memberIds = ((seatRows as any).rows ?? seatRows).map((r: any) => r.user_id);
@@ -2445,7 +2593,83 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
       res.status(500).json({ message: err.message });
     }
   });
+// ══════════════════════════════════════════════════════════════════════════
+// WITHDRAWALS (coins → real money, manual payout)
+// ══════════════════════════════════════════════════════════════════════════
+const COINS_PER_RUPEE = 50;       // 150 coins = ₹3
+const MIN_WITHDRAW_COINS = 500;   // ⚠️ assumption — change if you want a different minimum
 
+app.get("/api/withdrawals/mine", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.session.userId;
+    const rows = await db.execute(sql`
+      SELECT * FROM withdrawal_requests WHERE user_id = ${userId} ORDER BY created_at DESC
+    `);
+    res.json((rows as any).rows ?? rows);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post("/api/withdrawals/request", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.session.userId;
+    const { coins, method, upiId, bankAccountNumber, bankIfsc, bankHolderName } = req.body;
+
+    const coinsNum = Number(coins);
+    if (!coinsNum || coinsNum < MIN_WITHDRAW_COINS) {
+      return res.status(400).json({ message: `Minimum withdrawal is ${MIN_WITHDRAW_COINS} coins` });
+    }
+    if (method === "upi" && !upiId) {
+      return res.status(400).json({ message: "UPI ID required" });
+    }
+    if (method === "bank" && (!bankAccountNumber || !bankIfsc || !bankHolderName)) {
+      return res.status(400).json({ message: "Bank details incomplete" });
+    }
+
+    const wallet = await getOrCreateWallet(userId);
+    if (wallet.balance < coinsNum) {
+      return res.status(402).json({ message: "Not enough coins", balance: wallet.balance });
+    }
+
+    const amountInr = +(coinsNum / COINS_PER_RUPEE).toFixed(2);
+
+    // Coins turant kaat lo (pending state mein) taaki double-withdraw na ho sake
+    await addCoins(userId, -coinsNum, "withdrawal_request");
+
+    const result = await db.execute(sql`
+      INSERT INTO withdrawal_requests (user_id, coins, amount_inr, method, upi_id, bank_account_number, bank_ifsc, bank_holder_name)
+      VALUES (${userId}, ${coinsNum}, ${amountInr}, ${method}, ${upiId || null}, ${bankAccountNumber || null}, ${bankIfsc || null}, ${bankHolderName || null})
+      RETURNING *
+    `);
+
+    res.status(201).json(((result as any).rows ?? result)[0]);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) => {
+   const ADMIN_USER_IDS = ["your-user-id-yahan"]; // ⚠️ apni user id daalo
+  if (!ADMIN_USER_IDS.includes(req.session.userId)) {
+    return res.status(403).json({ message: "Not allowed" });
+  }
+  // TODO: yahan apna admin-check lagao (e.g. specific user id ya isAdmin flag)
+  const { status, adminNote } = req.body; // 'paid' | 'rejected'
+  const id = Number(req.params.id);
+  const rows = await db.execute(sql`SELECT * FROM withdrawal_requests WHERE id = ${id}`);
+  const wr = ((rows as any).rows ?? rows)[0];
+  if (!wr) return res.status(404).json({ message: "Not found" });
+
+  if (status === "rejected" && wr.status === "pending") {
+    await addCoins(wr.user_id, wr.coins, "withdrawal_rejected_refund"); // coins wapas
+  }
+  await db.execute(sql`
+    UPDATE withdrawal_requests SET status = ${status}, admin_note = ${adminNote || null},
+    paid_at = ${status === "paid" ? new Date() : null} WHERE id = ${id}
+  `);
+  res.json({ success: true });
+});
   // ══════════════════════════════════════════════════════════════════════════
   // SUBSCRIPTIONS
   // ══════════════════════════════════════════════════════════════════════════
@@ -2593,34 +2817,68 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // VOICE ROOMS
+  // VOICE ROOMS + 1v1/2v2 BATTLE
   // ══════════════════════════════════════════════════════════════════════════
 
   const FREE_JOIN_LIMIT = 3;
   const MAX_SEATS = 12;
 
-  // Room banao (host)
-  app.post("/api/voice-rooms", isAuthenticated, async (req: any, res) => {
+  // Battle columns are created here so the new routes do not fail on an older DB.
+  // Safe to run on every server start because IF NOT EXISTS is used.
+  try {
+    await db.execute(sql`ALTER TABLE voice_rooms ADD COLUMN IF NOT EXISTS battle_status VARCHAR(20) DEFAULT 'idle'`);
+    await db.execute(sql`ALTER TABLE voice_rooms ADD COLUMN IF NOT EXISTS battle_ends_at TIMESTAMP NULL`);
+    await db.execute(sql`ALTER TABLE voice_rooms ADD COLUMN IF NOT EXISTS team_a_score BIGINT DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE voice_rooms ADD COLUMN IF NOT EXISTS team_b_score BIGINT DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE voice_rooms ADD COLUMN IF NOT EXISTS battle_duration_seconds INTEGER DEFAULT 180`);
+    await db.execute(sql`ALTER TABLE voice_room_seats ADD COLUMN IF NOT EXISTS team VARCHAR(1) NULL`);
+  } catch (err) {
+    console.error("[voice room battle columns]", err);
+  }
+
+  const ROOM_TYPE_SEATS: Record<string, number> = {
+    "1v1": 2,
+    "2v2": 4,
+    "group": 8,
+  };
+
+  const isBattleRoom = (roomType: any) => roomType === "1v1" || roomType === "2v2";
+
+  // Room banao (host). Host seat #1 is ALWAYS Team A in battle rooms.
+  app.post("/api/voice-rooms", isAuthenticated, async (req: any, res: any) => {
     try {
       const hostId = req.session.userId;
-      const { title, joinCost } = req.body;
+      const { title, requiresApproval, roomType } = req.body;
+      const normalizedType = ROOM_TYPE_SEATS[roomType] ? roomType : "group";
+      const maxSeats = ROOM_TYPE_SEATS[normalizedType];
       const channelName = `room_${hostId}_${Date.now()}`;
+
       const result = await db.execute(sql`
-        INSERT INTO voice_rooms (host_id, channel_name, title, join_cost)
-        VALUES (${hostId}, ${channelName}, ${title || "Voice Room"}, ${joinCost || 0})
+        INSERT INTO voice_rooms (
+          host_id, channel_name, title, join_cost, requires_approval,
+          max_seats, room_type, battle_status, team_a_score, team_b_score,
+          battle_duration_seconds
+        )
+        VALUES (
+          ${hostId}, ${channelName}, ${title || "Voice Room"}, 0,
+          ${!!requiresApproval}, ${maxSeats}, ${normalizedType},
+          'idle', 0, 0, 180
+        )
         RETURNING *
       `);
-      const room = ((result as any).rows ?? result)[0];
 
-      // Host khud seat 1 pe baith jaye
+      const room = ((result as any).rows ?? result)[0];
+      if (!room) return res.status(500).json({ message: "Room creation failed" });
+
       await db.execute(sql`
-        INSERT INTO voice_room_seats (room_id, user_id, seat_number)
-        VALUES (${room.id}, ${hostId}, 1)
+        INSERT INTO voice_room_seats (room_id, user_id, seat_number, team)
+        VALUES (${room.id}, ${hostId}, 1, ${normalizedType === "1v1" || normalizedType === "2v2" ? "a" : null})
       `);
 
       res.status(201).json(room);
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      console.error("[voice room create]", err);
+      res.status(500).json({ message: err.message || "Failed to create room" });
     }
   });
 
@@ -2641,94 +2899,99 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     }
   });
 
-  // Room detail + seats
+  // Room detail + seats + battle state
   app.get("/api/voice-rooms/:id", isAuthenticated, async (req, res) => {
     try {
       const roomId = Number(req.params.id);
+      if (!Number.isFinite(roomId)) return res.status(400).json({ message: "Invalid room id" });
+
       const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId}`);
       const room = ((roomRows as any).rows ?? roomRows)[0];
       if (!room) return res.status(404).json({ message: "Room not found" });
+
       const seatRows = await db.execute(sql`
         SELECT s.*, u.first_name, u.last_name, u.username, u.profile_image_url
-        FROM voice_room_seats s JOIN users u ON u.id = s.user_id
-        WHERE s.room_id = ${roomId} ORDER BY s.seat_number ASC
+        FROM voice_room_seats s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.room_id = ${roomId}
+        ORDER BY s.seat_number ASC
       `);
+
       res.json({ ...room, seats: (seatRows as any).rows ?? seatRows });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  // Room join karo (coin deduction / free-join logic yahan hai)
-  app.post("/api/voice-rooms/:id/join", isAuthenticated, async (req: any, res) => {
+  // Room join karo. 1v1/2v2: seat 1=A, seat 2=B, seat 3=A, seat 4=B...
+  app.post("/api/voice-rooms/:id/join", isAuthenticated, async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       const roomId = Number(req.params.id);
+      if (!Number.isFinite(roomId)) return res.status(400).json({ message: "Invalid room id" });
 
-      const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId} AND is_active = true`);
+      const roomRows = await db.execute(sql`
+        SELECT * FROM voice_rooms WHERE id = ${roomId} AND is_active = true
+      `);
       const room = ((roomRows as any).rows ?? roomRows)[0];
       if (!room) return res.status(404).json({ message: "Room not found or ended" });
-        if (room.requires_approval && room.host_id !== userId) {
+
+      if (room.requires_approval && String(room.host_id) !== String(userId)) {
         const approvalRows = await db.execute(sql`
-          SELECT status FROM voice_room_join_requests WHERE room_id = ${roomId} AND user_id = ${userId}
+          SELECT status
+          FROM voice_room_join_requests
+          WHERE room_id = ${roomId} AND user_id = ${userId}
         `);
         const approvalRow = ((approvalRows as any).rows ?? approvalRows)[0];
         if (!approvalRow || approvalRow.status !== "approved") {
-          return res.status(403).json({ message: "This room requires host approval", requiresApproval: true });
+          return res.status(403).json({
+            message: "This room requires host approval",
+            requiresApproval: true,
+          });
         }
       }
-      // Already joined hai kya check
+
       const alreadyRows = await db.execute(sql`
-        SELECT * FROM voice_room_seats WHERE room_id = ${roomId} AND user_id = ${userId}
+        SELECT * FROM voice_room_seats
+        WHERE room_id = ${roomId} AND user_id = ${userId}
       `);
       if (((alreadyRows as any).rows ?? alreadyRows).length > 0) {
         return res.json({ success: true, alreadyJoined: true });
       }
 
-      const seatCountRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM voice_room_seats WHERE room_id = ${roomId}`);
-      const seatCount = parseInt(((seatCountRows as any).rows ?? seatCountRows)[0]?.cnt ?? "0");
-      if (seatCount >= MAX_SEATS) return res.status(400).json({ message: "Room is full" });
-
-      let usedFree = false;
-      if (room.join_cost > 0) {
-        // Free-join count check
-        const freeRows = await db.execute(sql`SELECT * FROM voice_room_free_joins WHERE user_id = ${userId}`);
-        const freeRow = ((freeRows as any).rows ?? freeRows)[0];
-        const usedCount = freeRow?.used_count ?? 0;
-
-        if (usedCount < FREE_JOIN_LIMIT) {
-          await db.execute(sql`
-            INSERT INTO voice_room_free_joins (user_id, used_count) VALUES (${userId}, 1)
-            ON CONFLICT (user_id) DO UPDATE SET used_count = voice_room_free_joins.used_count + 1
-          `);
-          usedFree = true;
-        } else {
-          const wallet = await getOrCreateWallet(userId);
-          if (wallet.balance < room.join_cost) {
-            return res.status(402).json({ message: "Not enough coins", required: room.join_cost, balance: wallet.balance });
-          }
-          await addCoins(userId, -room.join_cost, "join_room", String(roomId));
-          // Host ko coins milen (agar khud ka room nahi join kar raha)
-          if (room.host_id !== userId) {
-            await addCoins(room.host_id, room.join_cost, "host_earning", String(roomId));
-          }
-        }
+      const seatCountRows = await db.execute(sql`
+        SELECT COUNT(*) AS cnt FROM voice_room_seats WHERE room_id = ${roomId}
+      `);
+      const seatCount = parseInt(
+        ((seatCountRows as any).rows ?? seatCountRows)[0]?.cnt ?? "0",
+        10,
+      );
+      const roomMaxSeats = Number(room.max_seats ?? 12);
+      if (seatCount >= roomMaxSeats) {
+        return res.status(400).json({ message: "Room is full" });
       }
 
+      // Joining a voice room is free; coins are spent only on gifts.
+      const usedFree = true;
       const nextSeat = seatCount + 1;
+      const team = isBattleRoom(room.room_type)
+        ? (nextSeat % 2 === 1 ? "a" : "b")
+        : null;
+
       await db.execute(sql`
-        INSERT INTO voice_room_seats (room_id, user_id, seat_number)
-        VALUES (${roomId}, ${userId}, ${nextSeat})
+        INSERT INTO voice_room_seats (room_id, user_id, seat_number, team)
+        VALUES (${roomId}, ${userId}, ${nextSeat}, ${team})
       `);
 
-      res.json({ success: true, usedFree, seatNumber: nextSeat });
+      res.json({ success: true, usedFree, seatNumber: nextSeat, team });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      console.error("[voice room join]", err);
+      res.status(500).json({ message: err.message || "Failed to join room" });
     }
   });
 
   // ── Toggle approval requirement (host only) ──
-  app.patch("/api/voice-rooms/:id/settings", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/voice-rooms/:id/settings", isAuthenticated, async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       const roomId = Number(req.params.id);
@@ -2746,30 +3009,38 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     }
   });
 
-  // ── Request to join (jab requires_approval true ho) ──
-  app.post("/api/voice-rooms/:id/request-join", isAuthenticated, async (req: any, res) => {
+  // ── Request to join ──
+  app.post("/api/voice-rooms/:id/request-join", isAuthenticated, async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       const roomId = Number(req.params.id);
-      const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId} AND is_active = true`);
+      const roomRows = await db.execute(sql`
+        SELECT * FROM voice_rooms WHERE id = ${roomId} AND is_active = true
+      `);
       const room = ((roomRows as any).rows ?? roomRows)[0];
       if (!room) return res.status(404).json({ message: "Room not found" });
 
       await db.execute(sql`
         INSERT INTO voice_room_join_requests (room_id, user_id, status)
         VALUES (${roomId}, ${userId}, 'pending')
-        ON CONFLICT (room_id, user_id) DO UPDATE SET status = 'pending', created_at = NOW()
+        ON CONFLICT (room_id, user_id)
+        DO UPDATE SET status = 'pending', created_at = NOW()
       `);
 
-      // Host ko WebSocket se notify karo
       const requester = await authStorage.getUser(userId);
       const hostWs = wsClients.get(String(room.host_id));
       if (hostWs && hostWs.readyState === 1) {
         hostWs.send(JSON.stringify({
-          type: "voice_room_join_request", roomId, userId,
-          user: { firstName: requester?.firstName, profileImageUrl: requester?.profileImageUrl },
+          type: "voice_room_join_request",
+          roomId,
+          userId,
+          user: {
+            firstName: requester?.firstName,
+            profileImageUrl: requester?.profileImageUrl,
+          },
         }));
       }
+
       res.json({ success: true, status: "pending" });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -2777,17 +3048,20 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
   });
 
   // ── Pending requests list (host only) ──
-  app.get("/api/voice-rooms/:id/join-requests", isAuthenticated, async (req: any, res) => {
+  app.get("/api/voice-rooms/:id/join-requests", isAuthenticated, async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       const roomId = Number(req.params.id);
       const roomRows = await db.execute(sql`SELECT host_id FROM voice_rooms WHERE id = ${roomId}`);
       const room = ((roomRows as any).rows ?? roomRows)[0];
-      if (!room || room.host_id !== userId) return res.status(403).json({ message: "Not allowed" });
+      if (!room || String(room.host_id) !== String(userId)) {
+        return res.status(403).json({ message: "Not allowed" });
+      }
 
       const rows = await db.execute(sql`
         SELECT r.*, u.first_name, u.last_name, u.profile_image_url
-        FROM voice_room_join_requests r JOIN users u ON u.id = r.user_id
+        FROM voice_room_join_requests r
+        JOIN users u ON u.id = r.user_id
         WHERE r.room_id = ${roomId} AND r.status = 'pending'
         ORDER BY r.created_at ASC
       `);
@@ -2798,41 +3072,170 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
   });
 
   // ── Approve / Deny join request (host only) ──
-  app.post("/api/voice-rooms/:id/join-requests/:userId/:action", isAuthenticated, async (req: any, res) => {
+  app.post("/api/voice-rooms/:id/join-requests/:userId/:action", isAuthenticated, async (req: any, res: any) => {
     try {
       const hostId = req.session.userId;
       const roomId = Number(req.params.id);
       const targetUserId = req.params.userId;
-      const action = req.params.action; // "approve" | "deny"
+      const action = req.params.action;
+
+      if (action !== "approve" && action !== "deny") {
+        return res.status(400).json({ message: "Invalid action" });
+      }
 
       const roomRows = await db.execute(sql`SELECT * FROM voice_rooms WHERE id = ${roomId}`);
       const room = ((roomRows as any).rows ?? roomRows)[0];
-      if (!room || room.host_id !== hostId) return res.status(403).json({ message: "Not allowed" });
+      if (!room || String(room.host_id) !== String(hostId)) {
+        return res.status(403).json({ message: "Not allowed" });
+      }
 
       if (action === "approve") {
-        await db.execute(sql`UPDATE voice_room_join_requests SET status = 'approved' WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
-        const seatCountRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM voice_room_seats WHERE room_id = ${roomId}`);
-        const seatCount = parseInt(((seatCountRows as any).rows ?? seatCountRows)[0]?.cnt ?? "0");
+        const seatCountRows = await db.execute(sql`
+          SELECT COUNT(*) AS cnt FROM voice_room_seats WHERE room_id = ${roomId}
+        `);
+        const seatCount = parseInt(
+          ((seatCountRows as any).rows ?? seatCountRows)[0]?.cnt ?? "0",
+          10,
+        );
+        const roomMaxSeats = Number(room.max_seats ?? 12);
+        if (seatCount >= roomMaxSeats) {
+          return res.status(400).json({ message: "Room is full" });
+        }
+
+        const nextSeat = seatCount + 1;
+        const team = isBattleRoom(room.room_type)
+          ? (nextSeat % 2 === 1 ? "a" : "b")
+          : null;
+
         await db.execute(sql`
-          INSERT INTO voice_room_seats (room_id, user_id, seat_number) VALUES (${roomId}, ${targetUserId}, ${seatCount + 1})
+          INSERT INTO voice_room_seats (room_id, user_id, seat_number, team)
+          VALUES (${roomId}, ${targetUserId}, ${nextSeat}, ${team})
           ON CONFLICT (room_id, user_id) DO NOTHING
         `);
+
+        await db.execute(sql`
+          UPDATE voice_room_join_requests
+          SET status = 'approved'
+          WHERE room_id = ${roomId} AND user_id = ${targetUserId}
+        `);
       } else {
-        await db.execute(sql`UPDATE voice_room_join_requests SET status = 'denied' WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
+        await db.execute(sql`
+          UPDATE voice_room_join_requests
+          SET status = 'denied'
+          WHERE room_id = ${roomId} AND user_id = ${targetUserId}
+        `);
       }
 
       const targetWs = wsClients.get(String(targetUserId));
       if (targetWs && targetWs.readyState === 1) {
-        targetWs.send(JSON.stringify({ type: "voice_room_join_response", roomId, approved: action === "approve" }));
+        targetWs.send(JSON.stringify({
+          type: "voice_room_join_response",
+          roomId,
+          approved: action === "approve",
+        }));
       }
+
       res.json({ success: true });
+    } catch (err: any) {
+      console.error("[voice room join request action]", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Start battle (host only) ──
+  app.post("/api/voice-rooms/:id/battle/start", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const hostId = req.session.userId;
+      const roomId = Number(req.params.id);
+      const requestedDuration = Number(req.body?.durationSeconds);
+
+      if (!Number.isFinite(roomId)) {
+        return res.status(400).json({ message: "Invalid room id" });
+      }
+
+      const roomRows = await db.execute(sql`
+        SELECT * FROM voice_rooms WHERE id = ${roomId} AND is_active = true
+      `);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room || String(room.host_id) !== String(hostId)) {
+        return res.status(403).json({ message: "Not allowed" });
+      }
+
+      if (!isBattleRoom(room.room_type)) {
+        return res.status(400).json({ message: "Battle mode only available in 1v1/2v2 rooms" });
+      }
+
+      if (room.battle_status === "active") {
+        return res.status(400).json({ message: "Battle is already active" });
+      }
+
+      const duration = Number.isFinite(requestedDuration) && requestedDuration > 0
+        ? Math.min(Math.floor(requestedDuration), 3600)
+        : Number(room.battle_duration_seconds || 180);
+      const safeDuration = duration > 0 ? duration : 180;
+      const endsAt = new Date(Date.now() + safeDuration * 1000);
+
+      await db.execute(sql`
+        UPDATE voice_rooms
+        SET battle_status = 'active',
+            battle_ends_at = ${endsAt},
+            team_a_score = 0,
+            team_b_score = 0,
+            battle_duration_seconds = ${safeDuration}
+        WHERE id = ${roomId}
+      `);
+
+      const seatRows = await db.execute(sql`
+        SELECT user_id FROM voice_room_seats WHERE room_id = ${roomId}
+      `);
+      const memberIds = ((seatRows as any).rows ?? seatRows).map((r: any) => r.user_id);
+      memberIds.forEach((memberId: string) => {
+        const ws = wsClients.get(String(memberId));
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: "voice_room_battle_start",
+            roomId,
+            endsAt: endsAt.toISOString(),
+            durationSeconds: safeDuration,
+            teamAScore: 0,
+            teamBScore: 0,
+          }));
+        }
+      });
+
+      res.json({ success: true, endsAt, durationSeconds: safeDuration });
+    } catch (err: any) {
+      console.error("[battle start]", err);
+      res.status(500).json({ message: err.message || "Failed to start battle" });
+    }
+  });
+
+  // ── Battle status endpoint (useful after reconnect/page refresh) ──
+  app.get("/api/voice-rooms/:id/battle", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const roomId = Number(req.params.id);
+      const roomRows = await db.execute(sql`
+        SELECT room_type, battle_status, battle_ends_at, team_a_score, team_b_score
+        FROM voice_rooms WHERE id = ${roomId}
+      `);
+      const room = ((roomRows as any).rows ?? roomRows)[0];
+      if (!room) return res.status(404).json({ message: "Room not found" });
+
+      res.json({
+        roomId,
+        roomType: room.room_type,
+        battleStatus: room.battle_status || "idle",
+        battleEndsAt: room.battle_ends_at,
+        teamAScore: Number(room.team_a_score || 0),
+        teamBScore: Number(room.team_b_score || 0),
+      });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
   // ── Force mute a seat (host only) ──
-  app.post("/api/voice-rooms/:id/seats/:userId/mute", isAuthenticated, async (req: any, res) => {
+  app.post("/api/voice-rooms/:id/seats/:userId/mute", isAuthenticated, async (req: any, res: any) => {
     try {
       const hostId = req.session.userId;
       const roomId = Number(req.params.id);
@@ -2841,9 +3244,13 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
 
       const roomRows = await db.execute(sql`SELECT host_id FROM voice_rooms WHERE id = ${roomId}`);
       const room = ((roomRows as any).rows ?? roomRows)[0];
-      if (!room || room.host_id !== hostId) return res.status(403).json({ message: "Not allowed" });
+      if (!room || String(room.host_id) !== String(hostId)) return res.status(403).json({ message: "Not allowed" });
 
-      await db.execute(sql`UPDATE voice_room_seats SET is_muted = ${!!muted} WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
+      await db.execute(sql`
+        UPDATE voice_room_seats
+        SET is_muted = ${!!muted}
+        WHERE room_id = ${roomId} AND user_id = ${targetUserId}
+      `);
 
       const targetWs = wsClients.get(String(targetUserId));
       if (targetWs && targetWs.readyState === 1) {
@@ -2856,16 +3263,18 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
   });
 
   // ── Kick a user (host only) ──
-  app.delete("/api/voice-rooms/:id/seats/:userId", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/voice-rooms/:id/seats/:userId", isAuthenticated, async (req: any, res: any) => {
     try {
       const hostId = req.session.userId;
       const roomId = Number(req.params.id);
       const targetUserId = req.params.userId;
-      if (targetUserId === hostId) return res.status(400).json({ message: "Host cannot kick themselves" });
+      if (String(targetUserId) === String(hostId)) {
+        return res.status(400).json({ message: "Host cannot kick themselves" });
+      }
 
       const roomRows = await db.execute(sql`SELECT host_id FROM voice_rooms WHERE id = ${roomId}`);
       const room = ((roomRows as any).rows ?? roomRows)[0];
-      if (!room || room.host_id !== hostId) return res.status(403).json({ message: "Not allowed" });
+      if (!room || String(room.host_id) !== String(hostId)) return res.status(403).json({ message: "Not allowed" });
 
       await db.execute(sql`DELETE FROM voice_room_seats WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
       await db.execute(sql`DELETE FROM voice_room_join_requests WHERE room_id = ${roomId} AND user_id = ${targetUserId}`);
@@ -2879,9 +3288,9 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
       res.status(500).json({ message: err.message });
     }
   });
-  
+
   // Room leave karo
-  app.post("/api/voice-rooms/:id/leave", isAuthenticated, async (req: any, res) => {
+  app.post("/api/voice-rooms/:id/leave", isAuthenticated, async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       const roomId = Number(req.params.id);
@@ -2893,12 +3302,15 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
   });
 
   // Host room end kare
-  app.post("/api/voice-rooms/:id/end", isAuthenticated, async (req: any, res) => {
+  app.post("/api/voice-rooms/:id/end", isAuthenticated, async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       const roomId = Number(req.params.id);
       const result = await db.execute(sql`
-        UPDATE voice_rooms SET is_active = false, ended_at = NOW()
+        UPDATE voice_rooms
+        SET is_active = false,
+            ended_at = NOW(),
+            battle_status = CASE WHEN battle_status = 'active' THEN 'ended' ELSE battle_status END
         WHERE id = ${roomId} AND host_id = ${userId}
         RETURNING *
       `);
@@ -2911,14 +3323,16 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
   });
 
   // Host apna join cost badal sake
-  app.patch("/api/voice-rooms/:id/cost", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/voice-rooms/:id/cost", isAuthenticated, async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       const roomId = Number(req.params.id);
       const { joinCost } = req.body;
-      if (joinCost === undefined || joinCost < 0) return res.status(400).json({ message: "Invalid joinCost" });
+      if (joinCost === undefined || Number(joinCost) < 0) {
+        return res.status(400).json({ message: "Invalid joinCost" });
+      }
       const result = await db.execute(sql`
-        UPDATE voice_rooms SET join_cost = ${joinCost}
+        UPDATE voice_rooms SET join_cost = ${Number(joinCost)}
         WHERE id = ${roomId} AND host_id = ${userId}
         RETURNING *
       `);
@@ -2930,7 +3344,60 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     }
   });
 
-  // Live text chat: message bhejo
+  // ── Battle end checker — har 5 sec mein winner declare karo ──
+  setInterval(async () => {
+    try {
+      const endingRows = await db.execute(sql`
+        SELECT id, team_a_score, team_b_score
+        FROM voice_rooms
+        WHERE battle_status = 'active'
+          AND battle_ends_at IS NOT NULL
+          AND battle_ends_at <= NOW()
+      `);
+      const ending = (endingRows as any).rows ?? endingRows;
+
+      for (const room of ending) {
+        // Conditional UPDATE prevents duplicate winner broadcasts if two checks overlap.
+        const updatedRows = await db.execute(sql`
+          UPDATE voice_rooms
+          SET battle_status = 'ended'
+          WHERE id = ${room.id} AND battle_status = 'active'
+          RETURNING team_a_score, team_b_score
+        `);
+        const updated = ((updatedRows as any).rows ?? updatedRows)[0];
+        if (!updated) continue;
+
+        const teamAScore = Number(updated.team_a_score || 0);
+        const teamBScore = Number(updated.team_b_score || 0);
+        const winner = teamAScore > teamBScore ? "a"
+          : teamBScore > teamAScore ? "b"
+          : "draw";
+
+        const seatRows = await db.execute(sql`
+          SELECT user_id FROM voice_room_seats WHERE room_id = ${room.id}
+        `);
+        const memberIds = ((seatRows as any).rows ?? seatRows).map((r: any) => r.user_id);
+
+        memberIds.forEach((memberId: string) => {
+          const ws = wsClients.get(String(memberId));
+          if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: "voice_room_battle_ended",
+              roomId: room.id,
+              winner,
+              teamAScore,
+              teamBScore,
+            }));
+          }
+        });
+      }
+    } catch (err) {
+      console.error("[battle end checker]", err);
+    }
+  }, 5 * 1000);
+
+  
+// Live text chat: message bhejo
   app.post("/api/voice-rooms/:id/messages", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;

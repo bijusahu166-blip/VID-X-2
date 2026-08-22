@@ -18,17 +18,14 @@ export default function VoiceRoomCreate() {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(false);
+  const [roomType, setRoomType] = useState<"1v1" | "2v2" | "group">("group");
+  const [requiresApproval, setRequiresApproval] = useState(false);
+
   // Joining a voice room is always free now — no per-room coin cost.
   // Coins are only spent on gifts inside the room.
   const joinCost = 0;
 
   // ── Eligibility check ──
-  // NOTE: this endpoint is a placeholder — swap the URL and field names
-  // below to match whatever your backend actually exposes for a user's
-  // content counts (e.g. GET /api/users/me/stats returning
-  // { videoCount, postCount }). Until confirmed, this fails safe:
-  // on error or while loading, the create button stays disabled rather
-  // than letting an unverified user through.
   const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<CreatorStats>({
     queryKey: ["/api/users/me/stats"],
     queryFn: async () => {
@@ -49,8 +46,10 @@ export default function VoiceRoomCreate() {
       const res: any = await apiRequest("POST", "/api/voice-rooms", {
         title: title.trim() || "Voice Room",
         joinCost: Number(joinCost) || 0,
+        requiresApproval,
+        roomType,
       });
-      const room = await res.json ? await res.json() : res;
+      const room = res.json ? await res.json() : res;
       navigate(`/voice-rooms/${room.id}`);
     } catch (err: any) {
       toast({ title: "Could not create room", description: err.message, variant: "destructive" });
@@ -124,6 +123,43 @@ export default function VoiceRoomCreate() {
             <p className="text-[10px] text-zinc-500 mt-0.5">
               Anyone can join and listen for free. Coins are only used for sending gifts.
             </p>
+          </div>
+
+          {/* ── Room Format Selector ── */}
+          <div>
+            <p className="text-xs text-zinc-400 font-semibold mb-2">Room Format</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { key: "1v1", label: "1 vs 1", seats: "2 seats" },
+                { key: "2v2", label: "2 vs 2", seats: "4 seats" },
+                { key: "group", label: "Group", seats: "8 seats" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setRoomType(opt.key)}
+                  className={`flex flex-col items-center gap-1 py-3 rounded-xl border transition-colors ${
+                    roomType === opt.key
+                      ? "border-pink-500 bg-pink-500/10 text-white"
+                      : "border-white/10 bg-white/5 text-zinc-400"
+                  }`}
+                >
+                  <span className="text-sm font-bold">{opt.label}</span>
+                  <span className="text-[10px] text-zinc-500">{opt.seats}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Approval Toggle ── */}
+          <div className="flex items-center justify-between py-2 px-1">
+            <span className="text-xs text-zinc-300 font-medium">Require approval to speak</span>
+            <input
+              type="checkbox"
+              checked={requiresApproval}
+              onChange={(e) => setRequiresApproval(e.target.checked)}
+              className="w-4 h-4 accent-pink-500 rounded cursor-pointer"
+            />
           </div>
         </div>
 

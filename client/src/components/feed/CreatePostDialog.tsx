@@ -874,7 +874,23 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
 
             try {
               // First try the common File -> File API.
-              compressedResult = await compressor(fileToUpload);
+            const compressionTargetMB = 95;
+
+if (fileToUpload.size > 50 * 1024 * 1024) {
+  compressedResult = await compressor(
+    fileToUpload,
+    compressionTargetMB,
+    (progress: number) => {
+      if (Number.isFinite(progress)) {
+        setCompressProgress(
+          Math.max(0, Math.min(99, Math.round(progress)))
+        );
+      }
+    }
+  );
+} else {
+  compressedResult = fileToUpload;
+}
             } catch (firstError) {
               // Some implementations accept a progress callback.
               compressedResult = await compressor(

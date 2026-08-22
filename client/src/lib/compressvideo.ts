@@ -1,141 +1,354 @@
 export async function compressVideo(
   file: File,
-  targetMB = 95,
+  targetMB = 100,
   onProgress?: (pct: number) => void
 ): Promise<File> {
   const targetBytes = targetMB * 1024 * 1024;
 
-  // Already small enough — return as-is
-  if (file.size <= targetBytes) return file;
+  // Already under target — don't compress
+  if (file.size <= targetBytes) {
+    onProgress?.(100);
+    return file;
+  }
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const video = document.createElement("video");
     const objectUrl = URL.createObjectURL(file);
+
+    let finished = false;
+
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    const finish = (result: File) => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      resolve(result);
+    };
+
     video.src = objectUrl;
     video.muted = true;
+    video.playsInline = true;
     video.preload = "auto";
 
     video.onloadedmetadata = async () => {
-      const duration = video.duration;
-
-      // Calculate target bitrate to hit ~targetMB
-      // formula: (targetBytes * 8) / duration = bits per second
-      const targetBitsPerSec = Math.floor((targetBytes * 8) / duration);
-      const videoBitrate = Math.min(
-        Math.floor(targetBitsPerSec * 0.88), // 88% for video
-        2_500_000 // max 2.5Mbps
-      );
-      const audioBitrate = 96_000; // 96kbps audio
-
-      // Setup canvas for video frames
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d")!;
-
-      // Scale down resolution if needed
-      const maxWidth = 1280;
-      const maxHeight = 720;
-      const scale = Math.min(
-        maxWidth / video.videoWidth,
-        maxHeight / video.videoHeight,
-        1
-      );
-      canvas.width = Math.floor(video.videoWidth * scale);
-      canvas.height = Math.floor(video.videoHeight * scale);
-
-      // Capture canvas stream
-      const canvasStream = canvas.captureStream(30); // 30fps
-
-      // Add audio from video element
-      let audioCtx: AudioContext | null = null;
       try {
-        audioCtx = new AudioContext();
-        const src = audioCtx.createMediaElementSource(video);
-        const dest = audioCtx.createMediaStreamDestination();
-        src.connect(dest);
-        src.connect(audioCtx.destination);
-        dest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
-      } catch {
-        // Audio capture failed — video only (silent)
-      }
+        const duration = video.duration;
 
-      // Pick best supported codec
-      const mimeTypes = [
-        "video/webm;codecs=vp9,opus",
-        "video/webm;codecs=vp8,opus",
-        "video/webm;codecs=vp9",
-        "video/webm;codecs=vp8",
-        "video/webm",
-      ];
-      const mimeType = mimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || "video/webm";
-
-      let recorder: MediaRecorder;
-      try {
-        recorder = new MediaRecorder(canvasStream, {
-          mimeType,
-          videoBitsPerSecond: videoBitrate,
-          audioBitsPerSecond: audioBitrate,
-        });
-      } catch {
-        // MediaRecorder config failed — return original
-        URL.revokeObjectURL(objectUrl);
-        return resolve(file);
-      }
-
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-
-      recorder.onstop = () => {
-        URL.revokeObjectURL(objectUrl);
-        audioCtx?.close();
-        canvasStream.getTracks().forEach(t => t.stop());
-
-        const compressed = new Blob(chunks, { type: mimeType });
-
-        // If compression made it bigger (rare), use original
-        const result = compressed.size < file.size
-          ? new File([compressed], file.name.replace(/\.[^.]+$/, "") + "_compressed.webm", { type: mimeType })
-          : file;
-
-        resolve(result);
-      };
-
-      recorder.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve(file); // fallback
-      };
-
-      // Draw frames to canvas in real-time
-      let lastProgress = 0;
-      const drawFrame = () => {
-        if (video.paused || video.ended) return;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const pct = Math.min(Math.floor((video.currentTime / duration) * 100), 99);
-        if (pct !== lastProgress) {
-          lastProgress = pct;
-          onProgress?.(pct);
+        if (!Number.isFinite(duration) || duration <= 0) {
+          finish(file);
+          return;
         }
-        requestAnimationFrame(drawFrame);
-      };
 
-      recorder.start(250); // collect data every 250ms
-      video.play();
-      video.onplay = () => drawFrame();
+        // ----------------------------------------------------
+        // TARGET TOTAL BITRATE
+        // ----------------------------------------------------
+        const targetTotalBitsPerSecond =
+          (targetBytes * 8) / duration;
 
-      video.onended = () => {
-        recorder.stop();
-        onProgress?.(100);
-      };
+        // Keep audio small so total stays close to target
+        const audioBitrate = 64_000;
 
-      // Safety timeout
-      setTimeout(() => {
-        if (recorder.state === "recording") recorder.stop();
-      }, (duration + 10) * 1000);
+        // Reserve audio bitrate first
+        const availableVideoBitrate =
+          targetTotalBitsPerSecond - audioBitrate;
+
+        // Use 90% of available bitrate for safety
+        const videoBitrate = Math.max(
+          100_000,
+          Math.min(
+            Math.floor(availableVideoBitrate * 0.9),
+            2_500_000
+          )
+        );
+
+        // ----------------------------------------------------
+        // RESOLUTION
+        // ----------------------------------------------------
+        const maxWidth = 1280;
+        const maxHeight = 720;
+
+        const sourceWidth = video.videoWidth || 1280;
+        const sourceHeight = video.videoHeight || 720;
+
+        const scale = Math.min(
+          maxWidth / sourceWidth,
+          maxHeight / sourceHeight,
+          1
+        );
+
+        let width = Math.floor(sourceWidth * scale);
+        let height = Math.floor(sourceHeight * scale);
+
+        // Canvas dimensions should be even
+        width = width - (width % 2);
+        height = height - (height % 2);
+
+        canvasSetup:
+        {
+          // no-op label
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(width, 2);
+        canvas.height = Math.max(height, 2);
+
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          finish(file);
+          return;
+        }
+
+        const canvasStream = canvas.captureStream(30);
+
+        // ----------------------------------------------------
+        // AUDIO
+        // ----------------------------------------------------
+        let audioContext: AudioContext | null = null;
+
+        try {
+          audioContext = new AudioContext();
+
+          const source =
+            audioContext.createMediaElementSource(video);
+
+          const destination =
+            audioContext.createMediaStreamDestination();
+
+          source.connect(destination);
+
+          // Don't play compressed audio through speakers
+          // while compression is running.
+          destination.stream
+            .getAudioTracks()
+            .forEach((track) => {
+              canvasStream.addTrack(track);
+            });
+        } catch (error) {
+          console.warn(
+            "Audio capture unavailable:",
+            error
+          );
+        }
+
+        // ----------------------------------------------------
+        // CODEC
+        // ----------------------------------------------------
+        const mimeTypes = [
+          "video/webm;codecs=vp9,opus",
+          "video/webm;codecs=vp8,opus",
+          "video/webm;codecs=vp9",
+          "video/webm;codecs=vp8",
+          "video/webm",
+        ];
+
+        const mimeType =
+          mimeTypes.find((type) =>
+            MediaRecorder.isTypeSupported(type)
+          ) || "video/webm";
+
+        let recorder: MediaRecorder;
+
+        try {
+          recorder = new MediaRecorder(canvasStream, {
+            mimeType,
+            videoBitsPerSecond: videoBitrate,
+            audioBitsPerSecond: audioBitrate,
+          });
+        } catch (error) {
+          console.error(
+            "MediaRecorder initialization failed:",
+            error
+          );
+
+          audioContext?.close();
+          canvasStream.getTracks().forEach((track) => {
+            track.stop();
+          });
+
+          finish(file);
+          return;
+        }
+
+        const chunks: Blob[] = [];
+
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            chunks.push(event.data);
+          }
+        };
+
+        recorder.onerror = (event) => {
+          console.error(
+            "MediaRecorder error:",
+            event
+          );
+
+          audioContext?.close();
+
+          canvasStream.getTracks().forEach((track) => {
+            track.stop();
+          });
+
+          finish(file);
+        };
+
+        recorder.onstop = () => {
+          audioContext?.close();
+
+          canvasStream.getTracks().forEach((track) => {
+            track.stop();
+          });
+
+          const compressedBlob = new Blob(chunks, {
+            type: mimeType,
+          });
+
+          // If compression failed or became bigger,
+          // use original file.
+          if (
+            compressedBlob.size <= 0 ||
+            compressedBlob.size >= file.size
+          ) {
+            finish(file);
+            return;
+          }
+
+          const extension =
+            mimeType.includes("webm")
+              ? "webm"
+              : "mp4";
+
+          const baseName = file.name.replace(
+            /\.[^/.]+$/,
+            ""
+          );
+
+          const compressedFile = new File(
+            [compressedBlob],
+            `${baseName}_compressed.${extension}`,
+            {
+              type: mimeType,
+              lastModified: Date.now(),
+            }
+          );
+
+          onProgress?.(100);
+
+          finish(compressedFile);
+        };
+
+        // ----------------------------------------------------
+        // DRAW VIDEO FRAMES
+        // ----------------------------------------------------
+        let animationFrame = 0;
+        let lastProgress = -1;
+
+        const drawFrame = () => {
+          if (
+            recorder.state !== "recording" ||
+            video.ended
+          ) {
+            return;
+          }
+
+          try {
+            ctx.drawImage(
+              video,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+          } catch (error) {
+            console.warn(
+              "Frame drawing failed:",
+              error
+            );
+          }
+
+          const progress = Math.min(
+            99,
+            Math.floor(
+              (video.currentTime / duration) * 100
+            )
+          );
+
+          if (progress !== lastProgress) {
+            lastProgress = progress;
+            onProgress?.(progress);
+          }
+
+          animationFrame =
+            requestAnimationFrame(drawFrame);
+        };
+
+        recorder.start(250);
+
+        try {
+          await video.play();
+        } catch (error) {
+          console.error(
+            "Video playback failed:",
+            error
+          );
+
+          cancelAnimationFrame(animationFrame);
+
+          if (recorder.state === "recording") {
+            recorder.stop();
+          }
+
+          return;
+        }
+
+        drawFrame();
+
+        video.onended = () => {
+          cancelAnimationFrame(animationFrame);
+
+          if (recorder.state === "recording") {
+            recorder.stop();
+          }
+        };
+
+        // Safety timeout
+        const safetyTimeout = window.setTimeout(() => {
+          cancelAnimationFrame(animationFrame);
+
+          if (recorder.state === "recording") {
+            recorder.stop();
+          }
+        }, (duration + 15) * 1000);
+
+        const originalOnStop = recorder.onstop;
+
+        recorder.onstop = (event) => {
+          window.clearTimeout(safetyTimeout);
+
+          if (originalOnStop) {
+            originalOnStop.call(recorder, event);
+          }
+        };
+      } catch (error) {
+        console.error(
+          "Video compression failed:",
+          error
+        );
+
+        finish(file);
+      }
     };
 
     video.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(file); // fallback — upload original
+      console.error(
+        "Could not read video file."
+      );
+
+      finish(file);
     };
 
     video.load();

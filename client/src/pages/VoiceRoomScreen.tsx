@@ -328,6 +328,14 @@ export default function VoiceRoomScreen() {
             setFloatingGifts(prev => [...prev, { id, icon: data.gift.icon, name: data.gift.name }]);
             setTimeout(() => setFloatingGifts(prev => prev.filter(f => f.id !== id)), 2500);
           }
+          if (data.type === "voice_room_gift") {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  setFloatingGifts(prev => [...prev, { id, icon: data.gift.icon, name: data.gift.name }]);
+  setTimeout(() => setFloatingGifts(prev => prev.filter(f => f.id !== id)), 2500);
+}
+if (data.type === "voice_room_message") {          // 👈 ye poora block naya hai, add karo
+  qc.invalidateQueries({ queryKey: ["/api/voice-rooms", roomId, "messages"] });
+}
         } catch {
           // Malformed message from server — ignore rather than crash the screen.
         }

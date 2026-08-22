@@ -802,6 +802,68 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   },
   enabled: !params.id, // only fetch on own profile
 });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // AdPay Center — real coin balance + creator earnings + withdrawals
+  // ══════════════════════════════════════════════════════════════════════
+  const COINS_PER_RUPEE = 50;       // 150 coins = ₹3
+  const MIN_WITHDRAW_COINS = 500;   // minimum withdrawal amount
+
+  const { data: coinData } = useQuery<{ balance: number }>({
+    queryKey: ["/api/coins/balance"],
+    queryFn: async () => {
+      const res = await fetch("/api/coins/balance", { credentials: "include" });
+      return res.json();
+    },
+    enabled: !params.id,
+  });
+
+  const { data: earningsData } = useQuery<{ gifts: any[]; totalEarnedCoins: number }>({
+    queryKey: ["/api/users", user?.id, "gifts-received"],
+    queryFn: async () => {
+      const res = await fetch(`/api/users/${user?.id}/gifts-received`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: !params.id && !!user?.id,
+  });
+
+  const { data: withdrawals = [], isLoading: withdrawalsLoading } = useQuery<any[]>({
+    queryKey: ["/api/withdrawals/mine"],
+    queryFn: async () => {
+      const res = await fetch("/api/withdrawals/mine", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !params.id,
+  });
+
+  const [withdrawCoins, setWithdrawCoins] = useState("");
+  const [withdrawMethod, setWithdrawMethod] = useState<"upi" | "bank">("upi");
+  const [withdrawUpiId, setWithdrawUpiId] = useState("");
+  const [withdrawBankAcc, setWithdrawBankAcc] = useState("");
+  const [withdrawBankIfsc, setWithdrawBankIfsc] = useState("");
+  const [withdrawBankName, setWithdrawBankName] = useState("");
+
+  const withdrawMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", "/api/withdrawals/request", {
+        coins: Number(withdrawCoins),
+        method: withdrawMethod,
+        upiId: withdrawMethod === "upi" ? withdrawUpiId.trim() : undefined,
+        bankAccountNumber: withdrawMethod === "bank" ? withdrawBankAcc.trim() : undefined,
+        bankIfsc: withdrawMethod === "bank" ? withdrawBankIfsc.trim().toUpperCase() : undefined,
+        bankHolderName: withdrawMethod === "bank" ? withdrawBankName.trim() : undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/withdrawals/mine"] });
+      qc.invalidateQueries({ queryKey: ["/api/coins/balance"] });
+      toast({ title: "Withdrawal requested!", description: "We'll process it and notify you." });
+      setWithdrawCoins(""); setWithdrawUpiId(""); setWithdrawBankAcc(""); setWithdrawBankIfsc(""); setWithdrawBankName("");
+      setSettingsPanel("AdPay Center");
+    },
+    onError: (err: any) => toast({ title: "Couldn't submit request", description: err.message, variant: "destructive" }),
+  });
+
   const { data: history, error: historyError, isLoading: historyLoading } = useQuery<any[]>({ 
     queryKey: ["/api/history"],
     queryFn: () => apiRequest("GET", "/api/history").then((res) => res.json()),
@@ -1778,18 +1840,197 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                     </div>
                   )}
 
-                  {/* ── SUB: ADPAY CENTER (expanded per master table) ── */}
+                  {/* ── SUB: ADPAY CENTER — real coin balance, earnings, withdraw ── */}
                   {settingsPanel === "AdPay Center" && (
-                    <div className="p-5 space-y-3">
+                    <div className="p-5 space-y-4">
                       <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400">Balance</p>
-                        <p className="text-2xl font-black text-white mt-1">₹0.00</p>
-                        <p className="text-[11px] text-zinc-400 mt-1">Available earnings</p>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400">Coin Balance</p>
+                          <div className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-semibold text-emerald-300">● Live</div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-2xl">💰</span>
+                          <p className="text-2xl font-black text-white">{(coinData?.balance ?? 0).toLocaleString()}</p>
+                          <span className="text-[11px] text-zinc-500">coins</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 mt-1">
+                          ≈ ₹{((coinData?.balance ?? 0) / COINS_PER_RUPEE).toFixed(2)} · from gifts sent to you
+                        </p>
                       </div>
-                      <SettingRow icon={LineChart} label="Earnings" sub="Monetization income" />
-                      <SettingRow icon={Wallet} label="Payment Method" sub="Manage UPI/bank details" />
-                      <SettingRow icon={DollarSign} label="Withdraw" sub="Transfer eligible earnings" />
-                      <SettingRow icon={HistoryIcon} label="Transactions" sub="Payment history" />
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Total Earned</p>
+                          <p className="mt-1 text-lg font-black text-white">{(earningsData?.totalEarnedCoins ?? 0).toLocaleString()}</p>
+                          <p className="text-[10px] text-zinc-600">coins lifetime</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Gifts Received</p>
+                          <p className="mt-1 text-lg font-black text-white">
+                            {(earningsData?.gifts ?? []).reduce((s: number, g: any) => s + Number(g.count ?? 0), 0)}
+                          </p>
+                          <p className="text-[10px] text-zinc-600">total gifts</p>
+                        </div>
+                      </div>
+
+                      {earningsData?.gifts && earningsData.gifts.length > 0 && (
+                        <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3 space-y-2">
+                          <p className="text-sm font-semibold text-white mb-1">Gift breakdown</p>
+                          {earningsData.gifts.map((g: any) => (
+                            <div key={g.name} className="flex items-center justify-between text-[12px]">
+                              <span className="text-zinc-300">{g.icon} {g.name} × {g.count}</span>
+                              <span className="text-emerald-400 font-semibold">+{g.total_coins}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => setSettingsPanel("Withdraw")}
+                        className="w-full h-11 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2"
+                        style={{ background: "linear-gradient(135deg, #059669, #10b981)", boxShadow: "0 0 15px rgba(16,185,129,0.3)" }}
+                      >
+                        <DollarSign className="w-4 h-4" /> Withdraw Earnings
+                      </button>
+
+                      <SettingRow
+                        icon={HistoryIcon}
+                        label="Transactions"
+                        sub={`${withdrawals.length} request${withdrawals.length === 1 ? "" : "s"}`}
+                        onClick={() => setSettingsPanel("Withdraw")}
+                      />
+                    </div>
+                  )}
+
+                  {/* ── SUB: WITHDRAW ── */}
+                  {settingsPanel === "Withdraw" && (
+                    <div className="p-5 space-y-4">
+                      <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3 flex items-center justify-between">
+                        <span className="text-[11px] text-zinc-500">Available</span>
+                        <span className="text-sm font-black text-white">💰 {(coinData?.balance ?? 0).toLocaleString()} coins</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-600 -mt-2">Minimum withdrawal: {MIN_WITHDRAW_COINS} coins (₹{(MIN_WITHDRAW_COINS / COINS_PER_RUPEE).toFixed(2)})</p>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Coins to withdraw</Label>
+                        <Input
+                          type="number"
+                          value={withdrawCoins}
+                          onChange={(e) => setWithdrawCoins(e.target.value)}
+                          placeholder={`e.g. ${MIN_WITHDRAW_COINS}`}
+                          className="bg-white/5 border-white/10 rounded-xl h-11"
+                        />
+                        <div className="flex gap-2 pt-1">
+                          {[MIN_WITHDRAW_COINS, 1000, 2500].map((amt) => (
+                            <button
+                              key={amt}
+                              onClick={() => setWithdrawCoins(String(amt))}
+                              className="flex-1 h-8 rounded-lg bg-white/5 border border-white/10 text-[11px] font-semibold text-zinc-300 hover:bg-white/10"
+                            >
+                              {amt}
+                            </button>
+                          ))}
+                        </div>
+                        {Number(withdrawCoins) > 0 && Number(withdrawCoins) < MIN_WITHDRAW_COINS && (
+                          <p className="text-[11px] text-orange-400 pt-1">Minimum withdrawal is {MIN_WITHDRAW_COINS} coins</p>
+                        )}
+                        {Number(withdrawCoins) >= MIN_WITHDRAW_COINS && (
+                          <p className="text-[11px] text-emerald-400 font-semibold pt-1">
+                            ≈ ₹{(Number(withdrawCoins) / COINS_PER_RUPEE).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Payout method</p>
+                        <div className="flex gap-2">
+                          {(["upi", "bank"] as const).map((m) => (
+                            <button
+                              key={m}
+                              onClick={() => setWithdrawMethod(m)}
+                              className={`flex-1 h-10 rounded-xl text-sm font-semibold transition-colors ${
+                                withdrawMethod === m ? "bg-white text-black" : "bg-white/5 text-zinc-300 border border-white/10"
+                              }`}
+                            >
+                              {m === "upi" ? "UPI" : "Bank Transfer"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {withdrawMethod === "upi" ? (
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">UPI ID</Label>
+                          <Input
+                            value={withdrawUpiId}
+                            onChange={(e) => setWithdrawUpiId(e.target.value)}
+                            placeholder="yourname@upi"
+                            className="bg-white/5 border-white/10 rounded-xl h-11"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Account Holder Name</Label>
+                            <Input value={withdrawBankName} onChange={(e) => setWithdrawBankName(e.target.value)} className="bg-white/5 border-white/10 rounded-xl h-11" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Account Number</Label>
+                            <Input value={withdrawBankAcc} onChange={(e) => setWithdrawBankAcc(e.target.value)} className="bg-white/5 border-white/10 rounded-xl h-11" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">IFSC Code</Label>
+                            <Input value={withdrawBankIfsc} onChange={(e) => setWithdrawBankIfsc(e.target.value.toUpperCase())} className="bg-white/5 border-white/10 rounded-xl h-11 font-mono" />
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => withdrawMutation.mutate()}
+                        disabled={
+                          withdrawMutation.isPending ||
+                          !withdrawCoins ||
+                          Number(withdrawCoins) < MIN_WITHDRAW_COINS ||
+                          Number(withdrawCoins) > (coinData?.balance ?? 0) ||
+                          (withdrawMethod === "upi" ? !withdrawUpiId.trim() : !withdrawBankAcc.trim() || !withdrawBankIfsc.trim() || !withdrawBankName.trim())
+                        }
+                        className="w-full h-12 rounded-xl font-bold text-sm text-white disabled:opacity-40"
+                        style={{ background: "linear-gradient(135deg, #7c3aed, #db2777)", boxShadow: "0 0 20px rgba(124,58,237,0.4)" }}
+                      >
+                        {withdrawMutation.isPending ? "Submitting…" : "Request Withdrawal"}
+                      </button>
+
+                      <div className="pt-2">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-2">History</p>
+                        {withdrawalsLoading ? (
+                          <div className="space-y-2">
+                            {Array(2).fill(0).map((_, i) => <div key={i} className="h-14 rounded-xl bg-white/5 animate-pulse" />)}
+                          </div>
+                        ) : withdrawals.length === 0 ? (
+                          <p className="text-[11px] text-zinc-600 text-center py-6">No withdrawal requests yet.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {withdrawals.map((w: any) => {
+                              const statusStyle: Record<string, string> = {
+                                pending: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+                                paid: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+                                rejected: "bg-red-500/15 text-red-400 border-red-500/30",
+                              };
+                              return (
+                                <div key={w.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
+                                  <div>
+                                    <p className="text-sm font-semibold text-white">₹{Number(w.amount_inr).toFixed(2)}</p>
+                                    <p className="text-[10px] text-zinc-500">{w.coins} coins · {w.method?.toUpperCase()}</p>
+                                  </div>
+                                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${statusStyle[w.status] || statusStyle.pending}`}>
+                                    {w.status}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1891,7 +2132,7 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
           data-testid="button-buy-coins-wallet"
         >
           <span>💰</span>
-          {currentProfileUser?.coins ?? 0}
+          {coinData?.balance ?? currentProfileUser?.coins ?? 0}
         </button>
       </div>
 
