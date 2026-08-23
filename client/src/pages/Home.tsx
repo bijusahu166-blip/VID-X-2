@@ -504,13 +504,14 @@ export default function Home() {
   const [viewingPost, setViewingPost] = useState<any | null>(null);
   const [viewingStoryIdx, setViewingStoryIdx] = useState<number | null>(null);
 
-  const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
+  // ✅ SIRF YE EK BLOCK RAHE
+const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
     queryKey: ["/api/stories"],
     queryFn: async () => {
-      const res = await fetch("/api/posts", { credentials: "include" });
+      const res = await fetch("/api/stories", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stories");
       const data = await res.json();
-      return Array.isArray(data) ? data.filter((p: any) => p.type === "story") : [];
+      return Array.isArray(data) ? data : [];
     },
     refetchInterval: 10000,
     staleTime: 5000,
@@ -778,9 +779,9 @@ filteredPosts.forEach((post, i) => {
                       style={{ border: "2px solid transparent", background: "linear-gradient(#111,#111) padding-box, linear-gradient(135deg,#ec4899,#a855f7,#f97316) border-box" }}>
                       <div className="absolute inset-0"
                         style={{ background: `linear-gradient(135deg, hsl(${(story.id * 53) % 360}, 60%, 14%), hsl(${(story.id * 53 + 140) % 360}, 50%, 18%))` }} />
-                      {story.imageUrl && !story.imageUrl.startsWith("blob:") ? (
-                        <img src={story.imageUrl} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      ) : (
+                    {story.mediaUrl && !story.mediaUrl.startsWith("blob:") ? (
+  <img src={story.mediaUrl} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+) : (
                         <div className="absolute inset-0 flex items-center justify-center p-2">
                           <p className="text-[9px] text-white/60 text-center leading-tight line-clamp-4">{story.caption || "✨"}</p>
                         </div>

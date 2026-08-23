@@ -195,6 +195,24 @@ async function deleteFromCloudinary(mediaUrl: string): Promise<void> {
     console.error("[cloudinary delete] Error:", err);
   }
 }
+
+// ── Raw SQL rows snake_case return karta hai, frontend camelCase expect karta hai ──
+function mapPostRow(row: any) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    imageUrl: row.image_url,
+    caption: row.caption,
+    type: row.type,
+    videoUrl: row.video_url,
+    createdAt: row.created_at,
+    liveEndedAt: row.live_ended_at,
+    viewerCount: row.viewer_count,
+    songTitle: row.song_title,
+    songArtist: row.song_artist,
+    songColor: row.song_color,
+  };
+}
 // ── Expired stories cleanup — har 15 min mein chalega ──
 // ── Expired stories cleanup — har 15 min mein chalega ──
 setInterval(async () => {
@@ -862,7 +880,7 @@ app.post("/api/auth/register", async (req, res) => {
     const savedSet = new Set(((savedRows as any).rows ?? savedRows).map((r: any) => r.post_id));
 
     const enrichedPosts = finalPosts.map((post: any) => ({
-      ...post,
+      ...mapPostRow(post),
       user: userMap.get(String(post.user_id)) || null,
       likesCount: likesMap.get(post.id) ?? 0,
       commentsCount: commentsMap.get(post.id) ?? 0,
@@ -1850,7 +1868,7 @@ app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
         ORDER BY s.created_at DESC
       `);
       const rows = (result as any).rows ?? result;
-      res.json(rows);
+      res.json(rows.map(mapStoryRow));   // ← "res.json(rows)" ki jagah ye
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
