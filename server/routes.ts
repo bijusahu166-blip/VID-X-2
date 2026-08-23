@@ -269,6 +269,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   await ensureUserPreferenceColumns();
+  // Permanent Voice Room unlock
+async function ensureVoiceRoomUnlockColumn() {
+  try {
+    await db.execute(sql`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS voice_room_unlocked BOOLEAN DEFAULT FALSE
+    `);
+  } catch (error) {
+    console.error("[voice room unlock column]", error);
+  }
+}
+
+await ensureVoiceRoomUnlockColumn();
 
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
@@ -783,46 +796,86 @@ app.post("/api/auth/register", async (req, res) => {
   // ══════════════════════════════════════════════════════════════════════════
 
   app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
-    try {
-      const sessionUserId = (req.session as any).userId;
-      const filterUserId = req.query.userId as string | undefined;
+  try {
+    const sessionUserId = (req.session as any).userId;
+    const filterUserId = req.query.userId as string | undefined;
 
-      let allPosts = await storage.getAllPosts();
+    // ── Pagination — chahe 1 lakh ho ya 5 lakh, ek baar mein sirf 20 posts ──
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const offset = (page - 1) * pageSize;
 
-      if (filterUserId) {
-        allPosts = allPosts.filter(post => String(post.userId) === String(filterUserId));
-      }
+    // Base query — sirf zaroori columns, LIMIT/OFFSET ke saath
+    let baseQuery = sql`
+      SELECT p.* FROM posts p
+      WHERE p.type != 'deleted'
+      ${filterUserId ? sql`AND p.user_id = ${filterUserId}` : sql``}
+      ORDER BY p.created_at DESC
+      LIMIT ${pageSize} OFFSET ${offset}
+    `;
 
-      const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
-        .where(and(eq(pendingBlocks.blockedUserId, sessionUserId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
-      const blockedPostIds = new Set(blockedPosts.map(b => b.postId));
-      const filteredPosts = allPosts.filter(post => !blockedPostIds.has(post.id));
+    const postsRows = await db.execute(baseQuery);
+    const rawPosts = (postsRows as any).rows ?? postsRows;
 
-      // Users me se jo maine block kiye ya jinhone mujhe block kiya, unke posts hataao
-      const myBlockRows = await db.execute(sql`
-        SELECT blocked_id, blocker_id FROM blocks
-        WHERE blocker_id = ${sessionUserId} OR blocked_id = ${sessionUserId}
-      `);
-      const relatedIds = new Set<string>();
-      ((myBlockRows as any).rows ?? myBlockRows).forEach((r: any) => {
-        relatedIds.add(r.blocker_id === sessionUserId ? r.blocked_id : r.blocker_id);
-      });
-      const finalFilteredPosts = filteredPosts.filter(post => !relatedIds.has(String(post.userId)));
-
-      const enrichedPosts = await Promise.all(finalFilteredPosts.map(async (post) => {
-        const user = await authStorage.getUser(post.userId);
-        const likesCount = await storage.getLikesCount(post.id);
-        const comms = await storage.getComments(post.id);
-        const hasLiked = await storage.hasLiked(post.id, sessionUserId);
-        const savedCheck = await db.select().from(savedPosts)
-          .where(and(eq(savedPosts.userId, sessionUserId), eq(savedPosts.postId, post.id))).limit(1);
-        return { ...post, user, likesCount, commentsCount: comms.length, hasLiked, hasSaved: savedCheck.length > 0 };
-      }));
-      res.json(enrichedPosts);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    if (rawPosts.length === 0) {
+      return res.json([]);
     }
-  });
+
+    // Block filtering — chhoti list pe hi (max 50 posts), fast rehta hai
+    const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
+      .where(and(eq(pendingBlocks.blockedUserId, sessionUserId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
+    const blockedPostIds = new Set(blockedPosts.map(b => b.postId));
+
+    const myBlockRows = await db.execute(sql`
+      SELECT blocked_id, blocker_id FROM blocks
+      WHERE blocker_id = ${sessionUserId} OR blocked_id = ${sessionUserId}
+    `);
+    const relatedIds = new Set<string>();
+    ((myBlockRows as any).rows ?? myBlockRows).forEach((r: any) => {
+      relatedIds.add(r.blocker_id === sessionUserId ? r.blocked_id : r.blocker_id);
+    });
+
+    const finalPosts = rawPosts.filter((p: any) =>
+      !blockedPostIds.has(p.id) && !relatedIds.has(String(p.user_id))
+    );
+
+    if (finalPosts.length === 0) {
+      return res.json([]);
+    }
+
+    // ── Batch fix: 50 posts ke liye bhi sirf ~5 queries, N+1 nahi ──
+    const postIds = finalPosts.map((p: any) => p.id);
+    const userIds = [...new Set(finalPosts.map((p: any) => String(p.user_id)))];
+
+    const [usersRows, likesRows, commentsRows, likedRows, savedRows] = await Promise.all([
+      db.execute(sql`SELECT id, first_name, last_name, username, profile_image_url FROM users WHERE id = ANY(${userIds})`),
+      db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM likes WHERE post_id = ANY(${postIds}) GROUP BY post_id`),
+      db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM comments WHERE post_id = ANY(${postIds}) GROUP BY post_id`),
+      db.execute(sql`SELECT post_id FROM likes WHERE post_id = ANY(${postIds}) AND user_id = ${sessionUserId}`),
+      db.execute(sql`SELECT post_id FROM saved_posts WHERE post_id = ANY(${postIds}) AND user_id = ${sessionUserId}`),
+    ]);
+
+    const userMap = new Map(((usersRows as any).rows ?? usersRows).map((u: any) => [String(u.id), u]));
+    const likesMap = new Map(((likesRows as any).rows ?? likesRows).map((r: any) => [r.post_id, parseInt(r.cnt)]));
+    const commentsMap = new Map(((commentsRows as any).rows ?? commentsRows).map((r: any) => [r.post_id, parseInt(r.cnt)]));
+    const likedSet = new Set(((likedRows as any).rows ?? likedRows).map((r: any) => r.post_id));
+    const savedSet = new Set(((savedRows as any).rows ?? savedRows).map((r: any) => r.post_id));
+
+    const enrichedPosts = finalPosts.map((post: any) => ({
+      ...post,
+      user: userMap.get(String(post.user_id)) || null,
+      likesCount: likesMap.get(post.id) ?? 0,
+      commentsCount: commentsMap.get(post.id) ?? 0,
+      hasLiked: likedSet.has(post.id),
+      hasSaved: savedSet.has(post.id),
+    }));
+
+    res.json(enrichedPosts);
+  } catch (err: any) {
+    console.error("[posts list]", err);
+    res.status(500).json({ message: err.message });
+  }
+});
 
   app.post(api.posts.create.path, isAuthenticated, async (req, res) => {
     try {
@@ -1507,14 +1560,28 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     }
   });
 
-  app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
+  const VOICE_ROOM_REQUIRED_VIDEOS = 4;
+const VOICE_ROOM_REQUIRED_POSTS = 3;
+
+app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.session.userId;
+
     const videoRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM posts WHERE user_id = ${userId} AND type = 'video'`);
     const postRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM posts WHERE user_id = ${userId} AND type = 'post'`);
     const videoCount = parseInt(((videoRows as any).rows ?? videoRows)[0]?.cnt ?? "0");
     const postCount = parseInt(((postRows as any).rows ?? postRows)[0]?.cnt ?? "0");
-    res.json({ videoCount, postCount });
+
+    const userRows = await db.execute(sql`SELECT voice_room_unlocked FROM users WHERE id = ${userId}`);
+    let voiceRoomUnlocked = !!((userRows as any).rows ?? userRows)[0]?.voice_room_unlocked;
+
+    // Agar abhi tak unlock nahi hua, har stats-check pe recheck karo (frontend har 3 sec poll karta hai)
+    if (!voiceRoomUnlocked && videoCount >= VOICE_ROOM_REQUIRED_VIDEOS && postCount >= VOICE_ROOM_REQUIRED_POSTS) {
+      await db.execute(sql`UPDATE users SET voice_room_unlocked = TRUE WHERE id = ${userId}`);
+      voiceRoomUnlocked = true;
+    }
+
+    res.json({ videoCount, postCount, voiceRoomUnlocked });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -2848,6 +2915,59 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
   app.post("/api/voice-rooms", isAuthenticated, async (req: any, res: any) => {
     try {
       const hostId = req.session.userId;
+      // ── Permanent Voice Room eligibility ──
+const userRows = await db.execute(sql`
+  SELECT voice_room_unlocked
+  FROM users
+  WHERE id = ${hostId}
+`);
+
+const user = ((userRows as any).rows ?? userRows)[0];
+
+let voiceRoomUnlocked = !!user?.voice_room_unlocked;
+
+// Agar pehle unlock nahi hua, current counts check karo
+if (!voiceRoomUnlocked) {
+  const videoRows = await db.execute(sql`
+    SELECT COUNT(*) AS cnt
+    FROM posts
+    WHERE user_id = ${hostId}
+      AND type = 'video'
+  `);
+
+  const postRows = await db.execute(sql`
+    SELECT COUNT(*) AS cnt
+    FROM posts
+    WHERE user_id = ${hostId}
+      AND type = 'post'
+  `);
+
+  const videoCount = Number(
+    ((videoRows as any).rows ?? videoRows)[0]?.cnt ?? 0
+  );
+
+  const postCount = Number(
+    ((postRows as any).rows ?? postRows)[0]?.cnt ?? 0
+  );
+
+  // BOTH required: 4 videos + 3 posts
+  if (videoCount >= 4 && postCount >= 3) {
+    await db.execute(sql`
+      UPDATE users
+      SET voice_room_unlocked = TRUE
+      WHERE id = ${hostId}
+    `);
+
+    voiceRoomUnlocked = true;
+  }
+}
+
+// Abhi criteria complete nahi hua
+if (!voiceRoomUnlocked) {
+  return res.status(403).json({
+    message: "Voice Room unlocks after 4 videos and 3 posts",
+  });
+}
       const { title, requiresApproval, roomType } = req.body;
       const normalizedType = ROOM_TYPE_SEATS[roomType] ? roomType : "group";
       const maxSeats = ROOM_TYPE_SEATS[normalizedType];

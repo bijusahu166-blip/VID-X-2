@@ -834,10 +834,11 @@ filteredPosts.forEach((post, i) => {
     );
 }
 
-              const post = item.data;
-              const isVideo = isVideoPost(post);
-              const isPhoto = isPhotoPost(post);
-              const aspectClass = isVideo ? "aspect-video" : "aspect-[3/4]";
+             const post = item.data;
+             const isVideo = isVideoPost(post);
+             const isPhoto = isPhotoPost(post);
+             const isReel = post.type === "reel";
+             const aspectClass = isReel ? "aspect-[9/16]" : isVideo ? "aspect-video" : "aspect-[3/4]";
               return (
                 <div key={post.id} className="mb-1 group cursor-pointer rounded-3xl overflow-hidden border border-white/5">
                   <div className={`relative w-full ${aspectClass} bg-zinc-900 overflow-hidden rounded-3xl border border-white/5`}>
