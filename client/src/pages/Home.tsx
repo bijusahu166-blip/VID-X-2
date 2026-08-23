@@ -98,9 +98,9 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
     refetchInterval: open ? 5000 : false,
   });
 
-  const addComment = useMutation({
+const addComment = useMutation({
     mutationFn: async (content: string) => {
-      const res = await apiRequest("POST", `/api/posts/${postId}/comment`, { content });
+      const res = await apiRequest("POST", `/api/posts/${postId}/comments`, { content });
       return res.json();
     },
     onMutate: async (content: string) => {
