@@ -865,13 +865,13 @@ app.post("/api/auth/register", async (req, res) => {
     const postIds = finalPosts.map((p: any) => p.id);
     const userIds = [...new Set(finalPosts.map((p: any) => String(p.user_id)))];
 
-    const [usersRows, likesRows, commentsRows, likedRows, savedRows] = await Promise.all([
-      db.execute(sql`SELECT id, first_name, last_name, username, profile_image_url FROM users WHERE id = ANY(${userIds})`),
-      db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM likes WHERE post_id = ANY(${postIds}) GROUP BY post_id`),
-      db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM comments WHERE post_id = ANY(${postIds}) GROUP BY post_id`),
-      db.execute(sql`SELECT post_id FROM likes WHERE post_id = ANY(${postIds}) AND user_id = ${sessionUserId}`),
-      db.execute(sql`SELECT post_id FROM saved_posts WHERE post_id = ANY(${postIds}) AND user_id = ${sessionUserId}`),
-    ]);
+   const [usersRows, likesRows, commentsRows, likedRows, savedRows] = await Promise.all([
+  db.execute(sql`SELECT id, first_name, last_name, username, profile_image_url FROM users WHERE id = ANY(${userIds}::text[])`),
+  db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM likes WHERE post_id = ANY(${postIds}::int[]) GROUP BY post_id`),
+  db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM comments WHERE post_id = ANY(${postIds}::int[]) GROUP BY post_id`),
+  db.execute(sql`SELECT post_id FROM likes WHERE post_id = ANY(${postIds}::int[]) AND user_id = ${sessionUserId}`),
+  db.execute(sql`SELECT post_id FROM saved_posts WHERE post_id = ANY(${postIds}::int[]) AND user_id = ${sessionUserId}`),
+]);
 
     const userMap = new Map(((usersRows as any).rows ?? usersRows).map((u: any) => [String(u.id), u]));
     const likesMap = new Map(((likesRows as any).rows ?? likesRows).map((r: any) => [r.post_id, parseInt(r.cnt)]));
