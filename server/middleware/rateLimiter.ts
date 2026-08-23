@@ -2,17 +2,17 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { Request } from 'express';
 
 export const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 60 * 1000,        
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
-  skip: () => process.env.NODE_ENV !== 'production',
+  skip: (req) => process.env.NODE_ENV !== 'production' || req.path.startsWith('/upload'),
 });
 
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login attempts, please try again later' },
@@ -21,7 +21,7 @@ export const authLimiter = rateLimit({
 
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 50,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Upload limit reached, try again in 1 hour' },
