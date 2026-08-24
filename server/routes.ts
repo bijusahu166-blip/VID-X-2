@@ -213,7 +213,7 @@ function mapPostRow(row: any) {
     songColor: row.song_color,
   };
 }
-─
+
 // ── Expired stories cleanup — har 15 min mein chalega ──
 setInterval(async () => {
   try {
@@ -263,6 +263,18 @@ setInterval(async () => {
     console.error("[cleanup error]", err);
   }
 }, 15 * 60 * 1000);
+
+// --- AUTO-DELETE OLD COMMENTS (90 Days) ---
+setInterval(async () => {
+  try {
+    const result = await db.execute(sql`
+      DELETE FROM comments WHERE created_at < NOW() - INTERVAL '90 days'
+    `);
+    console.log(`[comments cleanup] Deleted old comments`);
+  } catch (err) {
+    console.error("[comments cleanup error]", err);
+  }
+}, 24 * 60 * 60 * 1000); 
 
 // --- SEED ---
 async function seed() {
