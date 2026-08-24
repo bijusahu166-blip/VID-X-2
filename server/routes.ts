@@ -2185,6 +2185,19 @@ app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
   // ══════════════════════════════════════════════════════════════════════════
   // Single message delete — res.json() sirf ek baar, Cloudinary se bhi media delete hoga
   // ══════════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
+  // Hide message for current user only ("Delete for me")
+  // ══════════════════════════════════════════════════════════════════════════
+  app.patch("/api/messages/:id/hide", isAuthenticated, async (req: any, res) => {
+    const userId = req.session.userId;
+    const messageId = Number(req.params.id);
+    try {
+      await storage.hideMessageForUser(messageId, userId);
+      res.json({ success: true, id: messageId });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to hide message" });
+    }
+  });
   app.delete("/api/messages/:id", isAuthenticated, async (req, res) => {
     const userId = (req.session as any).userId;
     const messageId = Number(req.params.id);

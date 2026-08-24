@@ -633,9 +633,12 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   const T = THEMES[theme] || THEMES.noir;
   const other = chat.otherUser;
 
-  const { data: messages = [] } = useQuery<DirectMessage[]>({
+ const { data: rawMessages = [] } = useQuery<any[]>({
     queryKey: ["/api/direct-chats", chat.id, "messages"],
   });
+  const messages = rawMessages.filter(
+    (m: any) => !(m.hiddenFor || m.hidden_for || []).includes(currentUserId)
+  );
 
   const { data: typingData } = useQuery<{ typers: string[] }>({
     queryKey: ["/api/direct-chats", chat.id, "typing"],
@@ -792,12 +795,21 @@ const notifyTyping = useCallback(() => {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/messages/${id}`, {}),
     onSuccess: (_, deletedId) => {
-      // ✅ FIX: Optimistic UI update — turant hatao
       qc.setQueryData<DirectMessage[]>(
         ["/api/direct-chats", chat.id, "messages"],
         (old = []) => old.filter(m => m.id !== deletedId)
       );
       qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
+    },
+  });
+
+  const hideMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("PATCH", `/api/messages/${id}/hide`, {}),
+    onSuccess: (_, hiddenId) => {
+      qc.setQueryData<DirectMessage[]>(
+        ["/api/direct-chats", chat.id, "messages"],
+        (old = []) => old.filter(m => m.id !== hiddenId)
+      );
     },
   });
 
@@ -1244,7 +1256,7 @@ const res: any = await apiRequest("POST", "/api/translate", {
               <p className="text-xs text-zinc-500 mt-0.5">This action cannot be undone</p>
             </div>
             <div className="py-2">
-              <button onClick={() => { deleteMutation.mutate(contextMsg.id); setContextMsg(null); setShowDeleteOptions(false); }}
+             <button onClick={() => { hideMutation.mutate(contextMsg.id); setContextMsg(null); setShowDeleteOptions(false); }}
                 className="w-full flex items-center gap-4 px-5 py-3.5 text-sm hover:bg-white/4 transition-colors text-zinc-200">
                 <Trash2 className="w-4 h-4 text-zinc-400" />
                 Delete for me

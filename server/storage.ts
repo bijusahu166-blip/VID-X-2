@@ -60,7 +60,7 @@ export interface IStorage {
   addReaction(messageId: number, userId: string, emoji: string): Promise<DirectMessage>;
   pinMessage(messageId: number, pinned: boolean): Promise<DirectMessage>;
   deleteMessage(messageId: number): Promise<void>;
-
+  hideMessageForUser(messageId: number, userId: string): Promise<void>; 
   // Typing & Online Status
   setTyping(userId: string, chatId: number): Promise<void>;
   getTyping(chatId: number, exceptUserId: string): Promise<string[]>;
@@ -287,6 +287,14 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMessage(messageId: number): Promise<void> {
     await db.delete(directMessages).where(eq(directMessages.id, messageId));
+  }
+
+  async hideMessageForUser(messageId: number, userId: string): Promise<void> {
+    await db.execute(sql`
+      UPDATE direct_messages
+      SET hidden_for = array_append(hidden_for, ${userId})
+      WHERE id = ${messageId} AND NOT (${userId} = ANY(hidden_for))
+    `);
   }
 
   // ── Typing Indicators ─────────────────────────────────────────────────────
