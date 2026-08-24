@@ -72,7 +72,21 @@ const THEMES: Record<string, {
   sakura: { bg: "bg-[#120810]", sent: "bg-gradient-to-br from-pink-500 to-rose-500 text-white",   recv: "bg-[#1f1020] text-white", accent: "pink",   label: "Sakura", glow: "shadow-pink-500/20",    headerBg: "bg-[#120810]/90" },
 };
 
-const QUICK_EMOJIS = ["❤️", "😂", "🔥", "👍", "😮", "😢", "🙏", "💯"];
+const QUICK_EMOJIS = [
+  "❤️","😂","🔥","👍","😮","😢","🙏","💯",
+  "😍","🥰","😘","😊","😎","🤩","🥳","😭",
+  "😡","🤔","🙄","😴","🤗","😱","🤯","🥺",
+  "😏","😅","🤣","😇","🤤","😋","🫡","🤝",
+  "👏","🙌","💪","🤙","👊","✌️","🤞","🫰",
+  "💀","👻","🎉","✨","⭐","🌟","💫","🌈",
+  "🎊","🎈","🍾","🥂","🍕","🍔","🍟","🌮",
+  "☕","🍩","🍰","🧁","🍫","🍦","🍓","🍇",
+  "⚡","🌊","🔥","❄️","☀️","🌙","🌸","🌺",
+  "🦋","🐶","🐱","🦁","🐯","🐸","🐼","🦄",
+  "🚀","💎","👑","🏆","🎯","🎮","🎵","🎸",
+  "📸","💡","🔑","💰","🎁","🕐","📍","💬",
+  "❤️‍🔥","💕","💖","💗","💓","💝","🫶","💞"
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatTime(dateStr: string) {
@@ -158,11 +172,42 @@ function useChatSocket(
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     wsRef.current = ws;
 
-   ws.onopen = async () => {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData?.session?.access_token;
-  ws.send(JSON.stringify({ type: "register", token }));
-};
+   function useChatSocket(
+  chatId: number,
+  currentUserId: string,
+  onMessage: (msg: DirectMessage) => void,
+  onDelete: (id: number) => void
+) {
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (!currentUserId || !chatId) return;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "register", userId: currentUserId }));   // ✅ token ki jagah userId
+    };
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === "new_message" && data.chatId === chatId) {
+          onMessage(data.message);
+          playReceive();
+        }
+        if (data.type === "delete_message") {
+          onDelete(data.messageId);
+        }
+      } catch { }
+    };
+
+    ws.onerror = () => { };
+    ws.onclose = () => { };
+
+    return () => { ws.close(); };
+  }, [chatId, currentUserId]);
+}
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
@@ -566,6 +611,7 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [translatedTexts, setTranslatedTexts] = useState<Record<number, string>>({});
   const [smartReplies, setSmartReplies] = useState<string[]>([]);
@@ -683,13 +729,17 @@ const notifyTyping = useCallback(() => {
   }, [messages.length, currentUserId]);
 
   const sendMsg = useMutation({
-  mutationFn: (body: any) => apiRequest("POST", `/api/direct-chats/${chat.id}/messages`, body),
+  mutationFn: async (body: any) => {
+    const res = await apiRequest("POST", `/api/direct-chats/${chat.id}/messages`, body);
+    return res.json();
+  },
   onMutate: async (body: any) => {
     await qc.cancelQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
     const previous = qc.getQueryData<DirectMessage[]>(["/api/direct-chats", chat.id, "messages"]);
 
+    const tempId = Date.now();
     const optimisticMsg: DirectMessage = {
-      id: Date.now(), // temp id
+      id: tempId,
       chatId: chat.id,
       senderId: currentUserId,
       content: body.content,
@@ -709,7 +759,7 @@ const notifyTyping = useCallback(() => {
       (old = []) => [...old, optimisticMsg]
     );
 
-    return { previous };
+    return { previous, tempId };
   },
   onError: (_err, _body, ctx) => {
     if (ctx?.previous) {
@@ -717,16 +767,16 @@ const notifyTyping = useCallback(() => {
     }
     toast({ title: "Message failed to send", variant: "destructive" });
   },
-  onSettled: () => {
-    qc.invalidateQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
+  onSuccess: (serverMsg: DirectMessage, _body, ctx) => {
+    qc.setQueryData<DirectMessage[]>(
+      ["/api/direct-chats", chat.id, "messages"],
+      (old = []) => old.map(m => m.id === ctx?.tempId ? serverMsg : m)
+    );
     qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
-  },
-  onSuccess: () => {
     setReplyTo(null);
     setSmartReplies([]);
   },
 });
-
   const reactMutation = useMutation({
     mutationFn: ({ id, emoji }: { id: number; emoji: string }) =>
       apiRequest("PATCH", `/api/messages/${id}/react`, { emoji }),
@@ -758,7 +808,6 @@ const notifyTyping = useCallback(() => {
     sendMsg.mutate({ content: encrypted, type: "text", replyToId: replyTo?.id, expiresInSeconds: disappearing ? 30 : undefined });
     setText("");
     playSend();
-    focusComposer();
   };
 
   const handleVoice = async () => {
@@ -1266,7 +1315,20 @@ const res: any = await apiRequest("POST", "/api/translate", {
           ))}
         </div>
       )}
-
+      {/* ── Emoji Picker ── */}
+{showEmojiPicker && (
+  <div className="grid grid-cols-8 gap-1 px-3 py-3 bg-[#0d0d16] border-t border-white/6 max-h-48 overflow-y-auto">
+    {QUICK_EMOJIS.map((e, i) => (
+      <button
+        key={i}
+        onClick={() => { setText(t => t + e); setShowEmojiPicker(false); focusComposer(); }}
+        className="text-xl hover:scale-125 active:scale-110 transition-transform p-1"
+      >
+        {e}
+      </button>
+    ))}
+  </div>
+)}
       {/* ── Reply preview ── */}
       {replyTo && (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-violet-600/8 border-t border-violet-500/15">
@@ -1343,9 +1405,12 @@ const res: any = await apiRequest("POST", "/api/translate", {
                 autoCapitalize="sentences"
                 className="flex-1 bg-transparent text-[14px] outline-none resize-none placeholder-zinc-500 leading-relaxed py-0.5 max-h-[120px]"
               />
-              <button className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mb-0.5 hover:bg-white/8">
-                <Smile className="w-4 h-4" />
-              </button>
+              <button
+  type="button"
+  onClick={() => setShowEmojiPicker(p => !p)}
+  className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mb-0.5 hover:bg-white/8">
+  <Smile className="w-4 h-4" />
+</button>
             </div>
 
           {text.trim() ? (

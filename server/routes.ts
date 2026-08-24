@@ -213,7 +213,7 @@ function mapPostRow(row: any) {
     songColor: row.song_color,
   };
 }
-// ── Expired stories cleanup — har 15 min mein chalega ──
+─
 // ── Expired stories cleanup — har 15 min mein chalega ──
 setInterval(async () => {
   try {
@@ -238,6 +238,18 @@ setInterval(async () => {
     console.error("[expired stories cleanup]", err);
   }
 }, 15 * 60 * 1000);
+// ── Auto-delete read direct messages after 10 minutes ──
+setInterval(async () => {
+  try {
+    await db.execute(sql`
+      DELETE FROM direct_messages
+      WHERE read_at IS NOT NULL
+        AND read_at < NOW() - INTERVAL '10 minutes'
+    `);
+  } catch (err) {
+    console.error("[auto-delete read messages]", err);
+  }
+}, 5 * 60 * 1000);
 // --- AUTO-DELETE LOGIC (2 Hours) ---
 setInterval(async () => {
   try {
@@ -2011,7 +2023,28 @@ app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
       res.status(500).json({ message: err.message });
     }
   });
+  // ══════════════════════════════════════════════════════════════════════════
+  // ONLINE STATUS
+  // ══════════════════════════════════════════════════════════════════════════
+  app.post("/api/status/online", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      await storage.setOnlineStatus(userId, true);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
+  app.post("/api/status/offline", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      await storage.setOnlineStatus(userId, false);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
   // ══════════════════════════════════════════════════════════════════════════
   // DIRECT CHAT ROUTES
   // ══════════════════════════════════════════════════════════════════════════
