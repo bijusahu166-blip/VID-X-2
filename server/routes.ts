@@ -1,6 +1,3 @@
-
-
-
 import {
   users, posts, comments, savedPosts, reports, notifications, conversations, messages,
   pendingBlocks, blocks, follows, directChats, directMessages,
@@ -3091,7 +3088,13 @@ app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
 
       const wallet = await getOrCreateWallet(senderId);
       if (wallet.balance < gift.price_coins) {
-        return res.status(402).json({ message: "Not enough coins", required: gift.price_coins, balance: wallet.balance });
+        return res.status(402).json({
+          code: "INSUFFICIENT_COINS",
+          message: "Not enough coins",
+          required: Number(gift.price_coins),
+          balance: Number(wallet.balance),
+          buyCoins: true,
+        });
       }
 
       // Sender se coins kaato
@@ -3228,22 +3231,84 @@ app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
 
   // ── Profile pe dikhane ke liye: kisi user ko kitne gifts mile ──
   app.get("/api/users/:id/gifts-received", async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const userId = Array.isArray(rawId) ? rawId[0] : rawId;
+
+    if (!userId) {
+      return res.status(400).json({
+        gifts: [],
+        totalEarnedCoins: 0,
+        message: "User ID required",
+      });
+    }
+
+    let gifts: any[] = [];
+    let totalEarnedCoins = 0;
+
     try {
-      const userId = req.params.id;
       const rows = await db.execute(sql`
-        SELECT g.name, g.icon, COUNT(*) as count, SUM(gt.coins_spent) as total_coins
-        FROM gift_transactions gt JOIN gifts_catalog g ON g.id = gt.gift_id
+        SELECT
+          g.name,
+          g.icon,
+          COUNT(*)::int AS count,
+          COALESCE(SUM(gt.coins_spent), 0)::int AS total_coins
+        FROM gift_transactions gt
+        INNER JOIN gifts_catalog g
+          ON g.id = gt.gift_id
         WHERE gt.receiver_id = ${userId}
         GROUP BY g.id, g.name, g.icon
         ORDER BY total_coins DESC
       `);
-      const earningsRows = await db.execute(sql`SELECT total_coins_earned FROM creator_earnings WHERE user_id = ${userId}`);
-      const earnings = ((earningsRows as any).rows ?? earningsRows)[0]?.total_coins_earned ?? 0;
-      res.json({ gifts: (rows as any).rows ?? rows, totalEarnedCoins: earnings });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+
+      gifts = (rows as any).rows ?? rows ?? [];
+    } catch (giftError: any) {
+      console.error("[gifts-received] gift query failed:", {
+        message: giftError?.message,
+        code: giftError?.code,
+      });
+
+      gifts = [];
     }
-  });
+
+    try {
+      const earningsRows = await db.execute(sql`
+        SELECT COALESCE(total_coins_earned, 0) AS total_coins_earned
+        FROM creator_earnings
+        WHERE user_id = ${userId}
+        LIMIT 1
+      `);
+
+      const earningRows =
+        (earningsRows as any).rows ??
+        earningsRows ??
+        [];
+
+      totalEarnedCoins =
+        Number(earningRows?.[0]?.total_coins_earned) || 0;
+    } catch (earningsError: any) {
+      console.error("[gifts-received] earnings query failed:", {
+        message: earningsError?.message,
+        code: earningsError?.code,
+      });
+
+      totalEarnedCoins = 0;
+    }
+
+    return res.json({
+      gifts,
+      totalEarnedCoins,
+    });
+  } catch (err: any) {
+    console.error("[gifts-received] unexpected error:", err);
+
+    // Profile ko 500 se break mat karo.
+    return res.json({
+      gifts: [],
+      totalEarnedCoins: 0,
+    });
+  }
+});
 // ══════════════════════════════════════════════════════════════════════════
 // WITHDRAWALS (coins → real money, manual payout)
 // ══════════════════════════════════════════════════════════════════════════
@@ -4005,24 +4070,100 @@ if (!voiceRoomUnlocked) {
     }
   });
 
-  // Host room end kare
+  // Host room end kare — DB + seats + realtime broadcast ek hi flow me.
   app.post("/api/voice-rooms/:id/end", isAuthenticated, async (req: any, res: any) => {
     try {
-      const userId = req.session.userId;
+      const userId = String(req.session.userId ?? "");
       const roomId = Number(req.params.id);
+
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      if (!Number.isInteger(roomId) || roomId <= 0) {
+        return res.status(400).json({ message: "Invalid room id" });
+      }
+
+      // Members ko update se pehle capture karo, kyunki seats cleanup hongi.
+      const seatRows = await db.execute(sql`
+        SELECT user_id
+        FROM voice_room_seats
+        WHERE room_id = ${roomId}
+      `);
+      const memberIds = (((seatRows as any).rows ?? seatRows) as any[])
+        .map((row) => String(row.user_id))
+        .filter(Boolean);
+
       const result = await db.execute(sql`
         UPDATE voice_rooms
-        SET is_active = false,
+        SET is_active = FALSE,
             ended_at = NOW(),
-            battle_status = CASE WHEN battle_status = 'active' THEN 'ended' ELSE battle_status END
-        WHERE id = ${roomId} AND host_id = ${userId}
-        RETURNING *
+            battle_status = CASE
+              WHEN battle_status = 'active' THEN 'ended'
+              ELSE battle_status
+            END
+        WHERE id = ${roomId}
+          AND host_id = ${userId}
+          AND is_active = TRUE
+        RETURNING id, host_id
       `);
+
       const updated = ((result as any).rows ?? result)[0];
-      if (!updated) return res.status(403).json({ message: "Not allowed" });
-      res.json({ success: true });
+
+      if (!updated) {
+        const existingRows = await db.execute(sql`
+          SELECT id, host_id, is_active
+          FROM voice_rooms
+          WHERE id = ${roomId}
+          LIMIT 1
+        `);
+        const existing = ((existingRows as any).rows ?? existingRows)[0];
+
+        if (!existing) {
+          return res.status(404).json({ message: "Room not found" });
+        }
+        if (String(existing.host_id) !== userId) {
+          return res.status(403).json({ message: "Only the host can end this room" });
+        }
+
+        // Already ended = idempotent success.
+        return res.json({ success: true, alreadyEnded: true });
+      }
+
+      // No stale seats / pending requests after room ends.
+      await db.execute(sql`
+        DELETE FROM voice_room_join_requests
+        WHERE room_id = ${roomId}
+      `).catch(() => {});
+
+      await db.execute(sql`
+        DELETE FROM voice_room_seats
+        WHERE room_id = ${roomId}
+      `);
+
+      // Everyone in the room exits immediately instead of waiting for polling.
+      for (const memberId of new Set([...memberIds, userId])) {
+        const ws = wsClients.get(String(memberId));
+        if (ws && ws.readyState === 1) {
+          try {
+            ws.send(JSON.stringify({
+              type: "voice_room_ended",
+              roomId,
+              endedBy: userId,
+            }));
+          } catch {}
+        }
+      }
+
+      return res.json({
+        success: true,
+        roomId,
+        ended: true,
+      });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      console.error("[voice room end]", err);
+      return res.status(500).json({
+        message: err?.message || "Failed to end room",
+      });
     }
   });
 

@@ -90,6 +90,7 @@ export default function VoiceRoomScreen() {
   const [watchingAd, setWatchingAd] = useState(false);
   const [speakingUsers, setSpeakingUsers] = useState<Set<number>>(new Set());
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
+  const [isEnding, setIsEnding] = useState(false);
 
   const agoraClient = useRef<IAgoraRTCClient | null>(null);
   const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
@@ -319,6 +320,12 @@ export default function VoiceRoomScreen() {
           if (data.type === "voice_room_chat_cleared") {
             qc.invalidateQueries({ queryKey: ["/api/voice-rooms", roomId, "messages"] });
           }
+
+          if (data.type === "voice_room_ended") {
+            toast({ title: "Room ended by host" });
+            void cleanupVoiceConnection().finally(() => navigate("/"));
+            return;
+          }
           if (data.type === "voice_room_join_request") {
             qc.invalidateQueries({ queryKey: ["/api/voice-rooms", roomId, "join-requests"] });
             toast({ title: `${data.user?.firstName ?? "Someone"} wants to join` });
@@ -360,20 +367,52 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
     };
   }, [currentUserId, roomId]);
 
+  const cleanupVoiceConnection = useCallback(async () => {
+    if (wsReconnectTimer.current) {
+      clearTimeout(wsReconnectTimer.current);
+      wsReconnectTimer.current = null;
+    }
+
+    if (localAudioTrack.current) {
+      try {
+        localAudioTrack.current.stop();
+      } catch {}
+      try {
+        localAudioTrack.current.close();
+      } catch {}
+      localAudioTrack.current = null;
+    }
+
+    if (agoraClient.current) {
+      try {
+        await agoraClient.current.leave();
+      } catch {}
+      agoraClient.current = null;
+    }
+
+    setConnected(false);
+    setIsMuted(false);
+    setForceMuted(false);
+  }, []);
+
+  const openBuyCoins = useCallback(() => {
+    setShowGiftPicker(false);
+
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    navigate(`/buy-coins?returnTo=${encodeURIComponent(returnTo)}`);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (room?.is_active === false) {
+      void cleanupVoiceConnection().finally(() => navigate("/"));
+    }
+  }, [room?.is_active, cleanupVoiceConnection, navigate]);
+
   const leaveRoom = async () => {
     try {
-      if (localAudioTrack.current) {
-        localAudioTrack.current.close();
-        localAudioTrack.current = null;
-      }
-      if (agoraClient.current) {
-        await agoraClient.current.leave();
-        agoraClient.current = null;
-      }
-      setConnected(false);
-      await apiRequest("POST", `/api/voice-rooms/${roomId}/leave`, {});
-      navigate("/");
-    } catch {
+      await cleanupVoiceConnection();
+      await apiRequest("POST", `/api/voice-rooms/${roomId}/leave`, {}).catch(() => {});
+    } finally {
       navigate("/");
     }
   };
@@ -389,11 +428,40 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
   };
 
   const endRoom = async () => {
+    if (!isHost || isEnding) return;
+
+    setIsEnding(true);
     try {
-      await apiRequest("POST", `/api/voice-rooms/${roomId}/end`, {});
-      leaveRoom();
+      const res = await fetch(`/api/voice-rooms/${roomId}/end`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.message || `Could not end room (${res.status})`);
+      }
+
+      // End locally immediately instead of calling /leave and waiting again.
+      await cleanupVoiceConnection();
+
+      qc.setQueryData(["/api/voice-rooms", roomId], (old: any) =>
+        old ? { ...old, is_active: false, seats: [] } : old
+      );
+      qc.invalidateQueries({ queryKey: ["/api/voice-rooms"] });
+
+      toast({ title: "Room ended" });
+      navigate("/");
     } catch (err: any) {
-      toast({ title: "Could not end room", variant: "destructive" });
+      toast({
+        title: "Could not end room",
+        description: err?.message || "Please try again",
+        variant: "destructive",
+      });
+      setIsEnding(false);
     }
   };
 
@@ -509,21 +577,87 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
   });
 
   const sendGift = useMutation({
-    mutationFn: ({ giftId, receiverId }: { giftId: number; receiverId: string }) =>
-      apiRequest("POST", "/api/gifts/send", { giftId, receiverId, roomId }),
+    mutationFn: async ({
+      giftId,
+      receiverId,
+    }: {
+      giftId: number;
+      receiverId: string;
+    }) => {
+      const res = await fetch("/api/gifts/send", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          giftId,
+          receiverId,
+          roomId,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 402 || data?.code === "INSUFFICIENT_COINS") {
+        const error: any = new Error(data?.message || "Not enough coins");
+        error.status = 402;
+        error.required = Number(data?.required ?? 0);
+        error.balance = Number(data?.balance ?? 0);
+        throw error;
+      }
+
+      if (!res.ok) {
+        const error: any = new Error(data?.message || "Could not send gift");
+        error.status = res.status;
+        throw error;
+      }
+
+      return data;
+    },
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["/api/coins/balance"] });
-      const gift = giftCatalog.find(g => g.id === variables.giftId);
+
+      const gift = giftCatalog.find((g) => g.id === variables.giftId);
       if (gift) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        setFloatingGifts(prev => [...prev, { id, icon: gift.icon, name: gift.name }]);
-        setTimeout(() => setFloatingGifts(prev => prev.filter(f => f.id !== id)), 2500);
+        setFloatingGifts((prev) => [
+          ...prev,
+          { id, icon: gift.icon, name: gift.name },
+        ]);
+        setTimeout(
+          () => setFloatingGifts((prev) => prev.filter((f) => f.id !== id)),
+          2500
+        );
       }
+
       setShowGiftPicker(false);
       setGiftTargetUserId(null);
     },
     onError: (err: any) => {
-      toast({ title: err.message || "Could not send gift", variant: "destructive" });
+      if (err?.status === 402) {
+        const missing = Math.max(
+          0,
+          Number(err?.required ?? 0) - Number(err?.balance ?? 0)
+        );
+
+        toast({
+          title: "Not enough coins",
+          description:
+            missing > 0
+              ? `You need ${missing} more coins. Opening Buy Coins...`
+              : "Opening Buy Coins...",
+        });
+
+        openBuyCoins();
+        return;
+      }
+
+      toast({
+        title: err?.message || "Could not send gift",
+        variant: "destructive",
+      });
     },
   });
 
@@ -759,8 +893,12 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
                 <Send className="w-4 h-4 text-white" />
               </button>
               {isHost && (
-                <button onClick={endRoom} className="px-3 py-2.5 rounded-xl bg-red-600 text-white text-xs font-bold">
-                  End
+                <button
+                  onClick={endRoom}
+                  disabled={isEnding}
+                  className="px-3 py-2.5 rounded-xl bg-red-600 text-white text-xs font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isEnding ? "Ending..." : "End"}
                 </button>
               )}
             </>
@@ -993,7 +1131,7 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
                           description: `You need ${gift.price_coins - balance} more coins for ${gift.name}.`,
                         });
                         setShowGiftPicker(false);
-                        navigate("/coins");
+                        openBuyCoins();
                         return;
                       }
                       if (giftTargetUserId) sendGift.mutate({ giftId: gift.id, receiverId: giftTargetUserId });
@@ -1014,7 +1152,7 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
             </div>
             {giftCatalog.some(g => (coinData?.balance ?? 0) < g.price_coins) && (
               <button
-                onClick={() => { setShowGiftPicker(false); navigate("/coins"); }}
+                onClick={() => { setShowGiftPicker(false); openBuyCoins(); }}
                 className="w-full mt-4 py-2.5 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-sm font-bold flex items-center justify-center gap-2"
               >
                 <Coins className="w-3.5 h-3.5" /> Buy Coins
