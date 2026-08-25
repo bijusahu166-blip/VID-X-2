@@ -311,6 +311,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   await ensureUserPreferenceColumns();
+  // ── JOBS TABLE ───────────────────────────────────────────────────────────
+  // Jobs are stored in the app PostgreSQL database. R2 is used only for
+  // optional job images/files, so Supabase REST is no longer required here.
+  async function ensureJobsTable() {
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS jobs (
+          id SERIAL PRIMARY KEY,
+          user_id VARCHAR(255) NOT NULL,
+          title VARCHAR(180) NOT NULL,
+          company VARCHAR(180) NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          location VARCHAR(180) NOT NULL DEFAULT '',
+          salary VARCHAR(120) NOT NULL DEFAULT '',
+          job_type VARCHAR(80) NOT NULL DEFAULT 'Full-time',
+          image_url TEXT,
+          apply_url TEXT,
+          active BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS jobs_active_created_idx ON jobs (active, created_at DESC)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS jobs_user_idx ON jobs (user_id)`);
+    } catch (error) {
+      console.error("[jobs table]", error);
+      throw error;
+    }
+  }
+
+  await ensureJobsTable();
   // Permanent Voice Room unlock
 async function ensureVoiceRoomUnlockColumn() {
   try {
@@ -818,6 +849,210 @@ app.post("/api/auth/register", async (req, res) => {
   const SERVER_START_TIME = Date.now().toString();
   app.get("/api/version", (_req, res) => {
     res.set("Cache-Control", "no-store").json({ v: SERVER_START_TIME });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // JOB ROUTES — PostgreSQL metadata + Cloudflare R2 media
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Keep job images small. Do NOT use the 500MB general memory upload for jobs.
+  const jobImageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+      if (allowed.includes(file.mimetype)) cb(null, true);
+      else cb(new Error("Only JPG, PNG, WEBP or GIF images are allowed"));
+    },
+  });
+
+  // Upload an optional job image to the existing R2 bucket.
+  app.post("/api/jobs/upload", isAuthenticated, (req: any, res: any) => {
+    jobImageUpload.single("image")(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ message: err.message });
+      if (!req.file) return res.status(400).json({ message: "No job image received" });
+
+      try {
+        const result = await uploadToR2(
+          req.file.buffer,
+          "jobs/images",
+          req.file.originalname,
+          req.file.mimetype
+        );
+        return res.status(201).json({
+          success: true,
+          url: result.url,
+          imageUrl: result.url,
+          key: result.key,
+        });
+      } catch (error: any) {
+        console.error("[jobs upload]", error);
+        return res.status(500).json({ message: error.message || "Job image upload failed" });
+      }
+    });
+  });
+
+  // Public active job feed. Supports ?limit=20&page=1.
+  app.get("/api/jobs", async (req, res) => {
+    try {
+      const page = Math.max(1, Number.parseInt(String(req.query.page || "1"), 10) || 1);
+      const limit = Math.min(50, Math.max(1, Number.parseInt(String(req.query.limit || "20"), 10) || 20));
+      const offset = (page - 1) * limit;
+
+      const result = await db.execute(sql`
+        SELECT
+          j.id, j.user_id, j.title, j.company, j.description, j.location,
+          j.salary, j.job_type, j.image_url, j.apply_url, j.active,
+          j.created_at, j.updated_at,
+          u.first_name, u.last_name, u.username, u.profile_image_url
+        FROM jobs j
+        LEFT JOIN users u ON CAST(u.id AS TEXT) = j.user_id
+        WHERE j.active = TRUE
+        ORDER BY j.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `);
+
+      return res.json((result as any).rows ?? result);
+    } catch (error: any) {
+      console.error("[jobs list]", error);
+      return res.status(500).json({ message: error.message || "Failed to load jobs" });
+    }
+  });
+
+  // Get one active job.
+  app.get("/api/jobs/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid job id" });
+      }
+
+      const result = await db.execute(sql`
+        SELECT
+          j.*,
+          u.first_name, u.last_name, u.username, u.profile_image_url
+        FROM jobs j
+        LEFT JOIN users u ON CAST(u.id AS TEXT) = j.user_id
+        WHERE j.id = ${id} AND j.active = TRUE
+        LIMIT 1
+      `);
+      const rows = (result as any).rows ?? result;
+      if (!rows?.length) return res.status(404).json({ message: "Job not found" });
+      return res.json(rows[0]);
+    } catch (error: any) {
+      console.error("[jobs get]", error);
+      return res.status(500).json({ message: error.message || "Failed to load job" });
+    }
+  });
+
+  // Create a job. The logged-in user id always comes from the server session.
+  app.post("/api/jobs", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = String(req.session.userId);
+      const body = req.body ?? {};
+
+      const title = String(body.title ?? "").trim();
+      const company = String(body.company ?? "").trim();
+      const description = String(body.description ?? "").trim();
+      const location = String(body.location ?? "").trim();
+      const salary = String(body.salary ?? "").trim();
+      const jobType = String(body.jobType ?? body.job_type ?? "Full-time").trim();
+      const imageUrl = String(body.imageUrl ?? body.image_url ?? "").trim() || null;
+      const applyUrl = String(body.applyUrl ?? body.apply_url ?? "").trim() || null;
+
+      if (!title) return res.status(400).json({ message: "Job title is required" });
+      if (title.length > 180) return res.status(400).json({ message: "Job title is too long" });
+      if (company.length > 180) return res.status(400).json({ message: "Company name is too long" });
+      if (location.length > 180) return res.status(400).json({ message: "Location is too long" });
+      if (salary.length > 120) return res.status(400).json({ message: "Salary text is too long" });
+      if (jobType.length > 80) return res.status(400).json({ message: "Job type is too long" });
+
+      const result = await db.execute(sql`
+        INSERT INTO jobs
+          (user_id, title, company, description, location, salary, job_type, image_url, apply_url, active)
+        VALUES
+          (${userId}, ${title}, ${company}, ${description}, ${location}, ${salary}, ${jobType}, ${imageUrl}, ${applyUrl}, TRUE)
+        RETURNING *
+      `);
+      const rows = (result as any).rows ?? result;
+      return res.status(201).json(rows[0]);
+    } catch (error: any) {
+      console.error("[jobs create]", error);
+      return res.status(500).json({ message: error.message || "Failed to post job" });
+    }
+  });
+
+  // Edit only your own job.
+  app.patch("/api/jobs/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      const userId = String(req.session.userId);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid job id" });
+      }
+
+      const existingResult = await db.execute(sql`
+        SELECT * FROM jobs WHERE id = ${id} AND user_id = ${userId} LIMIT 1
+      `);
+      const existingRows = (existingResult as any).rows ?? existingResult;
+      if (!existingRows?.length) return res.status(404).json({ message: "Job not found" });
+      const existing = existingRows[0];
+      const body = req.body ?? {};
+
+      const title = String(body.title ?? existing.title).trim();
+      const company = String(body.company ?? existing.company ?? "").trim();
+      const description = String(body.description ?? existing.description ?? "").trim();
+      const location = String(body.location ?? existing.location ?? "").trim();
+      const salary = String(body.salary ?? existing.salary ?? "").trim();
+      const jobType = String(body.jobType ?? body.job_type ?? existing.job_type ?? "Full-time").trim();
+      const imageUrl = body.imageUrl !== undefined || body.image_url !== undefined
+        ? (String(body.imageUrl ?? body.image_url ?? "").trim() || null)
+        : existing.image_url;
+      const applyUrl = body.applyUrl !== undefined || body.apply_url !== undefined
+        ? (String(body.applyUrl ?? body.apply_url ?? "").trim() || null)
+        : existing.apply_url;
+      const active = typeof body.active === "boolean" ? body.active : Boolean(existing.active);
+
+      if (!title) return res.status(400).json({ message: "Job title is required" });
+
+      const result = await db.execute(sql`
+        UPDATE jobs
+        SET title = ${title}, company = ${company}, description = ${description},
+            location = ${location}, salary = ${salary}, job_type = ${jobType},
+            image_url = ${imageUrl}, apply_url = ${applyUrl}, active = ${active},
+            updated_at = NOW()
+        WHERE id = ${id} AND user_id = ${userId}
+        RETURNING *
+      `);
+      const rows = (result as any).rows ?? result;
+      return res.json(rows[0]);
+    } catch (error: any) {
+      console.error("[jobs update]", error);
+      return res.status(500).json({ message: error.message || "Failed to update job" });
+    }
+  });
+
+  // Soft-delete your job so old links do not break abruptly.
+  app.delete("/api/jobs/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      const userId = String(req.session.userId);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid job id" });
+      }
+
+      const result = await db.execute(sql`
+        UPDATE jobs SET active = FALSE, updated_at = NOW()
+        WHERE id = ${id} AND user_id = ${userId}
+        RETURNING id
+      `);
+      const rows = (result as any).rows ?? result;
+      if (!rows?.length) return res.status(404).json({ message: "Job not found" });
+      return res.json({ success: true, id });
+    } catch (error: any) {
+      console.error("[jobs delete]", error);
+      return res.status(500).json({ message: error.message || "Failed to delete job" });
+    }
   });
 
   // ══════════════════════════════════════════════════════════════════════════

@@ -1,996 +1,633 @@
-import { supabase } from "@/lib/supabase";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Header } from "@/components/layout/Header";
+import { useAuth } from "@/hooks/use-auth";
 import { BottomNav } from "@/components/layout/BottomNav";
 import "./Jobs.css";
 
+type JobScreen = "browse" | "post" | "myjobs";
+
 interface Job {
   id: number;
+  userId: string;
   title: string;
   company: string;
-  email: string;
-  pin: string;
   location: string;
   salary: string;
   type: string;
   emoji: string;
   desc: string;
-  tags: string[];
-  ejsPubkey: string;
-  ejsService: string;
-  ejsTemplate: string;
+  imageUrl: string;
+  applyUrl: string;
   postedAt: string;
-  active?: boolean;
+  active: boolean;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  profileImageUrl?: string;
 }
 
-interface Applicant {
-  name: string;
-  email: string;
-  phone: string;
-  exp: string;
-  portfolio: string;
-  skills: string;
-  note: string;
+const JOB_TYPES = ["Full-time", "Part-time", "Freelance", "Internship"];
+
+function getEmoji(jobType: string): string {
+  switch (jobType.toLowerCase()) {
+    case "internship":
+      return "🎓";
+    case "freelance":
+      return "🧑‍💻";
+    case "part-time":
+      return "⏰";
+    default:
+      return "💼";
+  }
 }
 
-interface Application {
-  jobId: number;
-  applicant: Applicant;
-  appliedAt: string;
+function formatPostedAt(value: unknown): string {
+  if (!value) return "Today";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
-const SKILLS = [
-  "Video Editing",
-  "Reels",
-  "Music Production",
-  "Gaming",
-  "Vlogging",
-  "Animation",
-  "Live Streaming",
-  "Thumbnail Design",
-  "Scriptwriting",
-  "Photography",
-];
+function mapRowToJob(row: any): Job {
+  const type = String(row?.job_type ?? row?.jobType ?? row?.type ?? "Full-time");
 
-declare global {
-  interface Window {
-    emailjs?: any;
+  return {
+    id: Number(row?.id ?? 0),
+    userId: String(row?.user_id ?? row?.userId ?? ""),
+    title: String(row?.title ?? ""),
+    company: String(row?.company ?? ""),
+    location: String(row?.location ?? "Remote"),
+    salary: String(row?.salary ?? "Negotiable"),
+    type,
+    emoji: getEmoji(type),
+    desc: String(row?.description ?? row?.desc ?? ""),
+    imageUrl: String(row?.image_url ?? row?.imageUrl ?? ""),
+    applyUrl: String(row?.apply_url ?? row?.applyUrl ?? ""),
+    postedAt: formatPostedAt(row?.created_at ?? row?.createdAt),
+    active: row?.active !== false,
+    username: row?.username ? String(row.username) : undefined,
+    firstName: row?.first_name ? String(row.first_name) : undefined,
+    lastName: row?.last_name ? String(row.last_name) : undefined,
+    profileImageUrl: row?.profile_image_url ? String(row.profile_image_url) : undefined,
+  };
+}
+
+async function readJsonSafe(res: Response): Promise<any> {
+  try {
+    return await res.json();
+  } catch {
+    return {};
   }
 }
 
 export default function Jobs() {
-  const [location_state, setLocationState] = useLocation();
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [currentScreen, setCurrentScreen] = useState<"browse" | "post" | "myjobs">("browse");
-  const [currentJob, setCurrentJob] = useState<Job | null>(null);
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [showModal, setShowModal] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
-  const [loggedInEmail, setLoggedInEmail] = useState<string | null>(null);
-  const [loggedInPin, setLoggedInPin] = useState<string | null>(null);
-  const [myJobs, setMyJobs] = useState<Job[]>([]);
-  const [applications, setApplications] = useState<Application[]>([]);
+  const [currentScreen, setCurrentScreen] = useState<JobScreen>("browse");
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [postingJob, setPostingJob] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [jobImageFile, setJobImageFile] = useState<File | null>(null);
+  const [jobImagePreview, setJobImagePreview] = useState("");
+
   const [toastMsg, setToastMsg] = useState("");
   const [toastColor, setToastColor] = useState("#4afa8a");
-  const [loadingJobs, setLoadingJobs] = useState(true);
 
-  // Form data
   const [postForm, setPostForm] = useState({
-    pin: "",
     title: "",
     company: "",
-    email: "",
     location: "",
     salary: "",
     type: "Full-time",
-    emoji: "💼",
     desc: "",
-    tags: "",
-    ejsPubkey: "",
-    ejsService: "",
-    ejsTemplate: "",
+    applyUrl: "",
   });
-
-  const [applyForm, setApplyForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    exp: "",
-    portfolio: "",
-    customSkills: "",
-    note: "",
-  });
-
-  const [loginPin, setLoginPin] = useState(["", "", "", ""]);
-  const [loginError, setLoginError] = useState("");
-
-  // Maps a raw Supabase row (snake_case columns) to the Job shape the UI expects (camelCase)
-  const mapRowToJob = (row: any): Job => ({
-    id: row.id,
-    title: row.title,
-    company: row.company,
-    email: row.email,
-    pin: row.pin,
-    location: row.location,
-    salary: row.salary,
-    type: row.type,
-    emoji: row.emoji,
-    desc: row.description ?? "",
-    tags: Array.isArray(row.tags) ? row.tags : [],
-    ejsPubkey: row.ejs_pubkey ?? "",
-    ejsService: row.ejs_service ?? "",
-    ejsTemplate: row.ejs_template ?? "",
-    postedAt: row.posted_at ?? "",
-    active: row.active,
-  });
-
-  // Fetch jobs from Supabase + load EmailJS script (combined into a single effect)
-  useEffect(() => {
-    const fetchJobs = async () => {
-      const { data, error } = await supabase!
-        .from("jobs")
-        .select("*")
-        .eq("active", true)
-        .order("created_at", { ascending: false });
-
-      if (!error && data) {
-        setJobs(data.map(mapRowToJob));
-      } else if (error) {
-        showToast("❌ Jobs load nahi hue: " + error.message, "#ff6060");
-      }
-      setLoadingJobs(false);
-    };
-    fetchJobs();
-
-    // Load EmailJS from CDN
-    if (!window.emailjs) {
-      const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js";
-      document.body.appendChild(script);
-    }
-  }, []);
-
-  // Check for post query param
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("post") === "1") {
-      setCurrentScreen("post");
-      // Clear the query param
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, []);
-
-  // Save jobs to localStorage whenever they change (skip the initial empty state before fetch resolves)
-  useEffect(() => {
-    if (loadingJobs) return;
-    localStorage.setItem("vidx_jobs", JSON.stringify(jobs));
-  }, [jobs, loadingJobs]);
-
-  // Save applications to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("vidx_job_applications", JSON.stringify(applications));
-  }, [applications]);
 
   const showToast = (msg: string, color = "#4afa8a") => {
     setToastMsg(msg);
     setToastColor(color);
-    setTimeout(() => setToastMsg(""), 3000);
+    window.setTimeout(() => setToastMsg(""), 3200);
   };
 
-  // ── POST JOB ──
-  const handlePostJob = async () => {
-    if (!postForm.title.trim() || !postForm.company.trim() || !postForm.email.trim()) {
-      showToast("⚠️ Title, Company & Email are required!", "#ff9900");
-      return;
-    }
-    if (!postForm.pin || postForm.pin.length < 4 || !/^\d{4}$/.test(postForm.pin)) {
-      showToast("⚠️ Set a 4-digit numeric PIN!", "#ff9900");
-      return;
-    }
+  const loadJobs = async () => {
+    setLoadingJobs(true);
+    try {
+      const res = await fetch("/api/jobs?limit=50&page=1", {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
 
-    const { data, error } = await supabase!
-      .from("jobs")
-      .insert([{
-        title: postForm.title,
-        company: postForm.company,
-        email: postForm.email,
-        pin: postForm.pin,
-        location: postForm.location || "Remote",
-        salary: postForm.salary || "Negotiable",
-        type: postForm.type,
-        emoji: postForm.emoji || "💼",
-        description: postForm.desc,
-        tags: postForm.tags.split(",").map(t => t.trim()).filter(Boolean),
-        ejs_pubkey: postForm.ejsPubkey,
-        ejs_service: postForm.ejsService,
-        ejs_template: postForm.ejsTemplate,
-        posted_at: new Date().toLocaleDateString("en-IN"),
-        active: true,
-      }])
-      .select()
-      .single();
+      const data = await readJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.message || `Jobs load failed (${res.status})`);
+      }
 
-    if (error || !data) {
-      showToast("❌ Job post nahi hua: " + (error?.message ?? "unknown error"), "#ff6060");
-      return;
+      if (!Array.isArray(data)) {
+        throw new Error("Jobs API returned an invalid response");
+      }
+
+      setJobs(data.map(mapRowToJob).filter((job) => job.id > 0 && job.active));
+    } catch (error: any) {
+      console.error("[jobs load]", error);
+      showToast(`❌ Jobs load nahi hue: ${error?.message || "unknown error"}`, "#ff6060");
+    } finally {
+      setLoadingJobs(false);
     }
+  };
 
-    const newJob = mapRowToJob(data);
-    setJobs([newJob, ...jobs]);
-    showToast("✅ Job posted successfully!");
+  useEffect(() => {
+    loadJobs();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("post") === "1") {
+      setCurrentScreen("post");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (jobImagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(jobImagePreview);
+      }
+    };
+  }, [jobImagePreview]);
+
+  const myJobs = useMemo(() => {
+    const myId = user?.id ? String(user.id) : "";
+    if (!myId) return [];
+    return jobs.filter((job) => job.userId === myId && job.active);
+  }, [jobs, user?.id]);
+
+  const resetPostForm = () => {
+    if (jobImagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(jobImagePreview);
+    }
+    setJobImageFile(null);
+    setJobImagePreview("");
     setPostForm({
-      pin: "",
       title: "",
       company: "",
-      email: "",
       location: "",
       salary: "",
       type: "Full-time",
-      emoji: "💼",
       desc: "",
-      tags: "",
-      ejsPubkey: "",
-      ejsService: "",
-      ejsTemplate: "",
+      applyUrl: "",
     });
-    setCurrentScreen("browse");
   };
 
-  // ── OPEN APPLY MODAL ──
-  const handleOpenApply = (jobId: number) => {
-    const job = jobs.find((j) => j.id === jobId);
-    if (!job) return;
-    setCurrentJob(job);
-    setSelectedSkills([]);
-    setCurrentStep(1);
-    setApplyForm({ name: "", email: "", phone: "", exp: "", portfolio: "", customSkills: "", note: "" });
-    setShowModal(true);
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+    if (!allowed.includes(file.type)) {
+      showToast("❌ Sirf JPG, PNG, WEBP ya GIF image allowed hai.", "#ff6060");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("❌ Job image 10 MB se chhoti honi chahiye.", "#ff6060");
+      return;
+    }
+
+    if (jobImagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(jobImagePreview);
+    }
+
+    setJobImageFile(file);
+    setJobImagePreview(URL.createObjectURL(file));
   };
 
-  // ── APPLY NEXT/BACK ──
-  const handleApplyNext = () => {
-    if (currentStep === 1) {
-      if (!applyForm.name.trim() || !applyForm.email.trim() || !applyForm.phone.trim()) {
-        showToast("⚠️ Name, Email & Phone are required!", "#ff9900");
+  const uploadJobImage = async (): Promise<string> => {
+    if (!jobImageFile) return "";
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", jobImageFile);
+
+      const res = await fetch("/api/jobs/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      const data = await readJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.message || `Image upload failed (${res.status})`);
+      }
+
+      const url = String(data?.imageUrl ?? data?.url ?? "");
+      if (!url) throw new Error("R2 image URL nahi mila");
+      return url;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handlePostJob = async () => {
+    if (!user?.id) {
+      showToast("❌ Job post karne ke liye login zaroori hai.", "#ff6060");
+      return;
+    }
+
+    const title = postForm.title.trim();
+    const company = postForm.company.trim();
+
+    if (!title) {
+      showToast("⚠️ Job title required hai.", "#ff9900");
+      return;
+    }
+
+    if (!company) {
+      showToast("⚠️ Company name required hai.", "#ff9900");
+      return;
+    }
+
+    if (title.length > 180) {
+      showToast("⚠️ Job title bahut lamba hai.", "#ff9900");
+      return;
+    }
+
+    if (company.length > 180) {
+      showToast("⚠️ Company name bahut lamba hai.", "#ff9900");
+      return;
+    }
+
+    if (postForm.applyUrl.trim()) {
+      const value = postForm.applyUrl.trim();
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+      const isUrl = /^https?:\/\//i.test(value);
+      if (!isEmail && !isUrl) {
+        showToast("⚠️ Apply field me valid email ya https:// link daalo.", "#ff9900");
         return;
       }
-      setCurrentStep(2);
-    } else if (currentStep === 2) {
-      setCurrentStep(3);
     }
-  };
 
-  const handleApplyBack = () => {
-    setCurrentStep(currentStep - 1);
-  };
-
-  // ── SUBMIT APPLICATION ──
-  const handleSubmitApplication = async () => {
-    if (!currentJob) return;
-
-    const applicant: Applicant = {
-      name: applyForm.name.trim(),
-      email: applyForm.email.trim(),
-      phone: applyForm.phone.trim(),
-      exp: applyForm.exp || "Not mentioned",
-      portfolio: applyForm.portfolio.trim() || "Not provided",
-      skills: [...selectedSkills, ...applyForm.customSkills.split(",").map(s => s.trim()).filter(s => s)].join(", ") || "Not mentioned",
-      note: applyForm.note.trim() || "No cover note",
-    };
-
-    // Store application locally
-    const newApplication: Application = {
-      jobId: currentJob.id,
-      applicant,
-      appliedAt: new Date().toLocaleString("en-IN"),
-    };
-    setApplications([...applications, newApplication]);
-
-    // Send email if EmailJS is configured
-    const hasCreds =
-      currentJob.ejsPubkey && currentJob.ejsService && currentJob.ejsTemplate;
-    if (hasCreds && window.emailjs) {
-      try {
-        window.emailjs.init(currentJob.ejsPubkey);
-        await window.emailjs.send(currentJob.ejsService, currentJob.ejsTemplate, {
-          to_email: currentJob.email,
-          to_name: currentJob.company,
-          job_title: currentJob.title,
-          applicant_name: applicant.name,
-          applicant_email: applicant.email,
-          applicant_phone: applicant.phone,
-          applicant_experience: applicant.exp,
-          applicant_skills: applicant.skills,
-          applicant_portfolio: applicant.portfolio,
-          cover_note: applicant.note,
-          applied_on: new Date().toLocaleString("en-IN"),
-        });
-      } catch (err) {
-        console.error("EmailJS error:", err);
+    setPostingJob(true);
+    try {
+      let imageUrl = "";
+      if (jobImageFile) {
+        imageUrl = await uploadJobImage();
       }
-    }
 
-    setShowModal(false);
-    if (!hasCreds) {
-      showToast("📧 EmailJS config missing - setup for real emails", "#ff9900");
-    } else {
-      showToast("✅ Application submitted successfully!");
+      const applyValue = postForm.applyUrl.trim();
+      const normalizedApplyUrl = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applyValue)
+        ? `mailto:${applyValue}`
+        : applyValue;
+
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          company,
+          description: postForm.desc.trim(),
+          location: postForm.location.trim() || "Remote",
+          salary: postForm.salary.trim() || "Negotiable",
+          jobType: postForm.type,
+          imageUrl,
+          applyUrl: normalizedApplyUrl || null,
+        }),
+      });
+
+      const data = await readJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.message || `Job post failed (${res.status})`);
+      }
+
+      const newJob = mapRowToJob(data);
+      setJobs((prev) => [newJob, ...prev.filter((job) => job.id !== newJob.id)]);
+      resetPostForm();
+      setCurrentScreen("browse");
+      showToast("✅ Job posted successfully!");
+    } catch (error: any) {
+      console.error("[job create]", error);
+      showToast(`❌ Job post nahi hua: ${error?.message || "unknown error"}`, "#ff6060");
+    } finally {
+      setPostingJob(false);
     }
   };
 
-  // ── LOGIN PIN ──
-  const handlePinChange = (index: number, value: string) => {
-    if (value.length > 1) return;
-    const newPin = [...loginPin];
-    newPin[index] = value;
-    setLoginPin(newPin);
-    if (value && index < 3) {
-      document.getElementById(`pin-${index + 1}`)?.focus();
-    }
-  };
-
-  const handleVerifyPin = () => {
-    const enteredPin = loginPin.join("");
-    if (enteredPin.length < 4) {
-      setLoginError("⚠️ Please enter complete 4-digit PIN");
+  const handleDeleteJob = async (jobId: number) => {
+    if (!user?.id) {
+      showToast("❌ Please login first.", "#ff6060");
       return;
     }
 
-    const userJobs = jobs.filter((j) => j.pin === enteredPin && j.active !== false);
-    if (userJobs.length === 0) {
-      setLoginError("❌ Incorrect PIN! Try again.");
-      setLoginPin(["", "", "", ""]);
-      document.getElementById("pin-0")?.focus();
+    const confirmed = window.confirm("Kya aap is job ko remove karna chahte hain?");
+    if (!confirmed) return;
+
+    setDeletingId(jobId);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+
+      const data = await readJsonSafe(res);
+      if (!res.ok) {
+        throw new Error(data?.message || `Delete failed (${res.status})`);
+      }
+
+      setJobs((prev) => prev.filter((job) => job.id !== jobId));
+      showToast("🗑️ Job removed successfully!", "#ff6060");
+    } catch (error: any) {
+      console.error("[job delete]", error);
+      showToast(`❌ Delete nahi hua: ${error?.message || "unknown error"}`, "#ff6060");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const openApply = (job: Job) => {
+    if (!job.applyUrl) {
+      showToast("⚠️ Recruiter ne apply link/email nahi diya.", "#ff9900");
       return;
     }
 
-    setLoggedInEmail(userJobs[0].email);
-    setLoggedInPin(enteredPin);
-    setMyJobs(userJobs);
-    setShowLoginModal(false);
-    setCurrentScreen("myjobs");
-  };
-
-  // ── DELETE JOB ──
-  const handleAskDelete = (jobId: number) => {
-    setDeleteTargetId(jobId);
-    setShowConfirmModal(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deleteTargetId) return;
-
-    const { error } = await supabase!
-      .from("jobs")
-      .update({ active: false })
-      .eq("id", deleteTargetId);
-
-    if (error) {
-      showToast("❌ Delete nahi hua: " + error.message, "#ff6060");
+    if (job.applyUrl.startsWith("mailto:")) {
+      window.location.href = `${job.applyUrl}?subject=${encodeURIComponent(`Application for ${job.title}`)}`;
       return;
     }
 
-    setJobs(jobs.map((job) => job.id === deleteTargetId ? { ...job, active: false } : job));
-    setMyJobs(myJobs.filter((j) => j.id !== deleteTargetId));
-    setShowConfirmModal(false);
-    setDeleteTargetId(null);
-    showToast("🗑️ Job removed successfully!", "#ff6060");
+    try {
+      const url = new URL(job.applyUrl);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        throw new Error("Invalid apply link");
+      }
+      window.open(url.toString(), "_blank", "noopener,noreferrer");
+    } catch {
+      showToast("❌ Apply link invalid hai.", "#ff6060");
+    }
   };
 
-  // ── RENDER BROWSE JOBS ──
-  const renderBrowseJobs = () => {
-    const activeJobs = jobs.filter((job) => job.active !== false);
-    if (activeJobs.length === 0) {
-      return (
-        <div className="empty-state">
-          <div className="empty-icon">📭</div>
-          <div className="empty-text">
-            Abhi koi job nahi hai.
-            <br />
-            Upar "Post Job" karke job daalo!
+  const renderJobCard = (job: Job, mine = false) => (
+    <div key={job.id} className="card">
+      {job.imageUrl && (
+        <img
+          src={job.imageUrl}
+          alt={job.title}
+          loading="lazy"
+          style={{
+            width: "100%",
+            maxHeight: "220px",
+            objectFit: "cover",
+            borderRadius: "14px",
+            marginBottom: "14px",
+          }}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+      )}
+
+      <div className="job-card-header">
+        <div className="job-emoji">{job.emoji}</div>
+        <div className="job-meta">
+          <div className="job-title">
+            {job.title} {mine && <span className="owner-badge">👑 Mine</span>}
           </div>
+          <div className="job-company">{job.company}</div>
+          <div className="job-loc">📍 {job.location} · 🗓️ {job.postedAt}</div>
         </div>
-      );
-    }
+      </div>
 
-    return activeJobs.map((job) => (
-      <div key={job.id} className="card">
-        <div className="job-card-header">
-          <div className="job-emoji">{job.emoji}</div>
-          <div className="job-meta">
-            <div className="job-title">{job.title}</div>
-            <div className="job-company">{job.company}</div>
-            <div className="job-loc">
-              📍 {job.location} · 🗓️ {job.postedAt}
-            </div>
-          </div>
-        </div>
-        <div className="job-badges">
-          <span className="badge badge-hot">🔥 {job.type}</span>
-          <span className="badge badge-salary">💰 {job.salary}</span>
-          {job.tags.map((tag) => (
-            <span key={tag} className="badge badge-tag">
-              {tag}
-            </span>
-          ))}
-        </div>
-        {job.desc && (
-          <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.55)", lineHeight: "1.5", marginBottom: "14px" }}>
-            {job.desc}
-          </p>
-        )}
-        <button className="apply-btn" onClick={() => handleOpenApply(job.id)}>
+      <div className="job-badges">
+        <span className="badge badge-hot">🔥 {job.type}</span>
+        <span className="badge badge-salary">💰 {job.salary}</span>
+      </div>
+
+      {job.desc && (
+        <p
+          style={{
+            fontSize: "13px",
+            color: "rgba(255,255,255,0.62)",
+            lineHeight: 1.6,
+            marginBottom: "14px",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {job.desc}
+        </p>
+      )}
+
+      {mine ? (
+        <button
+          className="delete-btn"
+          disabled={deletingId === job.id}
+          onClick={() => handleDeleteJob(job.id)}
+        >
+          {deletingId === job.id ? "Removing..." : "🗑️ Remove This Job"}
+        </button>
+      ) : (
+        <button className="apply-btn" onClick={() => openApply(job)}>
           Apply Now →
         </button>
-      </div>
-    ));
-  };
-
-  // ── RENDER MY JOBS ──
-  const renderMyJobs = () => {
-    if (myJobs.length === 0) {
-      return (
-        <div className="empty-state">
-          <div className="empty-icon">📭</div>
-          <div className="empty-text">You haven't posted any jobs yet.</div>
-        </div>
-      );
-    }
-
-    return myJobs.map((job) => {
-      const jobApplications = applications.filter(app => app.jobId === job.id);
-      return (
-        <div key={job.id} className="card">
-          <div className="job-card-header">
-            <div className="job-emoji">{job.emoji}</div>
-            <div className="job-meta">
-              <div className="job-title">
-                {job.title} <span className="owner-badge">👑 Mine</span>
-              </div>
-              <div className="job-company">{job.company}</div>
-              <div className="job-loc">
-                📍 {job.location} · 🗓️ {job.postedAt}
-              </div>
-            </div>
-          </div>
-          <div className="job-badges">
-            <span className="badge badge-hot">🔥 {job.type}</span>
-            <span className="badge badge-salary">💰 {job.salary}</span>
-            {job.tags.map((tag) => (
-              <span key={tag} className="badge badge-tag">
-                {tag}
-              </span>
-            ))}
-          </div>
-          <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "12px" }}>
-            📧 Applications → <strong style={{ color: "rgba(255,255,255,0.7)" }}>{job.email}</strong>
-          </div>
-          {jobApplications.length > 0 && (
-            <div style={{ marginTop: "16px", padding: "12px", background: "var(--card2)", borderRadius: "8px", border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--text)", marginBottom: "8px" }}>
-                📋 Applicants ({jobApplications.length})
-              </div>
-              {jobApplications.map((app, idx) => (
-                <div key={idx} style={{ marginBottom: "12px", padding: "8px", background: "var(--card)", borderRadius: "6px" }}>
-                  <div style={{ fontSize: "13px", fontWeight: "bold", color: "var(--text)" }}>{app.applicant.name}</div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>📧 {app.applicant.email} · 📞 {app.applicant.phone}</div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>💼 {app.applicant.exp} · 🔗 {app.applicant.portfolio}</div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>🛠️ {app.applicant.skills}</div>
-                  {app.applicant.note && <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "4px" }}>📝 {app.applicant.note}</div>}
-                  <div style={{ fontSize: "10px", color: "var(--cyan)", marginTop: "4px" }}>Applied on: {app.appliedAt}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          <button className="delete-btn" onClick={() => handleAskDelete(job.id)}>
-            🗑️ Remove This Job
-          </button>
-        </div>
-      );
-    });
-  };
+      )}
+    </div>
+  );
 
   return (
     <div className="jobs-container">
-      <style>
-        {`
-          :root {
-            --pink: #ff2d78;
-            --purple: #a855f7;
-            --cyan: #00d4ff;
-            --bg: #08080f;
-            --card: #111120;
-            --card2: #16162a;
-            --border: rgba(255,255,255,0.08);
-            --text: #ffffff;
-            --muted: rgba(255,255,255,0.45);
-          }
+      <style>{`
+        .jobs-top-actions { display:flex; align-items:center; gap:8px; }
+        .jobs-refresh-btn { border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06); color:#fff; border-radius:10px; padding:8px 11px; cursor:pointer; }
+        .jobs-refresh-btn:disabled { opacity:.55; cursor:not-allowed; }
+        .job-image-preview { width:100%; max-height:220px; object-fit:cover; border-radius:12px; margin-top:10px; border:1px solid rgba(255,255,255,.08); }
+        .job-helper { font-size:11px; color:rgba(255,255,255,.45); margin-top:6px; line-height:1.45; }
+        .jobs-loading { padding:28px 12px; text-align:center; color:rgba(255,255,255,.55); }
+        .jobs-account-note { margin-bottom:14px; padding:10px 12px; border-radius:12px; background:rgba(0,212,255,.07); border:1px solid rgba(0,212,255,.15); color:rgba(255,255,255,.68); font-size:12px; line-height:1.5; }
+      `}</style>
 
-          .jobs-nav {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 20px;
-          }
-
-          .back-btn {
-            background: none;
-            border: none;
-            color: var(--text);
-            font-size: 14px;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 6px;
-            transition: background 0.2s;
-          }
-
-          .back-btn:hover {
-            background: var(--card2);
-          }
-
-          .nav-logo {
-            font-size: 18px;
-            font-weight: bold;
-          }
-
-          .nav-tabs {
-            display: flex;
-            gap: 8px;
-          }
-        `}
-      </style>
-
-      {/* Header */}
       <div className="jobs-nav">
-        <button className="back-btn" onClick={() => setLocationState("/")}>
-          ← Back
-        </button>
+        <button className="back-btn" onClick={() => setLocation("/")}>← Back</button>
         <div className="nav-logo">🎬 IQPartner Jobs</div>
-        <div className="nav-tabs">
-          <button
-            className={`nav-tab ${currentScreen === "browse" ? "active" : ""}`}
-            onClick={() => setCurrentScreen("browse")}
-          >
-            Browse
-          </button>
-          <button
-            className={`nav-tab ${currentScreen === "post" ? "active" : ""}`}
-            onClick={() => setCurrentScreen("post")}
-          >
-            Post Job
-          </button>
-          <button
-            className={`nav-tab ${currentScreen === "myjobs" ? "active" : ""}`}
-            onClick={() => {
-              setLoginPin(["", "", "", ""]);
-              setLoginError("");
-              setShowLoginModal(true);
-            }}
-          >
-            My Jobs
+        <div className="jobs-top-actions">
+          <button className="jobs-refresh-btn" onClick={loadJobs} disabled={loadingJobs}>
+            {loadingJobs ? "…" : "↻"}
           </button>
         </div>
       </div>
 
-      {/* SCREEN: BROWSE JOBS */}
+      <div className="nav-tabs" style={{ marginBottom: "20px" }}>
+        <button
+          className={`nav-tab ${currentScreen === "browse" ? "active" : ""}`}
+          onClick={() => setCurrentScreen("browse")}
+        >
+          Browse
+        </button>
+        <button
+          className={`nav-tab ${currentScreen === "post" ? "active" : ""}`}
+          onClick={() => setCurrentScreen("post")}
+        >
+          Post Job
+        </button>
+        <button
+          className={`nav-tab ${currentScreen === "myjobs" ? "active" : ""}`}
+          onClick={() => setCurrentScreen("myjobs")}
+        >
+          My Jobs
+        </button>
+      </div>
+
       {currentScreen === "browse" && (
         <div className="screen">
-          <p className="screen-title">
-            Find Your <span>Dream Job</span>
-          </p>
-          <div id="jobs-list">{renderBrowseJobs()}</div>
+          <p className="screen-title">Find Your <span>Dream Job</span></p>
+
+          {loadingJobs ? (
+            <div className="jobs-loading">Jobs loading...</div>
+          ) : jobs.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📭</div>
+              <div className="empty-text">Abhi koi active job nahi hai.<br />“Post Job” se pehli job daalo.</div>
+            </div>
+          ) : (
+            <div id="jobs-list">{jobs.map((job) => renderJobCard(job, false))}</div>
+          )}
         </div>
       )}
 
-      {/* SCREEN: POST JOB */}
       {currentScreen === "post" && (
         <div className="screen">
-          <p className="screen-title">
-            Post a <span>Job</span>
-          </p>
+          <p className="screen-title">Post a <span>Job</span></p>
 
-          <div className="notice">
-            ⚙️ <strong>Setup:</strong> EmailJS se real email bhejne ke liye apna{" "}
-            <strong>Service ID</strong>, <strong>Template ID</strong> aur <strong>Public Key</strong> niche daalo.
-            Free account: emailjs.com
-          </div>
+          {!user?.id && (
+            <div className="jobs-account-note">
+              Job post karne ke liye aapko login karna hoga. Jobs app ke existing account/session se owner ke naam par save hongi.
+            </div>
+          )}
 
           <div className="card">
-            <div className="form-section-title">📧 Email Config (EmailJS)</div>
-            <div className="field">
-              <label>EmailJS Public Key</label>
-              <input
-                placeholder="user_xxxxxxxxxxxxxxxx"
-                value={postForm.ejsPubkey}
-                onChange={(e) => setPostForm({ ...postForm, ejsPubkey: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label>Service ID</label>
-              <input
-                placeholder="service_xxxxxxx"
-                value={postForm.ejsService}
-                onChange={(e) => setPostForm({ ...postForm, ejsService: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label>Template ID</label>
-              <input
-                placeholder="template_xxxxxxx"
-                value={postForm.ejsTemplate}
-                onChange={(e) => setPostForm({ ...postForm, ejsTemplate: e.target.value })}
-              />
-            </div>
-
-            <div className="form-section-title">🔐 Security PIN (sirf aap hi delete kar sako)</div>
-            <div className="field">
-              <label>4-Digit PIN (yaad rakhna!) *</label>
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={4}
-                placeholder="e.g. 1234"
-                style={{ letterSpacing: "6px", fontSize: "18px", fontWeight: "700" }}
-                value={postForm.pin}
-                onChange={(e) => setPostForm({ ...postForm, pin: e.target.value })}
-              />
-            </div>
-
             <div className="form-section-title">🏢 Job Details</div>
+
             <div className="field">
               <label>Job Title *</label>
               <input
+                maxLength={180}
                 placeholder="e.g. Video Content Creator"
                 value={postForm.title}
                 onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label>Company Name *</label>
               <input
+                maxLength={180}
                 placeholder="e.g. IQPartner Studios"
                 value={postForm.company}
                 onChange={(e) => setPostForm({ ...postForm, company: e.target.value })}
               />
             </div>
-            <div className="field">
-              <label>Your Gmail (applications jayenge yahan) *</label>
-              <input
-                type="email"
-                placeholder="recruiter@gmail.com"
-                value={postForm.email}
-                onChange={(e) => setPostForm({ ...postForm, email: e.target.value })}
-              />
-            </div>
+
             <div className="field">
               <label>Location</label>
               <input
+                maxLength={180}
                 placeholder="Remote · India"
                 value={postForm.location}
                 onChange={(e) => setPostForm({ ...postForm, location: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label>Salary Range</label>
               <input
+                maxLength={120}
                 placeholder="₹25K – ₹60K/mo"
                 value={postForm.salary}
                 onChange={(e) => setPostForm({ ...postForm, salary: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label>Job Type</label>
-              <select value={postForm.type} onChange={(e) => setPostForm({ ...postForm, type: e.target.value })}>
-                <option>Full-time</option>
-                <option>Part-time</option>
-                <option>Freelance</option>
-                <option>Internship</option>
+              <select
+                value={postForm.type}
+                onChange={(e) => setPostForm({ ...postForm, type: e.target.value })}
+              >
+                {JOB_TYPES.map((type) => <option key={type}>{type}</option>)}
               </select>
             </div>
-            <div className="field">
-              <label>Job Emoji / Icon</label>
-              <input
-                placeholder="🎬"
-                maxLength={4}
-                value={postForm.emoji}
-                onChange={(e) => setPostForm({ ...postForm, emoji: e.target.value })}
-              />
-            </div>
+
             <div className="field">
               <label>Description</label>
               <textarea
-                rows={3}
+                rows={5}
                 placeholder="Job ke baare mein likho..."
                 value={postForm.desc}
                 onChange={(e) => setPostForm({ ...postForm, desc: e.target.value })}
               />
             </div>
+
             <div className="field">
-              <label>Tags (comma separated)</label>
+              <label>Apply Email or Link</label>
               <input
-                placeholder="Reels, Music, Editing"
-                value={postForm.tags}
-                onChange={(e) => setPostForm({ ...postForm, tags: e.target.value })}
+                placeholder="jobs@company.com or https://company.com/apply"
+                value={postForm.applyUrl}
+                onChange={(e) => setPostForm({ ...postForm, applyUrl: e.target.value })}
               />
+              <div className="job-helper">
+                Email dene par Apply button email app kholega; website link dene par browser me application page khulega.
+              </div>
             </div>
 
-            <button className="post-btn" onClick={handlePostJob}>
-              🚀 Post Job Now
+            <div className="field">
+              <label>Job Image (optional)</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageChange} />
+              <div className="job-helper">Maximum 10 MB. Image Cloudflare R2 ke jobs/images folder me save hogi.</div>
+              {jobImagePreview && <img src={jobImagePreview} alt="Job preview" className="job-image-preview" />}
+            </div>
+
+            <button
+              className="post-btn"
+              disabled={postingJob || uploadingImage || !user?.id}
+              onClick={handlePostJob}
+            >
+              {postingJob || uploadingImage ? "⏳ Posting..." : "🚀 Post Job Now"}
             </button>
           </div>
         </div>
       )}
 
-      {/* SCREEN: MY JOBS */}
       {currentScreen === "myjobs" && (
         <div className="screen">
-          <p className="screen-title">
-            My <span>Posted Jobs</span>
-          </p>
-          <div id="my-jobs-list">{renderMyJobs()}</div>
-        </div>
-      )}
+          <p className="screen-title">My <span>Posted Jobs</span></p>
 
-      {/* APPLY MODAL */}
-      {showModal && currentJob && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-handle"></div>
-            <div className="modal-header">
-              <button className="close-btn" onClick={() => setShowModal(false)}>
-                ✕
-              </button>
-              <div
-                style={{
-                  fontFamily: "'Syne',sans-serif",
-                  fontSize: "13px",
-                  fontWeight: "700",
-                  color: "var(--muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "1px",
-                }}
-              >
-                Apply Now
-              </div>
-              <div className="modal-job-info">
-                <div className="modal-emoji">{currentJob.emoji}</div>
-                <div>
-                  <div className="modal-job-title">{currentJob.title}</div>
-                  <div className="modal-job-co">{currentJob.company}</div>
-                </div>
-              </div>
+          {!user?.id ? (
+            <div className="empty-state">
+              <div className="empty-icon">🔐</div>
+              <div className="empty-text">My Jobs dekhne ke liye login karo.</div>
             </div>
-
-            <div className="modal-body" id="apply-form">
-              {/* Step dots */}
-              <div className="steps">
-                <div>
-                  <div className={`step-dot ${currentStep >= 1 ? "done" : ""}`}>{currentStep > 1 ? "✓" : "1"}</div>
-                  <div className="step-name">Profile</div>
-                </div>
-                <div className={`step-line ${currentStep > 1 ? "done" : ""}`}></div>
-                <div>
-                  <div className={`step-dot ${currentStep >= 2 ? "done" : ""}`}>{currentStep > 2 ? "✓" : "2"}</div>
-                  <div className="step-name">Skills</div>
-                </div>
-                <div className={`step-line ${currentStep > 2 ? "done" : ""}`}></div>
-                <div>
-                  <div className={`step-dot ${currentStep >= 3 ? "done" : ""}`}>3</div>
-                  <div className="step-name">Submit</div>
-                </div>
-              </div>
-
-              {/* Step 1 */}
-              {currentStep === 1 && (
-                <div>
-                  <div className="field">
-                    <label>Full Name *</label>
-                    <input
-                      placeholder="Rahul Sharma"
-                      value={applyForm.name}
-                      onChange={(e) => setApplyForm({ ...applyForm, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Email *</label>
-                    <input
-                      type="email"
-                      placeholder="rahul@gmail.com"
-                      value={applyForm.email}
-                      onChange={(e) => setApplyForm({ ...applyForm, email: e.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Phone *</label>
-                    <input
-                      type="tel"
-                      placeholder="+91 98765 43210"
-                      value={applyForm.phone}
-                      onChange={(e) => setApplyForm({ ...applyForm, phone: e.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Experience</label>
-                    <select value={applyForm.exp} onChange={(e) => setApplyForm({ ...applyForm, exp: e.target.value })}>
-                      <option value="">Select...</option>
-                      <option>Fresher (0–1 yr)</option>
-                      <option>Junior (1–3 yrs)</option>
-                      <option>Mid-level (3–5 yrs)</option>
-                      <option>Senior (5+ yrs)</option>
-                    </select>
-                  </div>
-                  <div className="btn-row">
-                    <button className="btn-next" style={{ flex: 3 }} onClick={handleApplyNext}>
-                      Next →
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 2 */}
-              {currentStep === 2 && (
-                <div>
-                  <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "12px" }}>Select your skills</p>
-                  <div className="chip-grid">
-                    {SKILLS.map((skill) => (
-                      <div
-                        key={skill}
-                        className={`chip ${selectedSkills.includes(skill) ? "on" : ""}`}
-                        onClick={() => {
-                          if (selectedSkills.includes(skill)) {
-                            setSelectedSkills(selectedSkills.filter((s) => s !== skill));
-                          } else {
-                            setSelectedSkills([...selectedSkills, skill]);
-                          }
-                        }}
-                      >
-                        {skill}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="field">
-                    <label>Additional Skills (comma separated)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., React, Node.js, Python"
-                      value={applyForm.customSkills}
-                      onChange={(e) => setApplyForm({ ...applyForm, customSkills: e.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Portfolio / Channel Link</label>
-                    <input
-                      placeholder="https://youtube.com/@channel"
-                      value={applyForm.portfolio}
-                      onChange={(e) => setApplyForm({ ...applyForm, portfolio: e.target.value })}
-                    />
-                  </div>
-                  <div className="btn-row">
-                    <button className="btn-back" onClick={handleApplyBack}>
-                      ← Back
-                    </button>
-                    <button className="btn-next" onClick={handleApplyNext}>
-                      Next →
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 3 */}
-              {currentStep === 3 && (
-                <div>
-                  <div className="field">
-                    <label>Cover Note</label>
-                    <textarea
-                      rows={4}
-                      placeholder="IQPartner ko kyun hire karna chahiye aapko? 2-3 lines mein likho..."
-                      value={applyForm.note}
-                      onChange={(e) => setApplyForm({ ...applyForm, note: e.target.value })}
-                    />
-                  </div>
-                  <div className="summary">
-                    <p style={{ fontSize: "11px", fontWeight: "700", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "10px" }}>
-                      📋 Summary
-                    </p>
-                    <div className="summary-row">
-                      <span className="sk">Name</span>
-                      <span className="sv">{applyForm.name}</span>
-                    </div>
-                    <div className="summary-row">
-                      <span className="sk">Email</span>
-                      <span className="sv">{applyForm.email}</span>
-                    </div>
-                    <div className="summary-row">
-                      <span className="sk">Phone</span>
-                      <span className="sv">{applyForm.phone}</span>
-                    </div>
-                    <div className="summary-row">
-                      <span className="sk">Experience</span>
-                      <span className="sv">{applyForm.exp || "—"}</span>
-                    </div>
-                    <div className="summary-row">
-                      <span className="sk">Skills</span>
-                      <span className="sv">{selectedSkills.length ? selectedSkills.join(", ") : "—"}</span>
-                    </div>
-                    <div className="summary-row">
-                      <span className="sk">Portfolio</span>
-                      <span className="sv">{applyForm.portfolio || "—"}</span>
-                    </div>
-                  </div>
-                  <div className="btn-row">
-                    <button className="btn-back" onClick={handleApplyBack}>
-                      ← Back
-                    </button>
-                    <button className="btn-submit" onClick={handleSubmitApplication}>
-                      🚀 Apply Now
-                    </button>
-                  </div>
-                </div>
-              )}
+          ) : myJobs.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📭</div>
+              <div className="empty-text">Aapne abhi koi active job post nahi ki.</div>
             </div>
-          </div>
+          ) : (
+            <div id="my-jobs-list">{myJobs.map((job) => renderJobCard(job, true))}</div>
+          )}
         </div>
       )}
 
-      {/* LOGIN MODAL */}
-      {showLoginModal && (
-        <div className="login-modal-overlay" onClick={() => setShowLoginModal(false)}>
-          <div className="login-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="login-icon">🔐</div>
-            <div className="login-title">Recruiter Login</div>
-            <p className="login-sub">Apna 4-digit PIN daalo jo aapne job post karte waqt set kiya tha</p>
-            <div className="pin-row">
-              {loginPin.map((_, idx) => (
-                <input
-                  key={idx}
-                  id={`pin-${idx}`}
-                  className="pin-box"
-                  maxLength={1}
-                  type="password"
-                  inputMode="numeric"
-                  value={loginPin[idx]}
-                  onChange={(e) => handlePinChange(idx, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Backspace" && !loginPin[idx] && idx > 0) {
-                      document.getElementById(`pin-${idx - 1}`)?.focus();
-                    }
-                  }}
-                />
-              ))}
-            </div>
-            <div className="login-error">{loginError}</div>
-            <button className="login-btn" onClick={handleVerifyPin}>
-              🔓 Login
-            </button>
-            <button className="login-cancel" onClick={() => setShowLoginModal(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* CONFIRM DELETE MODAL */}
-      {showConfirmModal && deleteTargetId && (
-        <div className="confirm-overlay" onClick={() => setShowConfirmModal(false)}>
-          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
-            <div className="confirm-icon">🗑️</div>
-            <div className="confirm-title">Job Delete Karein?</div>
-            <p className="confirm-sub">Kya aap sure hain? Yeh action undo nahi ho sakta.</p>
-            <button className="confirm-yes" onClick={handleConfirmDelete}>
-              Haan, Delete Karo
-            </button>
-            <button className="confirm-no" onClick={() => setShowConfirmModal(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* TOAST */}
       {toastMsg && (
         <div
           id="toast"
@@ -1006,17 +643,18 @@ export default function Jobs() {
             padding: "10px 20px",
             borderRadius: "20px",
             fontSize: "13px",
-            fontWeight: "600",
+            fontWeight: 600,
             zIndex: 9999,
-            whiteSpace: "nowrap",
+            maxWidth: "90vw",
+            textAlign: "center",
           }}
         >
           {toastMsg}
         </div>
       )}
 
-      {/* Bottom padding for BottomNav */}
-      <div style={{ height: "100px" }}></div>
+      <div style={{ height: "100px" }} />
+      <BottomNav />
     </div>
   );
 }

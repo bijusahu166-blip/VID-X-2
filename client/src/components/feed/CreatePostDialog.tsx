@@ -656,27 +656,28 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
     return () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); };
   }, []);
 
- const handleTypeSelect = (type: UploadType) => {
-  setUploadType(type);
-  if (type === "video") {
-    setStep("video-details");
-  } else if (type === "job") {
-    showToast("🔒 Job posting jaldi aa raha hai — abhi available nahi hai!", "#ff9800");
-    return;
-  } else if (type === "reel") {
-    setCameraMode(false);
-    setReelMediaMode("video");
-    setStep("edit");
-  } else if (type === "story") {
-    setCameraMode(false);
-    setReelMediaMode("photo");
-    setStep("edit");
-  } else if (type === "editing") {
-    setStep("edit");
-  } else {
-    setStep("details");
-  }
-};
+  const handleTypeSelect = (type: UploadType) => {
+    setUploadType(type);
+    if (type === "video") {
+      setStep("video-details");
+    } else if (type === "job") {
+      onOpenChange(false);
+      navigate("/jobs?post=1");
+    } else if (type === "reel") {
+      setCameraMode(false);
+      setReelMediaMode("video");
+      setStep("edit");
+    } else if (type === "story") {
+      setCameraMode(false);
+      setReelMediaMode("photo");
+      setStep("edit");
+    } else if (type === "editing") {
+      setStep("edit");
+    } else {
+      setStep("details");
+    }
+  };
+
  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
