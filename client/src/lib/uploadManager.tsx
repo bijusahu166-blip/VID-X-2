@@ -56,8 +56,8 @@ const MAX_RETRIES = 3;
 // The hosting plan REJECTS any file over 100MB — this isn't optional, so we
 // must guarantee the file we hand to uploadFileChunks is under this size,
 // even if that means compressing multiple times with lower and lower targets.
-const SERVER_HARD_LIMIT_MB = 100;
-const SAFE_TARGET_MB = 90; // leave a buffer under the hard limit
+const SERVER_HARD_LIMIT_MB = 80;
+const SAFE_TARGET_MB = 30; // leave a buffer under the hard limit
 const MAX_COMPRESSION_PASSES = 4;
 
 /**

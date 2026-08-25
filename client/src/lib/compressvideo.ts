@@ -109,30 +109,37 @@ export async function compressVideo(
         // ----------------------------------------------------
         let audioContext: AudioContext | null = null;
 
-        try {
-          audioContext = new AudioContext();
+try {
+  audioContext = new AudioContext();
 
-          const source =
-            audioContext.createMediaElementSource(video);
+  // ✅ FIX: browsers suspend AudioContext by default when created
+  // outside a direct click handler — must explicitly resume it,
+  // otherwise the captured audio track is silent (no error thrown).
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
 
-          const destination =
-            audioContext.createMediaStreamDestination();
+  const source =
+    audioContext.createMediaElementSource(video);
 
-          source.connect(destination);
+  const destination =
+    audioContext.createMediaStreamDestination();
 
-          // Don't play compressed audio through speakers
-          // while compression is running.
-          destination.stream
-            .getAudioTracks()
-            .forEach((track) => {
-              canvasStream.addTrack(track);
-            });
-        } catch (error) {
-          console.warn(
-            "Audio capture unavailable:",
-            error
-          );
-        }
+  source.connect(destination);
+
+  // Don't play compressed audio through speakers
+  // while compression is running.
+  destination.stream
+    .getAudioTracks()
+    .forEach((track) => {
+      canvasStream.addTrack(track);
+    });
+} catch (error) {
+  console.warn(
+    "Audio capture unavailable:",
+    error
+  );
+}
 
         // ----------------------------------------------------
         // CODEC

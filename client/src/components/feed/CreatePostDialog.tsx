@@ -708,7 +708,45 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
       setIsReadingFile(false);
     }
   };
+// Instagram-jaisa photo compression — resize + quality-optimize before upload
+function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const scale = Math.min(maxDimension / img.width, maxDimension / img.height, 1);
+      const width = Math.round(img.width * scale);
+      const height = Math.round(img.height * scale);
 
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob || blob.size >= file.size) {
+            resolve(file); // compression didn't help, use original
+            return;
+          }
+          const compressedFile = new File(
+            [blob],
+            file.name.replace(/\.[^/.]+$/, ".jpg"),
+            { type: "image/jpeg", lastModified: Date.now() }
+          );
+          resolve(compressedFile);
+        },
+        "image/jpeg",
+        quality
+      );
+    };
+    img.onerror = () => resolve(file); // fallback to original on error
+    img.src = objectUrl;
+  });
+}
   const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -718,10 +756,12 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
       // Create a preview URL for UI
       const previewUrl = URL.createObjectURL(file);
       setPreviewUrl(previewUrl);
-      
-      // Upload to Cloudinary immediately
+
+      // ✅ Instagram-jaisa compression — resize + quality-optimize before upload
+      const compressedFile = await compressImage(file);
+
       const formData = new FormData();
-      formData.append("image", file);
+      formData.append("image", compressedFile);
       const res = await fetch("/api/upload/image", {
         method: "POST",
         body: formData,

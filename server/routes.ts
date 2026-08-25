@@ -407,8 +407,8 @@ await ensureVoiceRoomUnlockColumn();
       if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No video file received" });
       try {
-        const result = await uploadLargeVideoToCloudinary(req.file.buffer, "vid-x/videos");
-        res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
+        const result = await uploadToR2(req.file.buffer, "videos", req.file.originalname, req.file.mimetype);
+        res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.key });
       } catch (err: any) {
         res.status(500).json({ message: `Video upload failed: ${err.message}` });
       }
@@ -559,29 +559,16 @@ res.json({ success: true, url: result.url, imageUrl: result.url, publicId: resul
       uploadByteTotals.delete(uploadId);
       uploadTimestamps.delete(uploadId);
 
-      const stats = fs.statSync(finalPath);
+            const stats = fs.statSync(finalPath);
       if (stats.size > MAX_VIDEO_UPLOAD_BYTES) {
         try { fs.unlinkSync(finalPath); } catch {}
         return res.status(413).json({ message: "Video exceeds the 200 MB upload limit." });
       }
-      const result = await new Promise<{ url: string; publicId: string }>((resolve, reject) => {
-        cloudinary.uploader.upload_large(
-          finalPath,
-          {
-            resource_type: "video",
-            folder: "vid-x/videos",
-            public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            overwrite: false,
-            chunk_size: 6 * 1024 * 1024,
-          },
-          (error: any, result: any) => {
-            try { fs.unlinkSync(finalPath); } catch {}
-            if (error) return reject(error);
-            resolve({ url: result.secure_url, publicId: result.public_id });
-          }
-        );
-      });
 
+      // ✅ R2 upload instead of Cloudinary — read assembled file into buffer, push to R2
+      const fileBuffer = fs.readFileSync(finalPath);
+      const result = await uploadToR2(fileBuffer, "videos", originalName, "video/mp4");
+      try { fs.unlinkSync(finalPath); } catch {}
       res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
     } catch (err: any) {
       res.status(500).json({ message: `Finalize failed: ${err.message}` });
