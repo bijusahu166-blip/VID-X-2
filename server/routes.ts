@@ -1105,69 +1105,166 @@ app.post("/api/auth/register", async (req, res) => {
   });
 
   // Create a job. The logged-in user id always comes from the server session.
-  app.post("/api/jobs", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = String(req.session.userId);
-      const body = req.body ?? {};
+ app.post("/api/jobs", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = String(req.session?.userId ?? "").trim();
 
-      const title = String(body.title ?? "").trim();
-      const company = String(body.company ?? "").trim();
-      const email = String(body.email ?? "").trim();
-      const pin = String(body.pin ?? "").trim();
-      const description = String(body.description ?? body.desc ?? "").trim();
-      const location = String(body.location ?? "Remote").trim() || "Remote";
-      const salary = String(body.salary ?? "Negotiable").trim() || "Negotiable";
-      const jobType = String(body.jobType ?? body.job_type ?? body.type ?? "Full-time").trim();
-      const emoji = String(body.emoji ?? "💼").trim() || "💼";
-      const tags = Array.isArray(body.tags)
-        ? body.tags.map((tag: unknown) => String(tag).trim()).filter(Boolean)
-        : String(body.tags ?? "")
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter(Boolean);
-      const ejsPubkey = String(body.ejsPubkey ?? body.ejs_pubkey ?? "").trim();
-      const ejsService = String(body.ejsService ?? body.ejs_service ?? "").trim();
-      const ejsTemplate = String(body.ejsTemplate ?? body.ejs_template ?? "").trim();
-      const imageUrl = String(body.imageUrl ?? body.image_url ?? "").trim() || null;
-      const applyUrl = String(body.applyUrl ?? body.apply_url ?? "").trim() || null;
-      const postedAt = String(body.postedAt ?? body.posted_at ?? new Date().toISOString()).trim();
-
-      if (!title) return res.status(400).json({ message: "Job title is required" });
-      if (!company) return res.status(400).json({ message: "Company name is required" });
-      if (title.length > 180) return res.status(400).json({ message: "Job title is too long" });
-      if (company.length > 180) return res.status(400).json({ message: "Company name is too long" });
-      if (location.length > 180) return res.status(400).json({ message: "Location is too long" });
-      if (salary.length > 120) return res.status(400).json({ message: "Salary text is too long" });
-      if (jobType.length > 80) return res.status(400).json({ message: "Job type is too long" });
-      if (pin && !/^\d{4}$/.test(pin)) {
-        return res.status(400).json({ message: "PIN must be exactly 4 digits" });
-      }
-
-      const result = await db.execute(sql`
-        INSERT INTO jobs
-          (
-            user_id, title, company, email, pin, description, location, salary,
-            type, job_type, emoji, tags, ejs_pubkey, ejs_service, ejs_template,
-            image_url, apply_url, posted_at, active
-          )
-        VALUES
-          (
-            ${userId}, ${title}, ${company}, ${email}, ${pin}, ${description},
-            ${location}, ${salary}, ${jobType}, ${jobType}, ${emoji}, ${tags},
-            ${ejsPubkey}, ${ejsService}, ${ejsTemplate}, ${imageUrl}, ${applyUrl},
-            ${postedAt}, TRUE
-          )
-        RETURNING *
-      `);
-
-      const rows = (result as any).rows ?? result;
-      return res.status(201).json(mapJobRow(rows[0]));
-    } catch (error: any) {
-      console.error("[jobs create]", error);
-      return res.status(500).json({ message: error.message || "Failed to post job" });
+    if (!userId) {
+      return res.status(401).json({
+        message: "Not authenticated",
+      });
     }
-  });
 
+    const body = req.body ?? {};
+
+    const title = String(body.title ?? "").trim();
+    const company = String(body.company ?? "").trim();
+    const description = String(body.description ?? "").trim();
+    const location =
+      String(body.location ?? "").trim() || "Remote";
+    const salary =
+      String(body.salary ?? "").trim() || "Negotiable";
+
+    const jobType =
+      String(
+        body.jobType ??
+        body.job_type ??
+        body.type ??
+        "Full-time"
+      ).trim() || "Full-time";
+
+    const imageUrl =
+      String(
+        body.imageUrl ??
+        body.image_url ??
+        ""
+      ).trim() || null;
+
+    const applyUrl =
+      String(
+        body.applyUrl ??
+        body.apply_url ??
+        ""
+      ).trim() || null;
+
+    if (!title) {
+      return res.status(400).json({
+        message: "Job title is required",
+      });
+    }
+
+    if (!company) {
+      return res.status(400).json({
+        message: "Company name is required",
+      });
+    }
+
+    if (title.length > 180) {
+      return res.status(400).json({
+        message: "Job title is too long",
+      });
+    }
+
+    if (company.length > 180) {
+      return res.status(400).json({
+        message: "Company name is too long",
+      });
+    }
+
+    if (location.length > 180) {
+      return res.status(400).json({
+        message: "Location is too long",
+      });
+    }
+
+    if (salary.length > 120) {
+      return res.status(400).json({
+        message: "Salary text is too long",
+      });
+    }
+
+    if (jobType.length > 80) {
+      return res.status(400).json({
+        message: "Job type is too long",
+      });
+    }
+
+    const result = await db.execute(sql`
+      INSERT INTO jobs (
+        user_id,
+        title,
+        company,
+        description,
+        location,
+        salary,
+        type,
+        job_type,
+        image_url,
+        apply_url,
+        active,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ${userId},
+        ${title},
+        ${company},
+        ${description},
+        ${location},
+        ${salary},
+        ${jobType},
+        ${jobType},
+        ${imageUrl},
+        ${applyUrl},
+        TRUE,
+        NOW(),
+        NOW()
+      )
+      RETURNING *
+    `);
+
+    const rows =
+      (result as any).rows ??
+      result;
+
+    const job = rows?.[0];
+
+    if (!job) {
+      return res.status(500).json({
+        message: "Job was not created",
+      });
+    }
+
+    return res.status(201).json({
+      id: job.id,
+      userId: job.user_id,
+      title: job.title,
+      company: job.company,
+      description: job.description ?? "",
+      location: job.location ?? "Remote",
+      salary: job.salary ?? "Negotiable",
+      type: job.job_type ?? job.type ?? "Full-time",
+      jobType: job.job_type ?? job.type ?? "Full-time",
+      imageUrl: job.image_url ?? null,
+      applyUrl: job.apply_url ?? null,
+      active: job.active ?? true,
+      createdAt: job.created_at ?? null,
+      updatedAt: job.updated_at ?? null,
+    });
+  } catch (error: any) {
+    console.error("[jobs create]", {
+      message: error?.message,
+      code: error?.code,
+      detail: error?.detail,
+    });
+
+    return res.status(500).json({
+      message:
+        error?.message ||
+        "Failed to post job",
+    });
+  }
+});
   // Edit only your own job.
   app.patch("/api/jobs/:id", isAuthenticated, async (req: any, res) => {
     try {
