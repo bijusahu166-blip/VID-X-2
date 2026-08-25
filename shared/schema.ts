@@ -451,9 +451,40 @@ export const insertMessageSchema = createInsertSchema(conversationMessages).omit
 export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true });
 export const insertDirectMessageSchema = createInsertSchema(directMessages).omit({ id: true, createdAt: true });
 
+// ── SELECT TYPES ─────────────────────────────────────────────────────────────
 export type Post = typeof posts.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
+export type Like = typeof likes.$inferSelect;
+export type Book = typeof books.$inferSelect;
+export type Ad = typeof ads.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof conversationMessages.$inferSelect;
 export type History = typeof history.$inferSelect;
 export type DirectMessage = typeof directMessages.$inferSelect;
+export type DirectChat = typeof directChats.$inferSelect;
+export type GroupChat = typeof groupChats.$inferSelect;
+export type GroupMember = typeof groupMembers.$inferSelect;
+export type Story = typeof stories.$inferSelect;
+export type Follow = typeof follows.$inferSelect;
+export type SavedPost = typeof savedPosts.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type Report = typeof reports.$inferSelect;
+
+// ── INSERT TYPES ─────────────────────────────────────────────────────────────
+export type InsertPost = typeof posts.$inferInsert;
+export type InsertComment = typeof comments.$inferInsert;
+export type InsertLike = typeof likes.$inferInsert;
+export type InsertBook = typeof books.$inferInsert;
+export type InsertAd = typeof ads.$inferInsert;
+export type InsertConversation = typeof conversations.$inferInsert;
+export type InsertMessage = typeof conversationMessages.$inferInsert;
+export type InsertHistory = typeof history.$inferInsert;
+export type InsertDirectMessage = typeof directMessages.$inferInsert;
+export type InsertDirectChat = typeof directChats.$inferInsert;
+export type InsertGroupChat = typeof groupChats.$inferInsert;
+export type InsertGroupMember = typeof groupMembers.$inferInsert;
+export type InsertStory = typeof stories.$inferInsert;
+export type InsertFollow = typeof follows.$inferInsert;
+export type InsertSavedPost = typeof savedPosts.$inferInsert;
+export type InsertNotification = typeof notifications.$inferInsert;
+export type InsertReport = typeof reports.$inferInsert;

@@ -1,3 +1,6 @@
+
+
+
 import {
   users, posts, comments, savedPosts, reports, notifications, conversations, messages,
   pendingBlocks, blocks, follows, directChats, directMessages,
@@ -214,6 +217,45 @@ function mapPostRow(row: any) {
   };
 }
 
+function mapStoryRow(row: any) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    mediaUrl: row.media_url,
+    type: row.type ?? "image",
+    caption: row.caption ?? null,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+    viewerCount: row.viewer_count ?? 0,
+    user: row.username
+      ? {
+          id: String(row.user_id),
+          firstName: row.first_name ?? null,
+          lastName: row.last_name ?? null,
+          username: row.username ?? null,
+          profileImageUrl: row.profile_image_url ?? null,
+        }
+      : undefined,
+  };
+}
+
+function mapJobRow(row: any) {
+  return {
+    ...row,
+    userId: row.user_id ?? null,
+    jobType: row.job_type ?? row.type ?? "Full-time",
+    type: row.job_type ?? row.type ?? "Full-time",
+    imageUrl: row.image_url ?? null,
+    applyUrl: row.apply_url ?? null,
+    postedAt: row.posted_at ?? row.created_at ?? "",
+    ejsPubkey: row.ejs_pubkey ?? "",
+    ejsService: row.ejs_service ?? "",
+    ejsTemplate: row.ejs_template ?? "",
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
 // ── Expired stories cleanup — har 15 min mein chalega ──
 setInterval(async () => {
   try {
@@ -311,37 +353,147 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   await ensureUserPreferenceColumns();
-  // ── JOBS TABLE ───────────────────────────────────────────────────────────
-  // Jobs are stored in the app PostgreSQL database. R2 is used only for
-  // optional job images/files, so Supabase REST is no longer required here.
-  async function ensureJobsTable() {
-    try {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS jobs (
-          id SERIAL PRIMARY KEY,
-          user_id VARCHAR(255) NOT NULL,
-          title VARCHAR(180) NOT NULL,
-          company VARCHAR(180) NOT NULL DEFAULT '',
-          description TEXT NOT NULL DEFAULT '',
-          location VARCHAR(180) NOT NULL DEFAULT '',
-          salary VARCHAR(120) NOT NULL DEFAULT '',
-          job_type VARCHAR(80) NOT NULL DEFAULT 'Full-time',
-          image_url TEXT,
-          apply_url TEXT,
-          active BOOLEAN NOT NULL DEFAULT TRUE,
-          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-      `);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS jobs_active_created_idx ON jobs (active, created_at DESC)`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS jobs_user_idx ON jobs (user_id)`);
-    } catch (error) {
-      console.error("[jobs table]", error);
-      throw error;
-    }
-  }
+ // ── JOBS TABLE ───────────────────────────────────────────────────────────
+async function ensureJobsTable() {
+  try {
+    // Table doesn't exist -> create it.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS jobs (
+        id SERIAL PRIMARY KEY
+      )
+    `);
 
-  await ensureJobsTable();
+    // Existing old jobs table ho to missing columns automatically add karo.
+    // user_id nullable rakha hai because old jobs may already exist.
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS user_id VARCHAR(255)
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS title VARCHAR(180) NOT NULL DEFAULT ''
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS company VARCHAR(180) NOT NULL DEFAULT ''
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS email VARCHAR(255) NOT NULL DEFAULT ''
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS pin VARCHAR(10) NOT NULL DEFAULT ''
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS location VARCHAR(180) NOT NULL DEFAULT 'Remote'
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS salary VARCHAR(120) NOT NULL DEFAULT 'Negotiable'
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS type VARCHAR(80) NOT NULL DEFAULT 'Full-time'
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS job_type VARCHAR(80) NOT NULL DEFAULT 'Full-time'
+    `);
+
+    await db.execute(sql`
+      UPDATE jobs
+      SET job_type = COALESCE(NULLIF(job_type, ''), NULLIF(type, ''), 'Full-time')
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS emoji VARCHAR(20) NOT NULL DEFAULT '💼'
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS ejs_pubkey TEXT NOT NULL DEFAULT ''
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS ejs_service TEXT NOT NULL DEFAULT ''
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS ejs_template TEXT NOT NULL DEFAULT ''
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS image_url TEXT
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS apply_url TEXT
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS posted_at VARCHAR(50)
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE jobs
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    `);
+
+    // Indexes only AFTER all columns definitely exist.
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS jobs_active_created_idx
+      ON jobs (active, created_at DESC)
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS jobs_user_idx
+      ON jobs (user_id)
+    `);
+
+    console.log("[jobs table] ready");
+  } catch (error) {
+    // Don't kill the whole app if jobs setup has a DB problem.
+    console.error("[jobs table] setup error:", error);
+  }
+}
+
+await ensureJobsTable();
   // Permanent Voice Room unlock
 async function ensureVoiceRoomUnlockColumn() {
   try {
@@ -600,7 +752,7 @@ res.json({ success: true, url: result.url, imageUrl: result.url, publicId: resul
       const fileBuffer = fs.readFileSync(finalPath);
       const result = await uploadToR2(fileBuffer, "videos", originalName, "video/mp4");
       try { fs.unlinkSync(finalPath); } catch {}
-      res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.publicId });
+      res.json({ success: true, url: result.url, videoUrl: result.url, publicId: result.key });
     } catch (err: any) {
       res.status(500).json({ message: `Finalize failed: ${err.message}` });
     }
@@ -627,7 +779,16 @@ app.post("/api/auth/login", async (req, res) => {
 
     const user = found[0];
     const bcrypt = await import("bcryptjs");
-    const valid = await bcrypt.compare(password, user.password);
+    if (!user.password) {
+  return res.status(401).json({
+    message: "Invalid email or password",
+  });
+}
+
+const valid = await bcrypt.compare(
+  password,
+  user.password
+);
 
     if (!valid) {
       return res.status(401).json({ message: "Invalid email or password" });
@@ -901,9 +1062,7 @@ app.post("/api/auth/register", async (req, res) => {
 
       const result = await db.execute(sql`
         SELECT
-          j.id, j.user_id, j.title, j.company, j.description, j.location,
-          j.salary, j.job_type, j.image_url, j.apply_url, j.active,
-          j.created_at, j.updated_at,
+          j.*,
           u.first_name, u.last_name, u.username, u.profile_image_url
         FROM jobs j
         LEFT JOIN users u ON CAST(u.id AS TEXT) = j.user_id
@@ -912,7 +1071,7 @@ app.post("/api/auth/register", async (req, res) => {
         LIMIT ${limit} OFFSET ${offset}
       `);
 
-      return res.json((result as any).rows ?? result);
+      return res.json((((result as any).rows ?? result) as any[]).map(mapJobRow));
     } catch (error: any) {
       console.error("[jobs list]", error);
       return res.status(500).json({ message: error.message || "Failed to load jobs" });
@@ -938,7 +1097,7 @@ app.post("/api/auth/register", async (req, res) => {
       `);
       const rows = (result as any).rows ?? result;
       if (!rows?.length) return res.status(404).json({ message: "Job not found" });
-      return res.json(rows[0]);
+      return res.json(mapJobRow(rows[0]));
     } catch (error: any) {
       console.error("[jobs get]", error);
       return res.status(500).json({ message: error.message || "Failed to load job" });
@@ -953,29 +1112,56 @@ app.post("/api/auth/register", async (req, res) => {
 
       const title = String(body.title ?? "").trim();
       const company = String(body.company ?? "").trim();
-      const description = String(body.description ?? "").trim();
-      const location = String(body.location ?? "").trim();
-      const salary = String(body.salary ?? "").trim();
-      const jobType = String(body.jobType ?? body.job_type ?? "Full-time").trim();
+      const email = String(body.email ?? "").trim();
+      const pin = String(body.pin ?? "").trim();
+      const description = String(body.description ?? body.desc ?? "").trim();
+      const location = String(body.location ?? "Remote").trim() || "Remote";
+      const salary = String(body.salary ?? "Negotiable").trim() || "Negotiable";
+      const jobType = String(body.jobType ?? body.job_type ?? body.type ?? "Full-time").trim();
+      const emoji = String(body.emoji ?? "💼").trim() || "💼";
+      const tags = Array.isArray(body.tags)
+        ? body.tags.map((tag: unknown) => String(tag).trim()).filter(Boolean)
+        : String(body.tags ?? "")
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean);
+      const ejsPubkey = String(body.ejsPubkey ?? body.ejs_pubkey ?? "").trim();
+      const ejsService = String(body.ejsService ?? body.ejs_service ?? "").trim();
+      const ejsTemplate = String(body.ejsTemplate ?? body.ejs_template ?? "").trim();
       const imageUrl = String(body.imageUrl ?? body.image_url ?? "").trim() || null;
       const applyUrl = String(body.applyUrl ?? body.apply_url ?? "").trim() || null;
+      const postedAt = String(body.postedAt ?? body.posted_at ?? new Date().toISOString()).trim();
 
       if (!title) return res.status(400).json({ message: "Job title is required" });
+      if (!company) return res.status(400).json({ message: "Company name is required" });
       if (title.length > 180) return res.status(400).json({ message: "Job title is too long" });
       if (company.length > 180) return res.status(400).json({ message: "Company name is too long" });
       if (location.length > 180) return res.status(400).json({ message: "Location is too long" });
       if (salary.length > 120) return res.status(400).json({ message: "Salary text is too long" });
       if (jobType.length > 80) return res.status(400).json({ message: "Job type is too long" });
+      if (pin && !/^\d{4}$/.test(pin)) {
+        return res.status(400).json({ message: "PIN must be exactly 4 digits" });
+      }
 
       const result = await db.execute(sql`
         INSERT INTO jobs
-          (user_id, title, company, description, location, salary, job_type, image_url, apply_url, active)
+          (
+            user_id, title, company, email, pin, description, location, salary,
+            type, job_type, emoji, tags, ejs_pubkey, ejs_service, ejs_template,
+            image_url, apply_url, posted_at, active
+          )
         VALUES
-          (${userId}, ${title}, ${company}, ${description}, ${location}, ${salary}, ${jobType}, ${imageUrl}, ${applyUrl}, TRUE)
+          (
+            ${userId}, ${title}, ${company}, ${email}, ${pin}, ${description},
+            ${location}, ${salary}, ${jobType}, ${jobType}, ${emoji}, ${tags},
+            ${ejsPubkey}, ${ejsService}, ${ejsTemplate}, ${imageUrl}, ${applyUrl},
+            ${postedAt}, TRUE
+          )
         RETURNING *
       `);
+
       const rows = (result as any).rows ?? result;
-      return res.status(201).json(rows[0]);
+      return res.status(201).json(mapJobRow(rows[0]));
     } catch (error: any) {
       console.error("[jobs create]", error);
       return res.status(500).json({ message: error.message || "Failed to post job" });
@@ -1004,7 +1190,9 @@ app.post("/api/auth/register", async (req, res) => {
       const description = String(body.description ?? existing.description ?? "").trim();
       const location = String(body.location ?? existing.location ?? "").trim();
       const salary = String(body.salary ?? existing.salary ?? "").trim();
-      const jobType = String(body.jobType ?? body.job_type ?? existing.job_type ?? "Full-time").trim();
+      const jobType = String(
+        body.jobType ?? body.job_type ?? body.type ?? existing.job_type ?? existing.type ?? "Full-time"
+      ).trim();
       const imageUrl = body.imageUrl !== undefined || body.image_url !== undefined
         ? (String(body.imageUrl ?? body.image_url ?? "").trim() || null)
         : existing.image_url;
@@ -1018,14 +1206,15 @@ app.post("/api/auth/register", async (req, res) => {
       const result = await db.execute(sql`
         UPDATE jobs
         SET title = ${title}, company = ${company}, description = ${description},
-            location = ${location}, salary = ${salary}, job_type = ${jobType},
+            location = ${location}, salary = ${salary},
+            type = ${jobType}, job_type = ${jobType},
             image_url = ${imageUrl}, apply_url = ${applyUrl}, active = ${active},
             updated_at = NOW()
         WHERE id = ${id} AND user_id = ${userId}
         RETURNING *
       `);
       const rows = (result as any).rows ?? result;
-      return res.json(rows[0]);
+      return res.json(mapJobRow(rows[0]));
     } catch (error: any) {
       console.error("[jobs update]", error);
       return res.status(500).json({ message: error.message || "Failed to update job" });

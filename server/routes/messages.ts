@@ -1,54 +1,97 @@
-import express from 'express';
-import { db } from '../db';
-import { messages, users } from '../../shared/schema';
-import { eq, or, and, desc } from 'drizzle-orm';
-import { authMiddleware } from '../middleware/auth';
-import { canSendDM } from '../middleware/privacy';
-import { encryptMessage, decryptMessage, generateEncryptionKey } from '../utils/encryption';
+import express from "express";
+import { db } from "../db";
+import { messages, users } from "../../shared/schema";
+import { eq, or, and, desc } from "drizzle-orm";
+import { authMiddleware } from "../middleware/auth";
+import { canSendDM } from "../middleware/privacy";
+import {
+  encryptMessage,
+  decryptMessage,
+  generateEncryptionKey,
+} from "../utils/encryption";
 
 const router = express.Router();
 
-// Get messages between current user and another user
-router.get('/:userId', authMiddleware, async (req, res) => {
-  try {
-    const currentUserId = req.session.userId;
-    const otherUserId = req.params.userId;
+function getParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
+}
 
-    const [currentUser, otherUser] = await Promise.all([
+function getSessionUserId(req: express.Request): string {
+  return String((req.session as any)?.userId ?? "");
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+// Get messages between current user and another user
+router.get("/:userId", authMiddleware, async (req, res) => {
+  try {
+    const currentUserId = getSessionUserId(req);
+    const otherUserId = getParam(req.params.userId);
+
+    if (!currentUserId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    if (!otherUserId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    const [currentUserRows, otherUserRows] = await Promise.all([
       db.select().from(users).where(eq(users.id, currentUserId)).limit(1),
-      db.select().from(users).where(eq(users.id, otherUserId)).limit(1)
+      db.select().from(users).where(eq(users.id, otherUserId)).limit(1),
     ]);
 
-    if (!currentUser[0] || !otherUser[0]) {
-      return res.status(404).json({ error: 'User not found' });
+    const currentUser = currentUserRows[0];
+    const otherUser = otherUserRows[0];
+
+    if (!currentUser || !otherUser) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-    if (currentUser[0].blockedUsers?.includes(otherUserId) ||
-        otherUser[0].blockedUsers?.includes(currentUserId)) {
-      return res.status(403).json({ error: 'Cannot access messages with this user' });
+    const currentBlocked = normalizeStringArray((currentUser as any).blockedUsers);
+    const otherBlocked = normalizeStringArray((otherUser as any).blockedUsers);
+
+    if (
+      currentBlocked.includes(otherUserId) ||
+      otherBlocked.includes(currentUserId)
+    ) {
+      return res
+        .status(403)
+        .json({ error: "Cannot access messages with this user" });
     }
 
-    const userMessages = await db.select()
+    const userMessages = await db
+      .select()
       .from(messages)
       .where(
         or(
-          and(eq(messages.senderId, currentUserId), eq(messages.receiverId, otherUserId)),
-          and(eq(messages.senderId, otherUserId), eq(messages.receiverId, currentUserId))
+          and(
+            eq(messages.senderId, currentUserId),
+            eq(messages.receiverId, otherUserId)
+          ),
+          and(
+            eq(messages.senderId, otherUserId),
+            eq(messages.receiverId, currentUserId)
+          )
         )
       )
       .orderBy(desc(messages.createdAt))
       .limit(50);
 
-    const decryptedMessages = userMessages.map(msg => {
+    const decryptedMessages = userMessages.map((msg) => {
       let content = msg.content;
+
       if (msg.encryptedContent && msg.encryptionKey) {
         try {
           content = decryptMessage(msg.encryptedContent, msg.encryptionKey);
         } catch (error) {
-          console.error('Failed to decrypt message:', error);
-          content = '[Encrypted message - decryption failed]';
+          console.error("Failed to decrypt message:", error);
+          content = "[Encrypted message - decryption failed]";
         }
       }
+
       return {
         ...msg,
         content,
@@ -57,126 +100,115 @@ router.get('/:userId', authMiddleware, async (req, res) => {
       };
     });
 
-    res.json(decryptedMessages.reverse());
+    return res.json(decryptedMessages.reverse());
   } catch (error) {
-    console.error('Get messages error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Get messages error:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // Send a message
-router.post('/:userId', authMiddleware, canSendDM, async (req, res) => {
+router.post("/:userId", authMiddleware, canSendDM, async (req, res) => {
   try {
-    const senderId = req.session.userId;
-    const receiverId = req.params.userId;
-    const { content } = req.body;
+    const senderId = getSessionUserId(req);
+    const receiverId = getParam(req.params.userId);
+    const content = String(req.body?.content ?? "");
 
-    // Validate content
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      return res.status(400).json({ error: 'Message content is required' });
+    if (!senderId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    if (!receiverId) {
+      return res.status(400).json({ error: "Receiver ID is required" });
+    }
+    if (!content.trim()) {
+      return res.status(400).json({ error: "Message content is required" });
     }
 
-    // Validate receiverUser was set by middleware
     const receiverUser = (req as any).receiverUser;
     if (!receiverUser) {
-      console.error('receiverUser not set by canSendDM middleware');
-      return res.status(403).json({ error: 'Cannot send message to this user' });
+      return res.status(403).json({ error: "Cannot send message to this user" });
     }
 
-    // Validate receiverId matches receiverUser
-    if (receiverUser.id !== receiverId) {
-      return res.status(400).json({ error: 'Receiver ID mismatch' });
+    if (String(receiverUser.id) !== receiverId) {
+      return res.status(400).json({ error: "Receiver ID mismatch" });
     }
 
-    // Verify receiver exists in DB
-    const receiverExists = await db.select()
-      .from(users)
-      .where(eq(users.id, receiverId))
-      .limit(1);
-
-    if (!receiverExists[0]) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    let encryptedContent: string | undefined;
-    let encryptionKey: string | undefined;
+    let encryptedContent: string | null = null;
+    let encryptionKey: string | null = null;
 
     if (receiverUser.encryptMessages) {
       try {
         encryptionKey = generateEncryptionKey();
         encryptedContent = encryptMessage(content, encryptionKey);
       } catch (encryptError) {
-        console.error('Encryption failed:', encryptError);
-        return res.status(500).json({ error: 'Failed to encrypt message' });
+        console.error("Encryption failed:", encryptError);
+        return res.status(500).json({ error: "Failed to encrypt message" });
       }
     }
 
-    let newMessage;
     try {
-      const insertResult = await db.insert(messages).values({
-        senderId,
-        receiverId,
-        content: receiverUser.encryptMessages ? '[Encrypted]' : content,
-        encryptedContent,
-        encryptionKey,
-      }).returning();
+      const [newMessage] = await db
+        .insert(messages)
+        .values({
+          senderId,
+          receiverId,
+          content: receiverUser.encryptMessages ? "[Encrypted]" : content.trim(),
+          encryptedContent,
+          encryptionKey,
+        })
+        .returning();
 
-      if (!insertResult || insertResult.length === 0) {
-        return res.status(500).json({ error: 'Failed to create message' });
+      if (!newMessage) {
+        return res.status(500).json({ error: "Failed to create message" });
       }
 
-      newMessage = insertResult[0];
-    } catch (dbError: any) {
-      console.error('Database error on message insert:', {
-        code: dbError.code,
-        message: dbError.message,
-        constraint: dbError.constraint,
-        detail: dbError.detail
+      return res.status(201).json({
+        ...newMessage,
+        content: receiverUser.encryptMessages ? content.trim() : newMessage.content,
+        encryptedContent: undefined,
+        encryptionKey: undefined,
       });
+    } catch (dbError: any) {
+      console.error("Database error on message insert:", dbError);
 
-      if (dbError.code === '23503') {
-        return res.status(400).json({ error: 'Invalid receiver ID' });
+      if (dbError?.code === "23503") {
+        return res.status(400).json({ error: "Invalid receiver ID" });
       }
-      if (dbError.code === '23505') {
-        return res.status(409).json({ error: 'Message already exists' });
+      if (dbError?.code === "23505") {
+        return res.status(409).json({ error: "Message already exists" });
       }
-      if (dbError.code === '40P01') {
-        return res.status(503).json({ error: 'Server busy, please retry' });
+      if (dbError?.code === "40P01") {
+        return res.status(503).json({ error: "Server busy, please retry" });
       }
 
       throw dbError;
     }
-
-    const responseMessage = {
-      ...newMessage,
-      content: receiverUser.encryptMessages ? content : newMessage.content,
-      encryptedContent: undefined,
-      encryptionKey: undefined,
-    };
-
-    res.json(responseMessage);
   } catch (error: any) {
-    console.error('Send message error:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      code: error.code
-    });
-
-    res.status(500).json({
-      error: 'Failed to send message',
-      ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+    console.error("Send message error:", error);
+    return res.status(500).json({
+      error: "Failed to send message",
+      ...(process.env.NODE_ENV === "development" && {
+        debug: error?.message,
+      }),
     });
   }
 });
 
 // Mark messages as read
-router.put('/:userId/read', authMiddleware, async (req, res) => {
+router.put("/:userId/read", authMiddleware, async (req, res) => {
   try {
-    const currentUserId = req.session.userId;
-    const otherUserId = req.params.userId;
+    const currentUserId = getSessionUserId(req);
+    const otherUserId = getParam(req.params.userId);
 
-    await db.update(messages)
+    if (!currentUserId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    if (!otherUserId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    await db
+      .update(messages)
       .set({ isRead: true, readAt: new Date() })
       .where(
         and(
@@ -186,38 +218,99 @@ router.put('/:userId/read', authMiddleware, async (req, res) => {
         )
       );
 
-    res.json({ message: 'Messages marked as read' });
+    return res.json({ message: "Messages marked as read" });
   } catch (error) {
-    console.error('Mark read error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Mark read error:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Delete a message
-router.delete('/:messageId', authMiddleware, async (req, res) => {
+// Delete ONE message. Only the sender can delete their sent message.
+router.delete("/:messageId", authMiddleware, async (req, res) => {
   try {
-    const userId = req.session.userId;
-    const messageId = parseInt(req.params.messageId);
+    const userId = getSessionUserId(req);
+    const rawMessageId = getParam(req.params.messageId);
+    const messageId = Number(rawMessageId);
 
-    const [message] = await db.select()
-      .from(messages)          // ✅ fixed: was directMessages
+    if (!userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    if (!Number.isInteger(messageId) || messageId <= 0) {
+      return res.status(400).json({ error: "Invalid message ID" });
+    }
+
+    const [message] = await db
+      .select()
+      .from(messages)
       .where(eq(messages.id, messageId))
       .limit(1);
 
     if (!message) {
-      return res.status(404).json({ error: 'Message not found' });
+      return res.status(404).json({ error: "Message not found" });
     }
 
     if (message.senderId !== userId) {
-      return res.status(403).json({ error: 'Cannot delete other users messages' });
+      return res
+        .status(403)
+        .json({ error: "Cannot delete other users' messages" });
     }
 
-    await db.delete(messages).where(eq(messages.id, messageId));   // ✅ fixed: was directMessages
+    await db
+      .delete(messages)
+      .where(
+        and(
+          eq(messages.id, messageId),
+          eq(messages.senderId, userId)
+        )
+      );
 
-    res.json({ message: 'Message deleted successfully' });
+    return res.json({
+      success: true,
+      messageId,
+      message: "Message deleted successfully",
+    });
   } catch (error) {
-    console.error('Delete message error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Delete message error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Delete the entire direct-message history between current user and another user.
+// This removes only rows involving the logged-in user and the selected user.
+router.delete("/conversation/:userId/all", authMiddleware, async (req, res) => {
+  try {
+    const currentUserId = getSessionUserId(req);
+    const otherUserId = getParam(req.params.userId);
+
+    if (!currentUserId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    if (!otherUserId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    await db
+      .delete(messages)
+      .where(
+        or(
+          and(
+            eq(messages.senderId, currentUserId),
+            eq(messages.receiverId, otherUserId)
+          ),
+          and(
+            eq(messages.senderId, otherUserId),
+            eq(messages.receiverId, currentUserId)
+          )
+        )
+      );
+
+    return res.json({
+      success: true,
+      message: "Conversation deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete conversation error:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

@@ -23,7 +23,7 @@ interface ReelPost {
   caption: string | null;
   type: string | null;
   videoUrl: string | null;
-  user?: { id: string; username?: string; profileImageUrl?: string; isFollowing?: boolean };
+  user?: { id: string; username?: string | null; profileImageUrl?: string | null; isFollowing?: boolean };
   likesCount?: number;
   commentsCount?: number;
   hasLiked?: boolean;
@@ -480,7 +480,7 @@ export default function Reels() {
   // plus their goal subjects, so similar hashtag/title videos surface more often.
   const interestTags = new Set<string>(allowedSubjects.map(s => s.toLowerCase()));
   reels.forEach(r => {
-    if (r.hasLiked || r.hasSaved) {
+    if (r.hasLiked || (r as any).hasSaved) {
       extractTags(r.caption).forEach(t => interestTags.add(t));
     }
   });

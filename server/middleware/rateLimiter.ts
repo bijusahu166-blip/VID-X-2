@@ -1,13 +1,30 @@
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
-import { Request } from 'express';
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import type { Request } from "express";
+
+function safeIp(req: Request): string {
+  const forwarded = req.headers["x-forwarded-for"];
+
+  if (typeof forwarded === "string") {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+
+  if (Array.isArray(forwarded) && forwarded[0]) {
+    return String(forwarded[0]);
+  }
+
+  return req.ip || req.socket.remoteAddress || "unknown";
+}
 
 export const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,        
+  windowMs: 60 * 1000,
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later' },
-  skip: (req) => process.env.NODE_ENV !== 'production' || req.path.startsWith('/upload'),
+  message: { error: "Too many requests, please try again later" },
+  skip: (req) =>
+    process.env.NODE_ENV !== "production" ||
+    req.path.startsWith("/upload"),
 });
 
 export const authLimiter = rateLimit({
@@ -15,8 +32,10 @@ export const authLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many login attempts, please try again later' },
-  skip: () => process.env.NODE_ENV !== 'production',
+  message: {
+    error: "Too many login attempts, please try again later",
+  },
+  skip: () => process.env.NODE_ENV !== "production",
 });
 
 export const uploadLimiter = rateLimit({
@@ -24,8 +43,8 @@ export const uploadLimiter = rateLimit({
   max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Upload limit reached, try again in 1 hour' },
-  skip: () => process.env.NODE_ENV !== 'production',
+  message: { error: "Upload limit reached, try again in 1 hour" },
+  skip: () => process.env.NODE_ENV !== "production",
 });
 
 export const searchLimiter = rateLimit({
@@ -33,8 +52,8 @@ export const searchLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Search rate limit exceeded' },
-  skip: () => process.env.NODE_ENV !== 'production',
+  message: { error: "Search rate limit exceeded" },
+  skip: () => process.env.NODE_ENV !== "production",
 });
 
 export const postLimiter = rateLimit({
@@ -42,22 +61,34 @@ export const postLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Posting limit reached, try again later' },
-  skip: () => process.env.NODE_ENV !== 'production',
+  message: { error: "Posting limit reached, try again later" },
+  skip: () => process.env.NODE_ENV !== "production",
 });
 
-// Rate limiter for SMS OTP: max 3 requests per 10 minutes per phone number
+// SMS OTP: max 3 requests per 10 minutes per phone number
 export const smsOtpLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
+  windowMs: 10 * 60 * 1000,
   max: 3,
   standardHeaders: true,
   legacyHeaders: false,
+
   keyGenerator: (req: Request) => {
-    // Use phone number from request body as the key
-    const phone = (req.body?.phone as string) || '';
-    // If no phone provided, fall back to IP address
-    return phone ? `otp-${phone}` : ipKeyGenerator(req);
+    const phone =
+      typeof req.body?.phone === "string"
+        ? req.body.phone.trim()
+        : "";
+
+    if (phone) {
+      return `otp-${phone}`;
+    }
+
+    // express-rate-limit v8 expects an IP string, not Request.
+    return `otp-ip-${ipKeyGenerator(safeIp(req))}`;
   },
-  message: { error: 'Too many OTP requests. Please try again in 10 minutes.' },
-  skip: () => process.env.NODE_ENV !== 'production',
+
+  message: {
+    error: "Too many OTP requests. Please try again in 10 minutes.",
+  },
+
+  skip: () => process.env.NODE_ENV !== "production",
 });

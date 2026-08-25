@@ -1,49 +1,55 @@
-import Redis from 'ioredis';
+import { createClient, type RedisClientType } from "redis";
 
-// Use REDIS_URL from environment (required for production)
-// In development, can be set to redis://localhost:6379
 const redisUrl = process.env.REDIS_URL;
 
-import Redis from 'ioredis';
+let redis: RedisClientType | null = null;
 
-// Use REDIS_URL from environment (required for production)
-// In development, can be set to redis://localhost:6379
-const redisUrl = process.env.REDIS_URL;
-
-const redis = redisUrl ? new Redis(redisUrl, {
-  enableReadyCheck: false,
-  enableOfflineQueue: true,
-  retryStrategy: (times: number) => {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-  maxRetriesPerRequest: null,
-}) : null;
-
-if (redis) {
-  redis.on('connect', () => {
-    console.log('[Redis] Connected to Redis cache');
+if (redisUrl) {
+  redis = createClient({
+    url: redisUrl,
+    socket: {
+      reconnectStrategy: (retries) => Math.min(retries * 50, 2000),
+    },
   });
 
-  redis.on('error', (err) => {
-    console.warn('[Redis] Connection error (will use fallback):', err.message);
+  redis.on("connect", () => {
+    console.log("[Redis] Connecting...");
   });
 
-  redis.on('reconnecting', () => {
-    console.log('[Redis] Reconnecting to Redis...');
+  redis.on("ready", () => {
+    console.log("[Redis] Connected to Redis cache");
   });
 
-  // Graceful shutdown
-  process.on('SIGTERM', async () => {
+  redis.on("reconnecting", () => {
+    console.log("[Redis] Reconnecting to Redis...");
+  });
+
+  redis.on("error", (err: Error) => {
+    console.warn("[Redis] Connection error (will use fallback):", err.message);
+  });
+
+  // Connect without crashing the app if Redis is temporarily unavailable.
+  void redis.connect().catch((err: Error) => {
+    console.warn("[Redis] Initial connection failed (cache disabled until reconnect):", err.message);
+  });
+
+  const shutdownRedis = async () => {
+    if (!redis) return;
+
     try {
-      await redis.quit();
-      console.log('[Redis] Disconnected gracefully');
+      if (redis.isOpen) {
+        await redis.quit();
+      }
+      console.log("[Redis] Disconnected gracefully");
     } catch (err) {
-      console.error('[Redis] Error during shutdown:', err);
+      console.error("[Redis] Error during shutdown:", err);
     }
-  });
+  };
+
+  process.once("SIGTERM", shutdownRedis);
+  process.once("SIGINT", shutdownRedis);
 } else {
-  console.warn('[Redis] REDIS_URL not set - Redis cache is disabled');
+  console.warn("[Redis] REDIS_URL not set - Redis cache is disabled");
 }
 
 export default redis;

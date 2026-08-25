@@ -1566,11 +1566,11 @@ function GroupDetail({ groupId, onBack }: { groupId: number; onBack: () => void 
                   value={postText}
                   onChange={e => setPostText(e.target.value)}
                   className="bg-zinc-900 border-zinc-700 text-white text-sm"
-                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && postText.trim() && postMutation.mutate()}
+                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && postText.trim() && postMutation.mutate({ content: postText.trim() })}
                 />
                 <Button size="sm" className="bg-violet-600 hover:bg-violet-700 px-3"
                   disabled={!postText.trim() || postMutation.isPending}
-                  onClick={() => postMutation.mutate()}>
+                  onClick={() => postMutation.mutate({ content: postText.trim() })}>
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
@@ -2111,4 +2111,3 @@ export default function Groups() {
     </div>
   );
 }
-
