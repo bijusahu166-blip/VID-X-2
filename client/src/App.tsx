@@ -44,10 +44,8 @@ import Notifications from "@/pages/Notifications";
 import Jobs from "@/pages/Jobs";
 import Subscription from "@/pages/Subscription";
 
-// ── API BASE ──────────────────────────────────────────────────────────────
 const API_BASE = Capacitor.isNativePlatform() ? "https://iqpartner.xyz" : "";
 
-// Bottom nav / swipe order
 const SWIPE_TABS = [
   "/",
   "/search",
@@ -57,7 +55,7 @@ const SWIPE_TABS = [
   "/profile",
 ] as const;
 
-const SWIPE_THRESHOLD = 82;
+const SWIPE_THRESHOLD = 80;
 const SWIPE_DOMINANCE = 1.25;
 const NAV_LOCK_MS = 320;
 
@@ -71,7 +69,7 @@ function IntroVideo({ onFinish }: { onFinish: () => void }) {
 
     video.play().catch(() => {
       video.muted = true;
-      video.play().catch(() => onFinish());
+      video.play().catch(onFinish);
     });
   }, [onFinish]);
 
@@ -81,7 +79,7 @@ function IntroVideo({ onFinish }: { onFinish: () => void }) {
   }, [onFinish]);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center">
+    <div className="fixed inset-0 z-[10000] bg-black flex items-center justify-center">
       <video
         ref={videoRef}
         src={introVideo}
@@ -92,10 +90,7 @@ function IntroVideo({ onFinish }: { onFinish: () => void }) {
         onEnded={onFinish}
         onError={onFinish}
         className="w-full h-full object-cover"
-        style={{
-          opacity: ready ? 1 : 0,
-          transition: "opacity 180ms ease",
-        }}
+        style={{ opacity: ready ? 1 : 0, transition: "opacity 180ms ease" }}
       />
     </div>
   );
@@ -105,7 +100,6 @@ function useServerVersionWatcher() {
   const knownVersion = useRef<string | null>(null);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = null;
     let cancelled = false;
 
     const check = async () => {
@@ -114,7 +108,6 @@ function useServerVersionWatcher() {
           cache: "no-store",
           credentials: "include",
         });
-
         if (!res.ok || cancelled) return;
 
         const data = await res.json();
@@ -129,17 +122,15 @@ function useServerVersionWatcher() {
         if (knownVersion.current !== version) {
           window.location.reload();
         }
-      } catch {
-        // Version check must never crash the app.
-      }
+      } catch {}
     };
 
     void check();
-    timer = setInterval(check, 30_000);
+    const timer = window.setInterval(check, 30_000);
 
     return () => {
       cancelled = true;
-      if (timer) clearInterval(timer);
+      window.clearInterval(timer);
     };
   }, []);
 }
@@ -157,13 +148,11 @@ function GlobalCallOverlay() {
   );
 }
 
-// ── Swipe helpers ─────────────────────────────────────────────────────────
-
 function getElement(target: EventTarget | null): HTMLElement | null {
   return target instanceof HTMLElement ? target : null;
 }
 
-function hasSwipeBlocker(target: EventTarget | null): boolean {
+function shouldBlockPageSwipe(target: EventTarget | null): boolean {
   const el = getElement(target);
   if (!el) return false;
 
@@ -173,18 +162,17 @@ function hasSwipeBlocker(target: EventTarget | null): boolean {
         "input",
         "textarea",
         "select",
-        "option",
         "[contenteditable='true']",
-        "[data-no-page-swipe='true']",
         "[role='dialog']",
+        "[data-no-page-swipe='true']",
+        "[data-story-viewer='true']",
+        "[data-live-viewer='true']",
       ].join(",")
     )
   );
 }
 
-function findHorizontalScroller(
-  target: EventTarget | null
-): HTMLElement | null {
+function findHorizontalScroller(target: EventTarget | null): HTMLElement | null {
   let el = getElement(target);
 
   while (el && el !== document.body) {
@@ -204,135 +192,90 @@ function findHorizontalScroller(
   return null;
 }
 
-function shouldProtectGesture(target: EventTarget | null): boolean {
-  const el = getElement(target);
-  if (!el) return false;
-
-  return Boolean(
-    el.closest(
-      [
-        "[data-story-viewer='true']",
-        "[data-live-viewer='true']",
-        "[data-no-page-swipe='true']",
-      ].join(",")
-    )
-  );
-}
-
 function SwipeTabs({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
-
-  const cleanPath = useMemo(
-    () => location.split("?")[0] || "/",
-    [location]
-  );
-
-  const currentIndex = SWIPE_TABS.findIndex(
-    (path) => path === cleanPath
-  );
-
+  const cleanPath = useMemo(() => location.split("?")[0] || "/", [location]);
+  const currentIndex = SWIPE_TABS.findIndex((p) => p === cleanPath);
   const canSwipe = currentIndex >= 0;
 
-  const startXRef = useRef(0);
-  const startYRef = useRef(0);
-  const currentXRef = useRef(0);
-  const currentYRef = useRef(0);
-  const startTimeRef = useRef(0);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const currentX = useRef(0);
+  const currentY = useRef(0);
+  const startedAt = useRef(0);
 
-  const trackingRef = useRef(false);
-  const navLockRef = useRef(false);
-  const horizontalScrollerRef = useRef<HTMLElement | null>(null);
+  const tracking = useRef(false);
+  const locked = useRef(false);
+  const horizontalScroller = useRef<HTMLElement | null>(null);
 
   const [direction, setDirection] = useState<1 | -1>(1);
 
-  const goToIndex = useCallback(
+  const go = useCallback(
     (nextIndex: number, dir: 1 | -1) => {
-      if (navLockRef.current) return;
+      if (locked.current) return;
       if (nextIndex < 0 || nextIndex >= SWIPE_TABS.length) return;
 
-      const nextPath = SWIPE_TABS[nextIndex];
-      if (!nextPath || nextPath === cleanPath) return;
+      const next = SWIPE_TABS[nextIndex];
+      if (!next || next === cleanPath) return;
 
-      navLockRef.current = true;
+      locked.current = true;
       setDirection(dir);
-      navigate(nextPath);
+      navigate(next);
 
       window.setTimeout(() => {
-        navLockRef.current = false;
+        locked.current = false;
       }, NAV_LOCK_MS);
     },
     [cleanPath, navigate]
   );
 
   const handleTouchStart = useCallback(
-    (event: ReactTouchEvent<HTMLDivElement>) => {
-      if (!canSwipe || navLockRef.current) {
-        trackingRef.current = false;
+    (e: ReactTouchEvent<HTMLDivElement>) => {
+      if (!canSwipe || locked.current || shouldBlockPageSwipe(e.target)) {
+        tracking.current = false;
         return;
       }
 
-      if (
-        hasSwipeBlocker(event.target) ||
-        shouldProtectGesture(event.target)
-      ) {
-        trackingRef.current = false;
-        return;
-      }
+      const t = e.touches[0];
+      if (!t) return;
 
-      const touch = event.touches[0];
-      if (!touch) {
-        trackingRef.current = false;
-        return;
-      }
-
-      startXRef.current = touch.clientX;
-      startYRef.current = touch.clientY;
-      currentXRef.current = touch.clientX;
-      currentYRef.current = touch.clientY;
-      startTimeRef.current = Date.now();
-
-      horizontalScrollerRef.current =
-        findHorizontalScroller(event.target);
-
-      trackingRef.current = true;
+      startX.current = t.clientX;
+      startY.current = t.clientY;
+      currentX.current = t.clientX;
+      currentY.current = t.clientY;
+      startedAt.current = Date.now();
+      horizontalScroller.current = findHorizontalScroller(e.target);
+      tracking.current = true;
     },
     [canSwipe]
   );
 
   const handleTouchMove = useCallback(
-    (event: ReactTouchEvent<HTMLDivElement>) => {
-      if (!trackingRef.current || !canSwipe) return;
+    (e: ReactTouchEvent<HTMLDivElement>) => {
+      if (!tracking.current || !canSwipe) return;
 
-      const touch = event.touches[0];
-      if (!touch) return;
+      const t = e.touches[0];
+      if (!t) return;
 
-      currentXRef.current = touch.clientX;
-      currentYRef.current = touch.clientY;
+      currentX.current = t.clientX;
+      currentY.current = t.clientY;
 
-      const dx = touch.clientX - startXRef.current;
-      const dy = touch.clientY - startYRef.current;
+      const dx = t.clientX - startX.current;
+      const dy = t.clientY - startY.current;
 
-      // Vertical page scroll gets priority.
       if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)) {
-        trackingRef.current = false;
+        tracking.current = false;
         return;
       }
 
-      // Horizontal inner carousels get priority while they can still scroll.
-      const scroller = horizontalScrollerRef.current;
+      const scroller = horizontalScroller.current;
       if (scroller && Math.abs(dx) > 12) {
-        const maxScrollLeft =
-          scroller.scrollWidth - scroller.clientWidth;
-
+        const max = scroller.scrollWidth - scroller.clientWidth;
         const atLeft = scroller.scrollLeft <= 2;
-        const atRight =
-          scroller.scrollLeft >= maxScrollLeft - 2;
+        const atRight = scroller.scrollLeft >= max - 2;
 
-        if (
-          (dx < 0 && !atRight) ||
-          (dx > 0 && !atLeft)
-        ) {
-          trackingRef.current = false;
+        if ((dx < 0 && !atRight) || (dx > 0 && !atLeft)) {
+          tracking.current = false;
         }
       }
     },
@@ -340,71 +283,48 @@ function SwipeTabs({ children }: { children: ReactNode }) {
   );
 
   const handleTouchEnd = useCallback(() => {
-    if (
-      !trackingRef.current ||
-      !canSwipe ||
-      navLockRef.current
-    ) {
-      trackingRef.current = false;
-      horizontalScrollerRef.current = null;
+    if (!tracking.current || !canSwipe || locked.current) {
+      tracking.current = false;
+      horizontalScroller.current = null;
       return;
     }
 
-    trackingRef.current = false;
+    tracking.current = false;
 
-    const dx =
-      currentXRef.current - startXRef.current;
-    const dy =
-      currentYRef.current - startYRef.current;
+    const dx = currentX.current - startX.current;
+    const dy = currentY.current - startY.current;
+    const elapsed = Math.max(1, Date.now() - startedAt.current);
 
-    const elapsed = Math.max(
-      1,
-      Date.now() - startTimeRef.current
-    );
-
-    horizontalScrollerRef.current = null;
+    horizontalScroller.current = null;
 
     if (Math.abs(dx) < SWIPE_THRESHOLD) return;
-    if (Math.abs(dx) <= Math.abs(dy) * SWIPE_DOMINANCE)
-      return;
-
+    if (Math.abs(dx) <= Math.abs(dy) * SWIPE_DOMINANCE) return;
     if (elapsed > 1200 && Math.abs(dx) < 140) return;
 
     if (dx < 0) {
-      goToIndex(currentIndex + 1, 1);
+      go(currentIndex + 1, 1);
     } else {
-      goToIndex(currentIndex - 1, -1);
+      go(currentIndex - 1, -1);
     }
-  }, [canSwipe, currentIndex, goToIndex]);
-
-  const handleTouchCancel = useCallback(() => {
-    trackingRef.current = false;
-    horizontalScrollerRef.current = null;
-  }, []);
+  }, [canSwipe, currentIndex, go]);
 
   return (
     <div
-      className="min-h-screen w-full overflow-x-hidden overscroll-x-none"
+      className="min-h-screen w-full overflow-x-hidden"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchCancel}
+      onTouchCancel={() => {
+        tracking.current = false;
+        horizontalScroller.current = null;
+      }}
     >
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={cleanPath}
-          initial={{
-            opacity: 0.97,
-            x: direction === 1 ? 36 : -36,
-          }}
-          animate={{
-            opacity: 1,
-            x: 0,
-          }}
-          exit={{
-            opacity: 0.97,
-            x: direction === 1 ? -36 : 36,
-          }}
+          initial={{ opacity: 0.98, x: direction === 1 ? 34 : -34 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0.98, x: direction === 1 ? -34 : 34 }}
           transition={{
             duration: 0.18,
             ease: [0.22, 1, 0.36, 1],
@@ -431,29 +351,18 @@ function Router() {
     );
   }
 
-  if (!user) {
-    return <Login />;
-  }
+  if (!user) return <Login />;
 
   const localGoal = localStorage.getItem("user_goal");
-
-  if (!(user as any).goal && !localGoal) {
-    return <AimSelection />;
-  }
+  if (!(user as any).goal && !localGoal) return <AimSelection />;
 
   return (
     <>
       <SwipeTabs>
         <Switch>
-          <Route
-            path="/voice-rooms/create"
-            component={VoiceRoomCreate}
-          />
+          <Route path="/voice-rooms/create" component={VoiceRoomCreate} />
           <Route path="/buy-coins" component={BuyCoins} />
-          <Route
-            path="/voice-rooms/:id"
-            component={VoiceRoomScreen}
-          />
+          <Route path="/voice-rooms/:id" component={VoiceRoomScreen} />
 
           <Route path="/" component={Home} />
           <Route path="/search" component={Search} />
@@ -464,19 +373,10 @@ function Router() {
 
           <Route path="/reading" component={Reading} />
           <Route path="/post/:id" component={PostView} />
-          <Route
-            path="/notifications"
-            component={Notifications}
-          />
+          <Route path="/notifications" component={Notifications} />
           <Route path="/profile/:id" component={Profile} />
-          <Route
-            path="/subscription"
-            component={Subscription}
-          />
-          <Route
-            path="/Subscription"
-            component={Subscription}
-          />
+          <Route path="/subscription" component={Subscription} />
+          <Route path="/Subscription" component={Subscription} />
 
           <Route component={NotFound} />
         </Switch>
@@ -497,22 +397,13 @@ function App() {
     if (!Capacitor.isNativePlatform()) return;
 
     const appId = import.meta.env.VITE_ONESIGNAL_APP_ID;
-
-    if (!appId) {
-      console.warn(
-        "[OneSignal] VITE_ONESIGNAL_APP_ID not configured"
-      );
-      return;
-    }
+    if (!appId) return;
 
     try {
       OneSignal.initialize(appId);
       OneSignal.Notifications.requestPermission(true);
-    } catch (error) {
-      console.warn(
-        "[OneSignal] Initialization failed:",
-        error
-      );
+    } catch (err) {
+      console.warn("[OneSignal]", err);
     }
   }, []);
 
@@ -522,20 +413,17 @@ function App() {
     let cancelled = false;
     let removeListener: (() => void) | null = null;
 
-    CapacitorApp.addListener(
-      "appUrlOpen",
-      async (data) => {
-        if (!data?.url?.includes("auth-callback")) return;
+    CapacitorApp.addListener("appUrlOpen", async (data) => {
+      if (!data?.url?.includes("auth-callback")) return;
 
-        try {
-          await Browser.close();
-        } catch {}
+      try {
+        await Browser.close();
+      } catch {}
 
-        if (!cancelled) {
-          window.location.href = "/";
-        }
+      if (!cancelled) {
+        window.location.href = "/";
       }
-    )
+    })
       .then((listener) => {
         if (cancelled) {
           listener.remove();
@@ -582,9 +470,7 @@ function AppContent() {
           const res = await fetch(`${API_BASE}/api/posts`, {
             credentials: "include",
           });
-
           if (!res.ok) return [];
-
           const data = await res.json();
           return Array.isArray(data) ? data : [];
         },
@@ -602,21 +488,14 @@ function AppContent() {
             return Array.isArray(data) ? data : [];
           }
 
-          const fallback = await fetch(
-            `${API_BASE}/api/posts`,
-            {
-              credentials: "include",
-            }
-          );
-
+          const fallback = await fetch(`${API_BASE}/api/posts`, {
+            credentials: "include",
+          });
           if (!fallback.ok) return [];
 
           const posts = await fallback.json();
-
           return Array.isArray(posts)
-            ? posts.filter(
-                (post: any) => post?.type === "story"
-              )
+            ? posts.filter((p: any) => p?.type === "story")
             : [];
         },
       }),
@@ -624,15 +503,10 @@ function AppContent() {
       queryClient.prefetchQuery({
         queryKey: ["/api/voice-rooms"],
         queryFn: async () => {
-          const res = await fetch(
-            `${API_BASE}/api/voice-rooms`,
-            {
-              credentials: "include",
-            }
-          );
-
+          const res = await fetch(`${API_BASE}/api/voice-rooms`, {
+            credentials: "include",
+          });
           if (!res.ok) return [];
-
           const data = await res.json();
           return Array.isArray(data) ? data : [];
         },
@@ -644,9 +518,7 @@ function AppContent() {
           const res = await fetch(`${API_BASE}/api/books`, {
             credentials: "include",
           });
-
           if (!res.ok) return [];
-
           const data = await res.json();
           return Array.isArray(data) ? data : [];
         },
@@ -660,17 +532,12 @@ function AppContent() {
     };
   }, []);
 
-  const showIntro =
-    !videoEnded || authLoading || !dataReady;
+  const showIntro = !videoEnded || authLoading || !dataReady;
 
   return (
     <>
       <Router />
-      {showIntro && (
-        <IntroVideo
-          onFinish={() => setVideoEnded(true)}
-        />
-      )}
+      {showIntro && <IntroVideo onFinish={() => setVideoEnded(true)} />}
     </>
   );
 }

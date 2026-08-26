@@ -986,7 +986,7 @@ filteredPosts.forEach((post, i) => {
         </div>
       </main>
 
-      <BottomNav />
+     
 
       {openCommentPostId !== null && (
         <CommentsDrawer
