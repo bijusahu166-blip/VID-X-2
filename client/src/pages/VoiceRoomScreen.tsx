@@ -1,4 +1,4 @@
-
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, Mic, MicOff, X, Send, Coins, Play, Settings, UserX, UserPlus, Check, Gift,

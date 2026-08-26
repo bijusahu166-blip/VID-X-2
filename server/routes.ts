@@ -1,4 +1,4 @@
-
+import {
   users, posts, comments, savedPosts, reports, notifications, conversations, messages,
   pendingBlocks, blocks, follows, directChats, directMessages,
   restrictedAccounts, hiddenWords, closeFriends, postDrafts, scheduledPosts,
@@ -4447,7 +4447,7 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
       const adsList = await storage.getAdsByPlacement(placement);
       res.json(adsList);
     } catch (err: any) {
-res.status(500).json({ message: err.message });
+      res.status(500).json({ message: err.message });
     }
   });
 
