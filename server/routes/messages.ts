@@ -25,7 +25,13 @@ function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
-// Get messages between current user and another user
+// IMPORTANT:
+// This router is the older user-to-user `messages` API.
+// Do NOT add DELETE /:messageId here when this router is mounted at /api/messages.
+// The main direct-chat system owns DELETE /api/messages/:id and stores rows in
+// `direct_messages`. Having both DELETE routes causes the wrong table to be
+// deleted and makes a message reappear after the direct-chat query refetches.
+
 router.get("/:userId", authMiddleware, async (req, res) => {
   try {
     const currentUserId = getSessionUserId(req);
@@ -107,7 +113,6 @@ router.get("/:userId", authMiddleware, async (req, res) => {
   }
 });
 
-// Send a message
 router.post("/:userId", authMiddleware, canSendDM, async (req, res) => {
   try {
     const senderId = getSessionUserId(req);
@@ -194,7 +199,6 @@ router.post("/:userId", authMiddleware, canSendDM, async (req, res) => {
   }
 });
 
-// Mark messages as read
 router.put("/:userId/read", authMiddleware, async (req, res) => {
   try {
     const currentUserId = getSessionUserId(req);
@@ -221,95 +225,6 @@ router.put("/:userId/read", authMiddleware, async (req, res) => {
     return res.json({ message: "Messages marked as read" });
   } catch (error) {
     console.error("Mark read error:", error);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Delete ONE message. Only the sender can delete their sent message.
-router.delete("/:messageId", authMiddleware, async (req, res) => {
-  try {
-    const userId = getSessionUserId(req);
-    const rawMessageId = getParam(req.params.messageId);
-    const messageId = Number(rawMessageId);
-
-    if (!userId) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
-    if (!Number.isInteger(messageId) || messageId <= 0) {
-      return res.status(400).json({ error: "Invalid message ID" });
-    }
-
-    const [message] = await db
-      .select()
-      .from(messages)
-      .where(eq(messages.id, messageId))
-      .limit(1);
-
-    if (!message) {
-      return res.status(404).json({ error: "Message not found" });
-    }
-
-    if (message.senderId !== userId) {
-      return res
-        .status(403)
-        .json({ error: "Cannot delete other users' messages" });
-    }
-
-    await db
-      .delete(messages)
-      .where(
-        and(
-          eq(messages.id, messageId),
-          eq(messages.senderId, userId)
-        )
-      );
-
-    return res.json({
-      success: true,
-      messageId,
-      message: "Message deleted successfully",
-    });
-  } catch (error) {
-    console.error("Delete message error:", error);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Delete the entire direct-message history between current user and another user.
-// This removes only rows involving the logged-in user and the selected user.
-router.delete("/conversation/:userId/all", authMiddleware, async (req, res) => {
-  try {
-    const currentUserId = getSessionUserId(req);
-    const otherUserId = getParam(req.params.userId);
-
-    if (!currentUserId) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
-    if (!otherUserId) {
-      return res.status(400).json({ error: "User ID is required" });
-    }
-
-    await db
-      .delete(messages)
-      .where(
-        or(
-          and(
-            eq(messages.senderId, currentUserId),
-            eq(messages.receiverId, otherUserId)
-          ),
-          and(
-            eq(messages.senderId, otherUserId),
-            eq(messages.receiverId, currentUserId)
-          )
-        )
-      );
-
-    return res.json({
-      success: true,
-      message: "Conversation deleted successfully",
-    });
-  } catch (error) {
-    console.error("Delete conversation error:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

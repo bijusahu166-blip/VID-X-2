@@ -162,70 +162,99 @@ function useChatSocket(
   chatId: number,
   currentUserId: string,
   onMessage: (msg: DirectMessage) => void,
-  onDelete: (id: number) => void
+  onDelete: (id: number) => void,
+  onClear: () => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  const onMessageRef = useRef(onMessage);
+  const onDeleteRef = useRef(onDelete);
+  const onClearRef = useRef(onClear);
+
+  useEffect(() => { onMessageRef.current = onMessage; }, [onMessage]);
+  useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
+  useEffect(() => { onClearRef.current = onClear; }, [onClear]);
 
   useEffect(() => {
     if (!currentUserId || !chatId) return;
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    wsRef.current = ws;
 
-   function useChatSocket(
-  chatId: number,
-  currentUserId: string,
-  onMessage: (msg: DirectMessage) => void,
-  onDelete: (id: number) => void
-) {
-  const wsRef = useRef<WebSocket | null>(null);
+    mountedRef.current = true;
 
-  useEffect(() => {
-    if (!currentUserId || !chatId) return;
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    wsRef.current = ws;
+    const connect = () => {
+      if (!mountedRef.current) return;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "register", userId: currentUserId }));   // ✅ token ki jagah userId
+      if (
+        wsRef.current &&
+        (wsRef.current.readyState === WebSocket.OPEN ||
+          wsRef.current.readyState === WebSocket.CONNECTING)
+      ) {
+        return;
+      }
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        reconnectAttemptRef.current = 0;
+        ws.send(JSON.stringify({ type: "register", userId: currentUserId }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.chatId !== undefined && Number(data.chatId) !== Number(chatId)) {
+            return;
+          }
+
+          if (data.type === "new_message" && data.message) {
+            onMessageRef.current(data.message);
+            if (data.message.senderId !== currentUserId) playReceive();
+            return;
+          }
+
+          if (data.type === "delete_message" && Number.isFinite(Number(data.messageId))) {
+            onDeleteRef.current(Number(data.messageId));
+            return;
+          }
+
+          if (data.type === "clear_chat") {
+            onClearRef.current();
+          }
+        } catch {}
+      };
+
+      ws.onerror = () => {
+        try { ws.close(); } catch {}
+      };
+
+      ws.onclose = () => {
+        if (!mountedRef.current) return;
+        reconnectAttemptRef.current += 1;
+        const delay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttemptRef.current - 1, 4)), 15000);
+        reconnectTimerRef.current = setTimeout(connect, delay);
+      };
     };
-    ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === "new_message" && data.chatId === chatId) {
-          onMessage(data.message);
-          playReceive();
-        }
-        if (data.type === "delete_message") {
-          onDelete(data.messageId);
-        }
-      } catch { }
+
+    connect();
+
+    return () => {
+      mountedRef.current = false;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      const ws = wsRef.current;
+      wsRef.current = null;
+      if (ws) {
+        ws.onclose = null;
+        try { ws.close(); } catch {}
+      }
     };
-
-    ws.onerror = () => { };
-    ws.onclose = () => { };
-
-    return () => { ws.close(); };
-  }, [chatId, currentUserId]);
-}
-    ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === "new_message" && data.chatId === chatId) {
-          onMessage(data.message);
-          playReceive();
-        }
-        // ✅ FIX: delete_message event handle karo
-        if (data.type === "delete_message") {
-          onDelete(data.messageId);
-        }
-      } catch { }
-    };
-
-    ws.onerror = () => { };
-    ws.onclose = () => { };
-
-    return () => { ws.close(); };
   }, [chatId, currentUserId]);
 }
 
@@ -617,7 +646,10 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
   const [smartReplies, setSmartReplies] = useState<string[]>([]);
   const [replyTo, setReplyTo] = useState<DirectMessage | null>(null);
   const [contextMsg, setContextMsg] = useState<DirectMessage | null>(null);
-  const [showDeleteOptions, setShowDeleteOptions] = useState(false);
+  const [showChatMenu, setShowChatMenu] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const optimisticIdRef = useRef(-1);
   const [showPollForm, setShowPollForm] = useState(false);
   const [pollQ, setPollQ] = useState("");
   const [pollOpts, setPollOpts] = useState(["", ""]);
@@ -652,16 +684,20 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     (newMsg) => {
       qc.setQueryData<DirectMessage[]>(
         ["/api/direct-chats", chat.id, "messages"],
-        (old = []) => [...old, newMsg]
+        (old = []) => old.some((m) => m.id === newMsg.id) ? old : [...old, newMsg]
       );
       qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
     },
     (deletedId) => {
-     
       qc.setQueryData<DirectMessage[]>(
         ["/api/direct-chats", chat.id, "messages"],
-        (old = []) => old.filter(m => m.id !== deletedId)
+        (old = []) => old.filter((m) => m.id !== deletedId)
       );
+      qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
+    },
+    () => {
+      qc.setQueryData<DirectMessage[]>(["/api/direct-chats", chat.id, "messages"], []);
+      qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
     }
   );
 
@@ -724,6 +760,23 @@ const notifyTyping = useCallback(() => {
   }, [chat.id, focusComposer]);
 
   useEffect(() => {
+    const viewport = window.visualViewport;
+    const syncViewport = () => {
+      const height = viewport?.height ?? window.innerHeight;
+      setViewportHeight(Math.max(320, Math.round(height)));
+    };
+    syncViewport();
+    viewport?.addEventListener("resize", syncViewport);
+    viewport?.addEventListener("scroll", syncViewport);
+    window.addEventListener("resize", syncViewport);
+    return () => {
+      viewport?.removeEventListener("resize", syncViewport);
+      viewport?.removeEventListener("scroll", syncViewport);
+      window.removeEventListener("resize", syncViewport);
+    };
+  }, []);
+
+  useEffect(() => {
     const last = messages[messages.length - 1];
     if (!last || last.senderId === currentUserId || last.type !== "text") { setSmartReplies([]); return; }
     const content = decryptedContents[last.id] || last.content;
@@ -740,7 +793,7 @@ const notifyTyping = useCallback(() => {
     await qc.cancelQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
     const previous = qc.getQueryData<DirectMessage[]>(["/api/direct-chats", chat.id, "messages"]);
 
-    const tempId = Date.now();
+    const tempId = optimisticIdRef.current--;
     const optimisticMsg: DirectMessage = {
       id: tempId,
       chatId: chat.id,
@@ -793,33 +846,75 @@ const notifyTyping = useCallback(() => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/messages/${id}`, {}),
-    onSuccess: (_, deletedId) => {
-      qc.setQueryData<DirectMessage[]>(
-        ["/api/direct-chats", chat.id, "messages"],
-        (old = []) => old.filter(m => m.id !== deletedId)
-      );
+    mutationFn: async (id: number) => {
+      const res: any = await apiRequest("DELETE", `/api/messages/${id}`, {});
+      return res?.json ? await res.json() : res;
+    },
+    onMutate: async (id: number) => {
+      const key = ["/api/direct-chats", chat.id, "messages"] as const;
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<DirectMessage[]>(key) ?? [];
+      qc.setQueryData<DirectMessage[]>(key, previous.filter((m) => m.id !== id));
+      return { previous };
+    },
+    onError: (err: any, _id, ctx) => {
+      if (ctx?.previous) qc.setQueryData(["/api/direct-chats", chat.id, "messages"], ctx.previous);
+      toast({ title: "Message not deleted", description: err?.message || "Please try again", variant: "destructive" });
+    },
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
     },
   });
 
-  const hideMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("PATCH", `/api/messages/${id}/hide`, {}),
-    onSuccess: (_, hiddenId) => {
-      qc.setQueryData<DirectMessage[]>(
-        ["/api/direct-chats", chat.id, "messages"],
-        (old = []) => old.filter(m => m.id !== hiddenId)
-      );
+  const deleteAllMutation = useMutation({
+    mutationFn: async () => {
+      const res: any = await apiRequest("DELETE", `/api/direct-chats/${chat.id}/messages`, {});
+      return res?.json ? await res.json() : res;
+    },
+    onMutate: async () => {
+      const key = ["/api/direct-chats", chat.id, "messages"] as const;
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<DirectMessage[]>(key) ?? [];
+      qc.setQueryData<DirectMessage[]>(key, []);
+      return { previous };
+    },
+    onError: (err: any, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(["/api/direct-chats", chat.id, "messages"], ctx.previous);
+      toast({ title: "Chat not deleted", description: err?.message || "Please try again", variant: "destructive" });
+    },
+    onSuccess: () => {
+      setShowDeleteAllConfirm(false);
+      setShowChatMenu(false);
+      setReplyTo(null);
+      setContextMsg(null);
+      setSmartReplies([]);
+      qc.setQueryData<DirectMessage[]>(["/api/direct-chats", chat.id, "messages"], []);
+      qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
+      toast({ title: "All messages deleted" });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["/api/direct-chats", chat.id, "messages"] });
     },
   });
 
   const handleSend = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    const encrypted = await encryptMessage(trimmed, currentUserId, partnerId);
-    sendMsg.mutate({ content: encrypted, type: "text", replyToId: replyTo?.id, expiresInSeconds: disappearing ? 30 : undefined });
+    if (!trimmed || !partnerId) return;
     setText("");
-    playSend();
+    focusComposer();
+    try {
+      const encrypted = await encryptMessage(trimmed, currentUserId, partnerId);
+      sendMsg.mutate({ content: encrypted, type: "text", replyToId: replyTo?.id, expiresInSeconds: disappearing ? 30 : undefined });
+      playSend();
+    } catch (err: any) {
+      setText((current) => current || trimmed);
+      toast({ title: "Message encryption failed", description: err?.message || "Please try again", variant: "destructive" });
+    } finally {
+      focusComposer();
+    }
   };
 
   const handleVoice = async () => {
@@ -907,7 +1002,7 @@ const res: any = await apiRequest("POST", "/api/translate", {
   const pinnedMsgs = messages.filter(m => m.pinnedAt);
 
   return (
-    <div className={cn("flex flex-col h-full", T.bg)}>
+    <div className={cn("flex flex-col w-full overflow-hidden", T.bg)} style={{ height: viewportHeight ? `${viewportHeight}px` : "100dvh" }}>
 
       {/* ✅ Fullscreen Viewer */}
       {fullscreenMedia && (
@@ -960,6 +1055,18 @@ const res: any = await apiRequest("POST", "/api/translate", {
             onClick={() => setShowThemePicker(p => !p)}>
             <Palette className="w-4 h-4 text-zinc-400" />
           </button>
+          <div className="relative">
+            <button type="button" className="w-8 h-8 rounded-full hover:bg-white/8 flex items-center justify-center transition-colors" onClick={() => setShowChatMenu((p) => !p)} aria-label="Chat options">
+              <MoreVertical className="w-4 h-4 text-zinc-400" />
+            </button>
+            {showChatMenu && (
+              <div className="absolute right-0 top-10 z-[70] min-w-[170px] overflow-hidden rounded-2xl border border-white/10 bg-[#171721] shadow-2xl">
+                <button type="button" onClick={() => { setShowChatMenu(false); setShowDeleteAllConfirm(true); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10">
+                  <Trash2 className="w-4 h-4" /> Delete All
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1195,7 +1302,7 @@ const res: any = await apiRequest("POST", "/api/translate", {
       </ScrollArea>
 
       {/* ── Context Menu (long press) ── */}
-      {contextMsg && !showDeleteOptions && (
+      {contextMsg && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end justify-center p-4"
           onClick={() => setContextMsg(null)}>
           <div className="bg-[#1a1a2e] border border-white/8 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl"
@@ -1226,12 +1333,12 @@ const res: any = await apiRequest("POST", "/api/translate", {
                   icon: <Globe className="w-4 h-4 text-zinc-300" />,
                   action: () => { handleTranslate(contextMsg); setContextMsg(null); }
                 },
-                {
+                ...(contextMsg.senderId === currentUserId ? [{
                   label: "Delete",
                   icon: <Trash2 className="w-4 h-4 text-red-400" />,
-                  action: () => setShowDeleteOptions(true),
+                  action: () => { deleteMutation.mutate(contextMsg.id); setContextMsg(null); },
                   danger: true,
-                },
+                }] : []),
               ].map(item => (
                 <button key={item.label} onClick={item.action}
                   className={cn("w-full flex items-center gap-4 px-5 py-3.5 text-sm hover:bg-white/4 active:bg-white/6 transition-colors",
@@ -1245,34 +1352,17 @@ const res: any = await apiRequest("POST", "/api/translate", {
         </div>
       )}
 
-      {/* ── Delete Options ── */}
-      {contextMsg && showDeleteOptions && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end justify-center p-4"
-          onClick={() => { setContextMsg(null); setShowDeleteOptions(false); }}>
-          <div className="bg-[#1a1a2e] border border-white/8 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl"
-            onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-white/6">
-              <p className="font-semibold text-base">Delete message?</p>
-              <p className="text-xs text-zinc-500 mt-0.5">This action cannot be undone</p>
+      {/* ── Delete All confirmation ── */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 z-[80] bg-black/75 backdrop-blur-sm flex items-end justify-center p-4" onClick={() => { if (!deleteAllMutation.isPending) setShowDeleteAllConfirm(false); }}>
+          <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-[#171721] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-5 border-b border-white/8">
+              <p className="text-base font-semibold text-white">Delete all messages?</p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">Every message in this chat will be permanently deleted. This cannot be undone.</p>
             </div>
-            <div className="py-2">
-             <button onClick={() => { hideMutation.mutate(contextMsg.id); setContextMsg(null); setShowDeleteOptions(false); }}
-                className="w-full flex items-center gap-4 px-5 py-3.5 text-sm hover:bg-white/4 transition-colors text-zinc-200">
-                <Trash2 className="w-4 h-4 text-zinc-400" />
-                Delete for me
-              </button>
-              {contextMsg.senderId === currentUserId && (
-                <button onClick={() => { deleteMutation.mutate(contextMsg.id); setContextMsg(null); setShowDeleteOptions(false); }}
-                  className="w-full flex items-center gap-4 px-5 py-3.5 text-sm hover:bg-red-500/8 transition-colors text-red-400">
-                  <Trash2 className="w-4 h-4" />
-                  Delete for everyone
-                </button>
-              )}
-              <button onClick={() => { setContextMsg(null); setShowDeleteOptions(false); }}
-                className="w-full flex items-center gap-4 px-5 py-3.5 text-sm hover:bg-white/4 transition-colors text-zinc-500">
-                <X className="w-4 h-4" />
-                Cancel
-              </button>
+            <div className="p-3 grid grid-cols-2 gap-2">
+              <button type="button" disabled={deleteAllMutation.isPending} onClick={() => setShowDeleteAllConfirm(false)} className="rounded-2xl bg-white/7 px-4 py-3 text-sm text-zinc-200 disabled:opacity-50">Cancel</button>
+              <button type="button" disabled={deleteAllMutation.isPending} onClick={() => deleteAllMutation.mutate()} className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">{deleteAllMutation.isPending ? "Deleting..." : "Delete All"}</button>
             </div>
           </div>
         </div>
@@ -1428,6 +1518,7 @@ const res: any = await apiRequest("POST", "/api/translate", {
           {text.trim() ? (
   <motion.button
     whileTap={{ scale: 0.85 }}
+    onPointerDown={(e) => e.preventDefault()}
     onClick={handleSend}
     className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 transition-shadow">
     <Send className="w-4 h-4 text-white" />
