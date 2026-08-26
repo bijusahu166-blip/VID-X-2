@@ -1,4 +1,4 @@
-import {
+
   users, posts, comments, savedPosts, reports, notifications, conversations, messages,
   pendingBlocks, blocks, follows, directChats, directMessages,
   restrictedAccounts, hiddenWords, closeFriends, postDrafts, scheduledPosts,
@@ -491,19 +491,77 @@ async function ensureJobsTable() {
 }
 
 await ensureJobsTable();
-  // Permanent Voice Room unlock
-async function ensureVoiceRoomUnlockColumn() {
-  try {
-    await db.execute(sql`
-      ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS voice_room_unlocked BOOLEAN DEFAULT FALSE
-    `);
-  } catch (error) {
-    console.error("[voice room unlock column]", error);
-  }
-}
+  // Permanent Voice Room unlock.
+  // V2 uses 10 successfully published Education-category posts.
+  async function ensureVoiceRoomUnlockColumn() {
+    try {
+      await db.execute(sql`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS voice_room_unlocked BOOLEAN DEFAULT FALSE
+      `);
 
-await ensureVoiceRoomUnlockColumn();
+      // Separate V2 flag prevents the old "4 videos + 3 posts" rule from
+      // accidentally keeping a user unlocked after the rule changed.
+      await db.execute(sql`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS voice_room_education_unlocked BOOLEAN DEFAULT FALSE
+      `);
+    } catch (error) {
+      console.error("[voice room unlock column]", error);
+    }
+  }
+
+  await ensureVoiceRoomUnlockColumn();
+
+  const VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS = 10;
+
+  async function getEducationalPostCount(userId: string): Promise<number> {
+    const rows = await db.execute(sql`
+      SELECT COUNT(*) AS cnt
+      FROM posts
+      WHERE user_id = ${userId}
+        AND type IN ('post', 'video', 'reel')
+        AND COALESCE(caption, '') ILIKE '%#Education%'
+    `);
+
+    return Number(((rows as any).rows ?? rows)[0]?.cnt ?? 0);
+  }
+
+  async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
+    educationalPostCount: number;
+    voiceRoomUnlocked: boolean;
+  }> {
+    const educationalPostCount = await getEducationalPostCount(userId);
+
+    const userRows = await db.execute(sql`
+      SELECT voice_room_education_unlocked
+      FROM users
+      WHERE id = ${userId}
+      LIMIT 1
+    `);
+
+    let voiceRoomUnlocked =
+      !!((userRows as any).rows ?? userRows)[0]?.voice_room_education_unlocked;
+
+    if (
+      !voiceRoomUnlocked &&
+      educationalPostCount >= VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS
+    ) {
+      await db.execute(sql`
+        UPDATE users
+        SET voice_room_education_unlocked = TRUE,
+            voice_room_unlocked = TRUE
+        WHERE id = ${userId}
+      `);
+
+      voiceRoomUnlocked = true;
+    }
+
+    return {
+      educationalPostCount,
+      voiceRoomUnlocked,
+    };
+  }
 
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
@@ -1424,12 +1482,54 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-  app.post(api.posts.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.posts.create.path, isAuthenticated, async (req: any, res) => {
     try {
-      const post = await storage.createPost({ ...req.body, userId: (req.session as any).userId });
-      res.status(201).json(post);
+      const userId = String(req.session?.userId ?? "");
+
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // storage.createPost finishing successfully is the source of truth:
+      // failed uploads/posts never increment eligibility.
+      const post = await storage.createPost({
+        ...req.body,
+        userId,
+      });
+
+      let voiceRoomProgress:
+        | {
+            educationalPostCount: number;
+            requiredEducationalPosts: number;
+            voiceRoomUnlocked: boolean;
+          }
+        | undefined;
+
+      const caption = String((post as any)?.caption ?? req.body?.caption ?? "");
+      const type = String((post as any)?.type ?? req.body?.type ?? "");
+
+      const isEducational =
+        ["post", "video", "reel"].includes(type) &&
+        /(^|\s)#education(?:\s|$|[^a-z0-9_])/i.test(caption);
+
+      if (isEducational) {
+        const refreshed = await refreshVoiceRoomEducationUnlock(userId);
+
+        voiceRoomProgress = {
+          ...refreshed,
+          requiredEducationalPosts: VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS,
+        };
+      }
+
+      return res.status(201).json({
+        ...(post as any),
+        ...(voiceRoomProgress ? { voiceRoomProgress } : {}),
+      });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      console.error("[post create]", err);
+      return res.status(500).json({
+        message: err?.message || "Failed to create post",
+      });
     }
   });
 
@@ -2107,32 +2207,36 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     }
   });
 
-  const VOICE_ROOM_REQUIRED_VIDEOS = 4;
-const VOICE_ROOM_REQUIRED_POSTS = 3;
+  app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = String(req.session.userId ?? "");
 
-app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
-  try {
-    const userId = req.session.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
 
-    const videoRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM posts WHERE user_id = ${userId} AND type = 'video'`);
-    const postRows = await db.execute(sql`SELECT COUNT(*) as cnt FROM posts WHERE user_id = ${userId} AND type = 'post'`);
-    const videoCount = parseInt(((videoRows as any).rows ?? videoRows)[0]?.cnt ?? "0");
-    const postCount = parseInt(((postRows as any).rows ?? postRows)[0]?.cnt ?? "0");
+      const {
+        educationalPostCount,
+        voiceRoomUnlocked,
+      } = await refreshVoiceRoomEducationUnlock(userId);
 
-    const userRows = await db.execute(sql`SELECT voice_room_unlocked FROM users WHERE id = ${userId}`);
-    let voiceRoomUnlocked = !!((userRows as any).rows ?? userRows)[0]?.voice_room_unlocked;
+      return res.json({
+        educationalPostCount,
+        requiredEducationalPosts: VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS,
+        voiceRoomUnlocked,
 
-    // Agar abhi tak unlock nahi hua, har stats-check pe recheck karo (frontend har 3 sec poll karta hai)
-    if (!voiceRoomUnlocked && videoCount >= VOICE_ROOM_REQUIRED_VIDEOS && postCount >= VOICE_ROOM_REQUIRED_POSTS) {
-      await db.execute(sql`UPDATE users SET voice_room_unlocked = TRUE WHERE id = ${userId}`);
-      voiceRoomUnlocked = true;
+        // Keep these legacy keys temporarily so an older deployed frontend
+        // does not crash while clients update.
+        videoCount: 0,
+        postCount: educationalPostCount,
+      });
+    } catch (err: any) {
+      console.error("[creator stats]", err);
+      return res.status(500).json({
+        message: err?.message || "Could not load creator stats",
+      });
     }
-
-    res.json({ videoCount, postCount, voiceRoomUnlocked });
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  });
   // ══════════════════════════════════════════════════════════════════════════
   // USER ROUTES
   // ══════════════════════════════════════════════════════════════════════════
@@ -3563,60 +3667,26 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
   // Room banao (host). Host seat #1 is ALWAYS Team A in battle rooms.
   app.post("/api/voice-rooms", isAuthenticated, async (req: any, res: any) => {
     try {
-      const hostId = req.session.userId;
-      // ── Permanent Voice Room eligibility ──
-const userRows = await db.execute(sql`
-  SELECT voice_room_unlocked
-  FROM users
-  WHERE id = ${hostId}
-`);
+      const hostId = String(req.session?.userId ?? "");
 
-const user = ((userRows as any).rows ?? userRows)[0];
+      if (!hostId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
 
-let voiceRoomUnlocked = !!user?.voice_room_unlocked;
+      // Server-side enforcement: frontend cannot bypass this.
+      const {
+        educationalPostCount,
+        voiceRoomUnlocked,
+      } = await refreshVoiceRoomEducationUnlock(hostId);
 
-// Agar pehle unlock nahi hua, current counts check karo
-if (!voiceRoomUnlocked) {
-  const videoRows = await db.execute(sql`
-    SELECT COUNT(*) AS cnt
-    FROM posts
-    WHERE user_id = ${hostId}
-      AND type = 'video'
-  `);
-
-  const postRows = await db.execute(sql`
-    SELECT COUNT(*) AS cnt
-    FROM posts
-    WHERE user_id = ${hostId}
-      AND type = 'post'
-  `);
-
-  const videoCount = Number(
-    ((videoRows as any).rows ?? videoRows)[0]?.cnt ?? 0
-  );
-
-  const postCount = Number(
-    ((postRows as any).rows ?? postRows)[0]?.cnt ?? 0
-  );
-
-  // BOTH required: 4 videos + 3 posts
-  if (videoCount >= 4 && postCount >= 3) {
-    await db.execute(sql`
-      UPDATE users
-      SET voice_room_unlocked = TRUE
-      WHERE id = ${hostId}
-    `);
-
-    voiceRoomUnlocked = true;
-  }
-}
-
-// Abhi criteria complete nahi hua
-if (!voiceRoomUnlocked) {
-  return res.status(403).json({
-    message: "Voice Room unlocks after 4 videos and 3 posts",
-  });
-}
+      if (!voiceRoomUnlocked) {
+        return res.status(403).json({
+          code: "VOICE_ROOM_LOCKED",
+          message: `Voice Room unlocks after ${VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS} Educational posts`,
+          educationalPostCount,
+          requiredEducationalPosts: VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS,
+        });
+      }
       const { title, requiresApproval, roomType } = req.body;
       const normalizedType = ROOM_TYPE_SEATS[roomType] ? roomType : "group";
       const maxSeats = ROOM_TYPE_SEATS[normalizedType];
@@ -4377,7 +4447,7 @@ if (!voiceRoomUnlocked) {
       const adsList = await storage.getAdsByPlacement(placement);
       res.json(adsList);
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+res.status(500).json({ message: err.message });
     }
   });
 

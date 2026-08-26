@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+
 import { useLocation, useParams } from "wouter";
 import {
-  ArrowLeft, Mic, MicOff, X, Send, Coins, Play, Settings, UserX, Check, Gift,
+  ArrowLeft, Mic, MicOff, X, Send, Coins, Play, Settings, UserX, UserPlus, Check, Gift,
   Shield, Lock, Unlock, Volume2, VolumeX, Trash2, Ban,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -139,6 +139,115 @@ export default function VoiceRoomScreen() {
   // Guard against `room.seats` being missing on a malformed/partial API response —
   // without the extra `?.` here a network hiccup would crash the whole screen.
   const mySeat = room?.seats?.find(s => s.user_id === currentUserId);
+
+  // ── Host follow status ──
+  // Only viewers need this. The host never sees a Follow button for themselves.
+  const { data: hostFollowData } = useQuery<{ following: boolean }>({
+    queryKey: ["/api/users", room?.host_id, "follow-status"],
+    queryFn: async () => {
+      const hostId = room?.host_id;
+      if (!hostId || hostId === currentUserId) return { following: false };
+
+      const res = await fetch(`/api/users/${hostId}/follow-status`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (!res.ok) return { following: false };
+
+      const data = await res.json().catch(() => ({}));
+      return { following: Boolean(data?.following) };
+    },
+    enabled: !!room?.host_id && room.host_id !== currentUserId,
+    staleTime: 5000,
+  });
+
+  const isFollowingHost = Boolean(hostFollowData?.following);
+
+  const hostFollowMutation = useMutation({
+    mutationFn: async (nextFollowing: boolean) => {
+      const hostId = room?.host_id;
+
+      if (!hostId || hostId === currentUserId) {
+        return { following: false };
+      }
+
+      const res = await fetch(`/api/users/${hostId}/follow`, {
+        method: nextFollowing ? "POST" : "DELETE",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.message || "Could not update follow");
+      }
+
+      return {
+        following: Boolean(data?.following),
+      };
+    },
+
+    // Optimistic UI: Follow -> Following instantly on tap.
+    onMutate: async (nextFollowing: boolean) => {
+      const hostId = room?.host_id;
+      if (!hostId) return;
+
+      const key = ["/api/users", hostId, "follow-status"];
+
+      await qc.cancelQueries({
+        queryKey: key,
+      });
+
+      const previous =
+        qc.getQueryData<{ following: boolean }>(key);
+
+      qc.setQueryData(key, {
+        following: nextFollowing,
+      });
+
+      return {
+        previous,
+        key,
+      };
+    },
+
+    onError: (err: any, _nextFollowing, context) => {
+      if (context?.key) {
+        qc.setQueryData(
+          context.key,
+          context.previous ?? { following: false }
+        );
+      }
+
+      toast({
+        title: "Could not update follow",
+        description: err?.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+
+    onSuccess: (data) => {
+      const hostId = room?.host_id;
+      if (!hostId) return;
+
+      qc.setQueryData(
+        ["/api/users", hostId, "follow-status"],
+        { following: data.following }
+      );
+
+      qc.invalidateQueries({
+        queryKey: ["/api/users", hostId],
+      });
+
+      qc.invalidateQueries({
+        queryKey: ["/api/profile"],
+      });
+    },
+  });
 
   const { data: joinRequests = [] } = useQuery<JoinRequest[]>({
     queryKey: ["/api/voice-rooms", roomId, "join-requests"],
@@ -767,38 +876,80 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
           const isSpeaking = speakingUsers.has(stringToNumericUid(seat.user_id));
           const canControl = isHost && seat.user_id !== room.host_id;
           return (
-            <button
+            <div
               key={seat.id}
-              onClick={() => {
-                if (canControl) { setSelectedSeat(seat); return; }
-                if (seat.user_id !== currentUserId) { setGiftTargetUserId(seat.user_id); setShowGiftPicker(true); }
-              }}
-              className="flex flex-col items-center gap-1"
+              className="flex flex-col items-center gap-1 min-w-0"
             >
-              <div className="relative">
-                <div className={`w-14 h-14 rounded-full overflow-hidden ring-2 transition-all ${
-                  isSpeaking
-                    ? "ring-4 ring-green-400 shadow-[0_0_16px_4px_rgba(74,222,128,0.6)] animate-pulse"
-                    : "ring-pink-500/50"
-                }`}>
-                  <img
-                    src={seat.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${seat.user_id}`}
-                    className="w-full h-full object-cover"
-                  />
+              {/* Follow button appears directly ABOVE the host only for other users */}
+              {seat.user_id === room.host_id && seat.user_id !== currentUserId ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!hostFollowMutation.isPending) {
+                      hostFollowMutation.mutate(!isFollowingHost);
+                    }
+                  }}
+                  disabled={hostFollowMutation.isPending}
+                  className={`mb-1 h-6 px-2.5 rounded-full text-[9px] font-black flex items-center justify-center gap-1 transition-all active:scale-95 disabled:opacity-60 ${
+                    isFollowingHost
+                      ? "bg-white/10 border border-white/15 text-zinc-200"
+                      : "bg-gradient-to-r from-pink-500 to-violet-600 text-white shadow-[0_0_10px_rgba(236,72,153,0.35)]"
+                  }`}
+                >
+                  {!isFollowingHost && <UserPlus className="w-2.5 h-2.5" />}
+                  {isFollowingHost ? "Following" : "Follow"}
+                </button>
+              ) : (
+                <div className="h-7" />
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (canControl) {
+                    setSelectedSeat(seat);
+                    return;
+                  }
+
+                  if (seat.user_id !== currentUserId) {
+                    setGiftTargetUserId(seat.user_id);
+                    setShowGiftPicker(true);
+                  }
+                }}
+                className="flex flex-col items-center gap-1 min-w-0"
+              >
+                <div className="relative">
+                  <div className={`w-14 h-14 rounded-full overflow-hidden ring-2 transition-all ${
+                    isSpeaking
+                      ? "ring-4 ring-green-400 shadow-[0_0_16px_4px_rgba(74,222,128,0.6)] animate-pulse"
+                      : "ring-pink-500/50"
+                  }`}>
+                    <img
+                      src={seat.profile_image_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${seat.user_id}`}
+                      alt={seat.first_name || "Voice room user"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  {seat.user_id === room.host_id && (
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[7px] font-black px-1.5 py-0.5 rounded-full">
+                      HOST
+                    </span>
+                  )}
+
+                  {seat.is_muted && (
+                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                      <MicOff className="w-2.5 h-2.5 text-white" />
+                    </span>
+                  )}
                 </div>
-                {seat.user_id === room.host_id && (
-                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[7px] font-black px-1.5 py-0.5 rounded-full">
-                    HOST
-                  </span>
-                )}
-                {seat.is_muted && (
-                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
-                    <MicOff className="w-2.5 h-2.5 text-white" />
-                  </span>
-                )}
-              </div>
-              <span className="text-[9px] text-zinc-300 truncate max-w-[56px]">{seat.first_name}</span>
-            </button>
+
+                <span className="text-[9px] text-zinc-300 truncate max-w-[56px]">
+                  {seat.first_name}
+                </span>
+              </button>
+            </div>
           );
         })}
         {Array.from({ length: emptySeatSlots }).map((_, i) => (

@@ -792,9 +792,25 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
         ? `${videoTitle}${videoDesc ? `\n${videoDesc}` : ""}`
         : caption;
 
+    // Persist content category without requiring a DB schema migration.
+    // Voice-room eligibility reads the #Education tag from successfully
+    // published posts. Apply category to post/video/reel, never story/job.
+    const categoryTag = selectedCategory
+      ? `#${selectedCategory.replace(/\s+/g, "")}`
+      : "";
+
+    const categoryEligibleType =
+      uploadType === "post" ||
+      uploadType === "video" ||
+      uploadType === "reel";
+
+    const alreadyHasCategory =
+      !!categoryTag &&
+      finalCaption.toLowerCase().includes(categoryTag.toLowerCase());
+
     const captionWithCategory =
-      uploadType === "video" && selectedCategory
-        ? `${finalCaption}\n#${selectedCategory}`.trim()
+      categoryEligibleType && categoryTag && !alreadyHasCategory
+        ? `${finalCaption}\n${categoryTag}`.trim()
         : finalCaption;
 
     const DEFAULT_THUMB =
@@ -2050,6 +2066,38 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
                 />
               </div>
 
+              {/* Category — required for real Educational-post eligibility */}
+              {(uploadType === "post" || uploadType === "reel") && (
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Tag className="w-3 h-3" /> Category
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CATEGORIES.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                          selectedCategory === cat
+                            ? cat === "Education"
+                              ? "bg-green-500/20 border-green-500/60 text-green-300"
+                              : "bg-purple-500/20 border-purple-500/60 text-purple-300"
+                            : "bg-white/5 border-white/10 text-zinc-500 hover:border-white/25 hover:text-white"
+                        }`}
+                      >
+                        {cat === "Education" ? "🎓 Education" : cat}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedCategory === "Education" && (
+                    <p className="text-[10px] text-green-400">
+                      ✓ This successful post will count toward Voice Room unlock.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <Button type="submit" className="w-full h-11 rounded-xl font-bold bg-gradient-to-r from-primary to-accent relative overflow-hidden" disabled={createPost.isPending || isUploadingVideo || isCompressing}>
                 {isCompressing ? (
                   <>
@@ -2089,4 +2137,3 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
     </Dialog>
   );
 }
-
