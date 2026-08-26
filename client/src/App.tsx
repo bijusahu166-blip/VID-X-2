@@ -21,6 +21,7 @@ import {
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from "react";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { AnimatePresence, motion } from "framer-motion";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -356,35 +357,35 @@ function Router() {
   const localGoal = localStorage.getItem("user_goal");
   if (!(user as any).goal && !localGoal) return <AimSelection />;
 
-  return (
-    <>
-      <SwipeTabs>
-        <Switch>
-          <Route path="/voice-rooms/create" component={VoiceRoomCreate} />
-          <Route path="/buy-coins" component={BuyCoins} />
-          <Route path="/voice-rooms/:id" component={VoiceRoomScreen} />
+ return (
+  <>
+    <SwipeTabs>
+      <Switch>
+        <Route path="/voice-rooms/create" component={VoiceRoomCreate} />
+        <Route path="/buy-coins" component={BuyCoins} />
+        <Route path="/voice-rooms/:id" component={VoiceRoomScreen} />
 
-          <Route path="/" component={Home} />
-          <Route path="/search" component={Search} />
-          <Route path="/jobs" component={Jobs} />
-          <Route path="/reels" component={Reels} />
-          <Route path="/messages" component={Messages} />
-          <Route path="/profile" component={Profile} />
+        <Route path="/" component={Home} />
+        <Route path="/search" component={Search} />
+        <Route path="/jobs" component={Jobs} />
+        <Route path="/reels" component={Reels} />
+        <Route path="/messages" component={Messages} />
+        <Route path="/profile" component={Profile} />
 
-          <Route path="/reading" component={Reading} />
-          <Route path="/post/:id" component={PostView} />
-          <Route path="/notifications" component={Notifications} />
-          <Route path="/profile/:id" component={Profile} />
-          <Route path="/subscription" component={Subscription} />
-          <Route path="/Subscription" component={Subscription} />
+        <Route path="/reading" component={Reading} />
+        <Route path="/post/:id" component={PostView} />
+        <Route path="/notifications" component={Notifications} />
+        <Route path="/profile/:id" component={Profile} />
+        <Route path="/subscription" component={Subscription} />
 
-          <Route component={NotFound} />
-        </Switch>
-      </SwipeTabs>
+        <Route component={NotFound} />
+      </Switch>
+    </SwipeTabs>
 
-      <GlobalCallOverlay />
-    </>
-  );
+    <BottomNav />
+    <GlobalCallOverlay />
+  </>
+);
 }
 
 function App() {
