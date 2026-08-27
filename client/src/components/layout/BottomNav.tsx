@@ -37,8 +37,34 @@ function isActiveRoute(location: string, href: string) {
   return path === href;
 }
 
+/**
+ * Chat detail routes should NOT show the global BottomNav.
+ *
+ * Supported examples:
+ *   /messages
+ *   /messages/123
+ *   /messages/123?...
+ *   /messages?chat=123
+ *
+ * The list page `/messages` keeps the BottomNav.
+ * A specific conversation hides it.
+ */
+function isMessageDetailRoute(location: string) {
+  const path = location.split("?")[0] || "/";
+
+  // `/messages` = inbox/list → BottomNav stays visible
+  if (path === "/messages") {
+    return false;
+  }
+
+  // `/messages/:chatId` = opened conversation → hide BottomNav
+  return /^\/messages\/[^/]+$/.test(path);
+}
+
 export function BottomNav() {
   const [location] = useLocation();
+
+  const hideOnMessageDetail = isMessageDetailRoute(location);
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
@@ -54,6 +80,15 @@ export function BottomNav() {
       ? { ...item, badge: unreadCount }
       : item
   );
+
+  /*
+   * IMPORTANT:
+   * Return before createPortal so absolutely nothing is mounted
+   * on the chat-detail screen.
+   */
+  if (hideOnMessageDetail) {
+    return null;
+  }
 
   const content = (
     <nav
@@ -131,7 +166,9 @@ export function BottomNav() {
     </nav>
   );
 
-  if (typeof document === "undefined") return null;
+  if (typeof document === "undefined") {
+    return null;
+  }
 
   return createPortal(content, document.body);
 }

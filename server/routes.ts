@@ -515,17 +515,59 @@ await ensureJobsTable();
 
   const VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS = 10;
 
-  async function getEducationalPostCount(userId: string): Promise<number> {
-    const rows = await db.execute(sql`
-      SELECT COUNT(*) AS cnt
-      FROM posts
-      WHERE user_id = ${userId}
-        AND type IN ('post', 'video', 'reel')
-        AND COALESCE(caption, '') ILIKE '%#Education%'
+ const VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS = 10;
+
+async function getEducationalVideoCount(userId: string): Promise<number> {
+  const rows = await db.execute(sql`
+    SELECT COUNT(*) AS cnt
+    FROM posts
+    WHERE user_id = ${userId}
+      AND type IN ('video', 'reel')
+      AND COALESCE(caption, '') ILIKE '%#Education%'
+  `);
+
+  return Number(((rows as any).rows ?? rows)[0]?.cnt ?? 0);
+}
+
+async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
+  educationalVideoCount: number;
+  voiceRoomUnlocked: boolean;
+}> {
+  const educationalVideoCount =
+    await getEducationalVideoCount(userId);
+
+  const userRows = await db.execute(sql`
+    SELECT voice_room_education_unlocked
+    FROM users
+    WHERE id = ${userId}
+    LIMIT 1
+  `);
+
+  let voiceRoomUnlocked =
+    !!((userRows as any).rows ?? userRows)[0]
+      ?.voice_room_education_unlocked;
+
+  // 🔓 AUTOMATIC UNLOCK AT 10 EDUCATIONAL VIDEOS
+  if (
+    !voiceRoomUnlocked &&
+    educationalVideoCount >= VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS
+  ) {
+    await db.execute(sql`
+      UPDATE users
+      SET
+        voice_room_education_unlocked = TRUE,
+        voice_room_unlocked = TRUE
+      WHERE id = ${userId}
     `);
 
-    return Number(((rows as any).rows ?? rows)[0]?.cnt ?? 0);
+    voiceRoomUnlocked = true;
   }
+
+  return {
+    educationalVideoCount,
+    voiceRoomUnlocked,
+  };
+}
 
   async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
     educationalPostCount: number;
@@ -1517,7 +1559,7 @@ app.post("/api/auth/register", async (req, res) => {
 
         voiceRoomProgress = {
           ...refreshed,
-          requiredEducationalPosts: VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS,
+          requiredEducationalVideos: VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS,
         };
       }
 
@@ -2215,21 +2257,21 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
         return res.status(401).json({ message: "Not authenticated" });
       }
 
-      const {
-        educationalPostCount,
-        voiceRoomUnlocked,
-      } = await refreshVoiceRoomEducationUnlock(userId);
+     const {
+  educationalVideoCount,
+  voiceRoomUnlocked,
+} = await refreshVoiceRoomEducationUnlock(userId);
 
-      return res.json({
-        educationalPostCount,
-        requiredEducationalPosts: VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS,
-        voiceRoomUnlocked,
+return res.json({
+  educationalVideoCount,
+  requiredEducationalVideos:
+    VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS,
+  voiceRoomUnlocked,
 
-        // Keep these legacy keys temporarily so an older deployed frontend
-        // does not crash while clients update.
-        videoCount: 0,
-        postCount: educationalPostCount,
-      });
+  // Legacy fields — old frontend crash na kare
+  videoCount: educationalVideoCount,
+  postCount: 0,
+});
     } catch (err: any) {
       console.error("[creator stats]", err);
       return res.status(500).json({
@@ -3674,17 +3716,17 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
       }
 
       // Server-side enforcement: frontend cannot bypass this.
-      const {
-        educationalPostCount,
-        voiceRoomUnlocked,
-      } = await refreshVoiceRoomEducationUnlock(hostId);
+       const {
+  educationalVideoCount,
+  voiceRoomUnlocked,
+} = await refreshVoiceRoomEducationUnlock(hostId);
 
       if (!voiceRoomUnlocked) {
         return res.status(403).json({
           code: "VOICE_ROOM_LOCKED",
           message: `Voice Room unlocks after ${VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS} Educational posts`,
-          educationalPostCount,
-          requiredEducationalPosts: VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS,
+          educationalVideoCount,
+          requiredEducationalvideo: VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS,
         });
       }
       const { title, requiresApproval, roomType } = req.body;
