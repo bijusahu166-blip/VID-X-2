@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { createPortal } from "react-dom";
 
 type NavItem = {
   id: string;
@@ -331,12 +330,5 @@ export function BottomNav() {
     </nav>
   );
 
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    content,
-    document.body
-  );
+ return content;
 }
