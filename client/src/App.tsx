@@ -320,21 +320,27 @@ function SwipeTabs({ children }: { children: ReactNode }) {
         horizontalScroller.current = null;
       }}
     >
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={cleanPath}
-          initial={{ opacity: 0.98, x: direction === 1 ? 34 : -34 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0.98, x: direction === 1 ? -34 : 34 }}
-          transition={{
-            duration: 0.18,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          className="min-h-screen w-full will-change-transform"
-        >
-          {children}
-        </motion.div>
-      </AnimatePresence>
+     {canSwipe ? (
+  <AnimatePresence mode="wait" initial={false}>
+    <motion.div
+      key={cleanPath}
+      initial={{ opacity: 0.98, x: direction === 1 ? 34 : -34 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0.98, x: direction === 1 ? -34 : 34 }}
+      transition={{
+        duration: 0.18,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      className="min-h-screen w-full will-change-transform"
+    >
+      {children}
+    </motion.div>
+  </AnimatePresence>
+) : (
+  <div className="min-h-screen w-full">
+    {children}
+  </div>
+)}
     </div>
   );
 }

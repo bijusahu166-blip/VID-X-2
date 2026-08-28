@@ -3547,10 +3547,8 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
   // ══════════════════════════════════════════════════════════════════════════
 
   const PLAN_IDS: Record<string, string> = {
-    premium: process.env.RAZORPAY_PLAN_PREMIUM!,
-    creator_pro: process.env.RAZORPAY_PLAN_CREATOR_PRO!,
-    business: process.env.RAZORPAY_PLAN_BUSINESS!,
-  };
+  signature: process.env.RAZORPAY_PLAN_SIGNATURE!,
+};
 
   app.get("/api/subscription/mine", isAuthenticated, async (req: any, res) => {
     try {
@@ -3571,50 +3569,89 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
     }
   });
 
-  app.post("/api/subscription/create", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.session.userId;
-      const { planType } = req.body;
-      const normalizedPlanType = planType === "pro" ? "pro" : planType;
-      const planId = PLAN_IDS[normalizedPlanType];
-      if (!normalizedPlanType || !["pro", "creator_pro", "business"].includes(normalizedPlanType)) {
-        return res.status(400).json({ message: "Invalid plan type" });
-      }
+ app.post("/api/subscription/create", isAuthenticated, async (req: any, res: any) => {
+  try {
+    const userId = String(req.session?.userId ?? "");
+    const { planType } = req.body ?? {};
 
-      const [row] = await db.select({ isPro: users.isPro, subscriptionStatus: users.subscriptionStatus }).from(users).where(eq(users.id, userId)).limit(1);
-      if (row?.isPro || row?.subscriptionStatus === "active") {
-        return res.status(400).json({ message: "You already have an active subscription" });
-      }
-
-      if (!planId || !process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-        await db.update(users).set({
-          isPro: true,
-          subscriptionStatus: "active",
-          subscriptionPlan: normalizedPlanType,
-          updatedAt: new Date(),
-        }).where(eq(users.id, userId));
-
-        return res.json({ success: true, subscriptionId: `local-${normalizedPlanType}`, keyId: process.env.RAZORPAY_KEY_ID || "local" });
-      }
-
-      const subscription = await razorpay.subscriptions.create({
-        plan_id: planId,
-        customer_notify: 1,
-        total_count: 12,
+    if (!userId) {
+      return res.status(401).json({
+        message: "Not authenticated",
       });
-
-      await db.update(users).set({
-        isPro: true,
-        subscriptionStatus: "active",
-        subscriptionPlan: normalizedPlanType,
-        updatedAt: new Date(),
-      }).where(eq(users.id, userId));
-
-      res.json({ subscriptionId: subscription.id, keyId: process.env.RAZORPAY_KEY_ID });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message || "Subscription creation failed" });
     }
-  });
+
+    // Only one subscription is available now.
+    if (planType !== "signature") {
+      return res.status(400).json({
+        message: "Invalid plan type",
+      });
+    }
+
+    const planId = PLAN_IDS.signature;
+
+    if (!planId) {
+      return res.status(500).json({
+        message:
+          "Premium Signature Razorpay plan is not configured. Add RAZORPAY_PLAN_SIGNATURE in Render Environment Variables.",
+      });
+    }
+
+    if (
+      !process.env.RAZORPAY_KEY_ID ||
+      !process.env.RAZORPAY_KEY_SECRET
+    ) {
+      return res.status(500).json({
+        message:
+          "Razorpay keys are not configured on the server.",
+      });
+    }
+
+    const [row] = await db
+      .select({
+        isPro: users.isPro,
+        subscriptionStatus: users.subscriptionStatus,
+        subscriptionPlan: users.subscriptionPlan,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (row?.subscriptionStatus === "active") {
+      return res.status(400).json({
+        message: "You already have an active subscription",
+      });
+    }
+
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: planId,
+      customer_notify: 1,
+      total_count: 1,
+      notes: {
+        user_id: userId,
+        plan_type: "signature",
+      },
+    });
+
+    // IMPORTANT:
+    // Do NOT activate Premium here.
+    // Activation should happen only after successful payment/webhook.
+
+    return res.status(200).json({
+      success: true,
+      subscriptionId: subscription.id,
+      keyId: process.env.RAZORPAY_KEY_ID,
+    });
+  } catch (err: any) {
+    console.error("[subscription create]", err);
+
+    return res.status(500).json({
+      message:
+        err?.error?.description ||
+        err?.message ||
+        "Subscription creation failed",
+    });
+  }
+});
 
   // Razorpay Dashboard → Webhooks me ye URL add karni hogi (Step 6 me detail)
   app.post(
