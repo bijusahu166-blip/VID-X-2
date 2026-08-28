@@ -435,8 +435,9 @@ function OtherUserProfile({ userId }: { userId: string }) {
   const { data: profileData, isLoading } = useQuery<any>({
     queryKey: ["/api/users", userId],
     queryFn: () => fetch(`/api/users/${userId}`, { credentials: "include" }).then(r => r.json()),
-    refetchInterval: 15000,
-    staleTime: 5000,
+    staleTime: 10000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
  const { data: userPosts, isLoading: postsLoading } = useQuery<any[]>({
@@ -755,7 +756,7 @@ const sortedUserPosts = (userPosts ?? [])
     </div>
   );
 }
-export default function Profile() {
+function OwnProfile() {
   const [, navigate] = useLocation();
   const params = useParams<{ id?: string }>();
   const { user, logout, isLoading: authLoading } = useAuth();
@@ -777,6 +778,10 @@ export default function Profile() {
   const { data: profile, error: profileError, isLoading: profileLoading } = useQuery({
     queryKey: ["/api/profile"],
     queryFn: () => apiRequest("GET", "/api/profile").then((res) => res.json()),
+    enabled: !!user?.id,
+    staleTime: 10000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   const { data: viewedUser, error: viewedUserError, isLoading: viewedUserLoading } = useQuery({
@@ -789,8 +794,9 @@ export default function Profile() {
     queryKey: ["/api/users", user?.id],
     queryFn: () => apiRequest("GET", `/api/users/${user?.id}`).then((res) => res.json()),
     enabled: !!user?.id,
-    refetchInterval: 15000,
-    staleTime: 5000,
+    staleTime: 10000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   queryKey: ["/api/user/saved"],
@@ -864,9 +870,13 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
     onError: (err: any) => toast({ title: "Couldn't submit request", description: err.message, variant: "destructive" }),
   });
 
-  const { data: history, error: historyError, isLoading: historyLoading } = useQuery<any[]>({ 
+  const { data: history, error: historyError, isLoading: historyLoading } = useQuery<any[]>({
     queryKey: ["/api/history"],
     queryFn: () => apiRequest("GET", "/api/history").then((res) => res.json()),
+    enabled: !!user?.id,
+    staleTime: 10000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   // Determine current profile user
@@ -875,6 +885,9 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   const { data: xpData, error: xpError, isLoading: xpLoading } = useQuery<{ totalXP: number; xpInLevel: number; xpMax: number; level: number; breakdown: any }>({
     queryKey: ["/api/profile/xp"],
     queryFn: () => apiRequest("GET", "/api/profile/xp").then((res) => res.json()),
+    enabled: !!user?.id,
+    staleTime: 10000,
+    refetchOnWindowFocus: false,
     retry: false,
   });
   const { data: profileBooksData = [], isLoading: booksLoading } = useQuery<any[]>({
@@ -2732,4 +2745,26 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
 // so it doesn't clash with the lucide-react CheckCheck import used elsewhere)
 function CheckCheckIconPlaceholder(props: any) {
   return <MessageSquare {...props} />;
+}
+
+// Route-aware wrapper: other profiles render without running all of the
+// own-profile queries/settings at the same time. This prevents unnecessary
+// API/database connections when opening another user's profile.
+export default function Profile() {
+  const params = useParams<{ id?: string }>();
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+      </div>
+    );
+  }
+
+  if (params.id && String(params.id) !== String(user?.id)) {
+    return <OtherUserProfile userId={String(params.id)} />;
+  }
+
+  return <OwnProfile />;
 }

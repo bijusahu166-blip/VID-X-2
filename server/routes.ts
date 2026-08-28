@@ -513,22 +513,50 @@ await ensureJobsTable();
 
   await ensureVoiceRoomUnlockColumn();
 
-  const VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS = 10;
+const VOICE_ROOM_REQUIRED_POSTS = 10;
 
- const VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS = 10;
-
-async function getEducationalVideoCount(userId: string): Promise<number> {
+async function getUserPostCount(userId: string): Promise<number> {
   const rows = await db.execute(sql`
     SELECT COUNT(*) AS cnt
     FROM posts
     WHERE user_id = ${userId}
-      AND type IN ('video', 'reel')
-      AND COALESCE(caption, '') ILIKE '%#Education%'
+      AND type IN ('post', 'video', 'reel')
   `);
 
   return Number(((rows as any).rows ?? rows)[0]?.cnt ?? 0);
 }
 
+async function refreshVoiceRoomUnlock(userId: string): Promise<{
+  postCount: number;
+  voiceRoomUnlocked: boolean;
+}> {
+  const postCount = await getUserPostCount(userId);
+
+  const userRows = await db.execute(sql`
+    SELECT voice_room_unlocked
+    FROM users
+    WHERE id = ${userId}
+    LIMIT 1
+  `);
+
+  let voiceRoomUnlocked =
+    !!((userRows as any).rows ?? userRows)[0]?.voice_room_unlocked;
+
+  if (!voiceRoomUnlocked && postCount >= VOICE_ROOM_REQUIRED_POSTS) {
+    await db.execute(sql`
+      UPDATE users
+      SET voice_room_unlocked = TRUE
+      WHERE id = ${userId}
+    `);
+
+    voiceRoomUnlocked = true;
+  }
+
+  return {
+    postCount,
+    voiceRoomUnlocked,
+  };
+}
 async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
   educationalVideoCount: number;
   voiceRoomUnlocked: boolean;
@@ -2249,36 +2277,31 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     }
   });
 
-  app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = String(req.session.userId ?? "");
+app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = String(req.session.userId ?? "");
 
-      if (!userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-     const {
-  educationalVideoCount,
-  voiceRoomUnlocked,
-} = await refreshVoiceRoomEducationUnlock(userId);
-
-return res.json({
-  educationalVideoCount,
-  requiredEducationalVideos:
-    VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS,
-  voiceRoomUnlocked,
-
-  // Legacy fields — old frontend crash na kare
-  videoCount: educationalVideoCount,
-  postCount: 0,
-});
-    } catch (err: any) {
-      console.error("[creator stats]", err);
-      return res.status(500).json({
-        message: err?.message || "Could not load creator stats",
-      });
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
     }
-  });
+
+    const { postCount, voiceRoomUnlocked } =
+      await refreshVoiceRoomUnlock(userId);
+
+    return res.json({
+      postCount,
+      requiredPosts: VOICE_ROOM_REQUIRED_POSTS,
+      voiceRoomUnlocked,
+    });
+  } catch (err: any) {
+    console.error("[creator stats]", err);
+
+    return res.status(500).json({
+      message: err?.message || "Could not load creator stats",
+    });
+  }
+}); 
+
   // ══════════════════════════════════════════════════════════════════════════
   // USER ROUTES
   // ══════════════════════════════════════════════════════════════════════════
@@ -3716,19 +3739,19 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
       }
 
       // Server-side enforcement: frontend cannot bypass this.
-       const {
-  educationalVideoCount,
+      const {
+  postCount,
   voiceRoomUnlocked,
-} = await refreshVoiceRoomEducationUnlock(hostId);
+} = await refreshVoiceRoomUnlock(hostId);
 
-      if (!voiceRoomUnlocked) {
-        return res.status(403).json({
-          code: "VOICE_ROOM_LOCKED",
-          message: `Voice Room unlocks after ${VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS} Educational posts`,
-          educationalVideoCount,
-          requiredEducationalvideo: VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS,
-        });
-      }
+if (!voiceRoomUnlocked) {
+  return res.status(403).json({
+    code: "VOICE_ROOM_LOCKED",
+    message: `Voice Room unlocks after ${VOICE_ROOM_REQUIRED_POSTS} posts`,
+    postCount,
+    requiredPosts: VOICE_ROOM_REQUIRED_POSTS,
+  });
+}
       const { title, requiresApproval, roomType } = req.body;
       const normalizedType = ROOM_TYPE_SEATS[roomType] ? roomType : "group";
       const maxSeats = ROOM_TYPE_SEATS[normalizedType];
