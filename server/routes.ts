@@ -1509,8 +1509,8 @@ app.post("/api/auth/register", async (req, res) => {
     signature_expires_at
   FROM users
   WHERE id IN ${userIds}
-`)
-    db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM likes WHERE post_id IN ${postIds} GROUP BY post_id`),
+`),
+  db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM likes WHERE post_id IN ${postIds} GROUP BY post_id`),
   db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM comments WHERE post_id IN ${postIds} GROUP BY post_id`),
   db.execute(sql`SELECT post_id FROM likes WHERE post_id IN ${postIds} AND user_id = ${sessionUserId}`),
   db.execute(sql`SELECT post_id FROM saved_posts WHERE post_id IN ${postIds} AND user_id = ${sessionUserId}`),
