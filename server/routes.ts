@@ -513,50 +513,22 @@ await ensureJobsTable();
 
   await ensureVoiceRoomUnlockColumn();
 
-const VOICE_ROOM_REQUIRED_POSTS = 10;
+const VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS = 10;
 
-async function getUserPostCount(userId: string): Promise<number> {
+async function getEducationalVideoCount(userId: string): Promise<number> {
   const rows = await db.execute(sql`
     SELECT COUNT(*) AS cnt
     FROM posts
     WHERE user_id = ${userId}
-      AND type IN ('post', 'video', 'reel')
+      AND type IN ('video', 'reel')
+      AND COALESCE(caption, '') ILIKE '%#Education%'
   `);
 
-  return Number(((rows as any).rows ?? rows)[0]?.cnt ?? 0);
+  return Number(
+    ((rows as any).rows ?? rows)[0]?.cnt ?? 0
+  );
 }
 
-async function refreshVoiceRoomUnlock(userId: string): Promise<{
-  postCount: number;
-  voiceRoomUnlocked: boolean;
-}> {
-  const postCount = await getUserPostCount(userId);
-
-  const userRows = await db.execute(sql`
-    SELECT voice_room_unlocked
-    FROM users
-    WHERE id = ${userId}
-    LIMIT 1
-  `);
-
-  let voiceRoomUnlocked =
-    !!((userRows as any).rows ?? userRows)[0]?.voice_room_unlocked;
-
-  if (!voiceRoomUnlocked && postCount >= VOICE_ROOM_REQUIRED_POSTS) {
-    await db.execute(sql`
-      UPDATE users
-      SET voice_room_unlocked = TRUE
-      WHERE id = ${userId}
-    `);
-
-    voiceRoomUnlocked = true;
-  }
-
-  return {
-    postCount,
-    voiceRoomUnlocked,
-  };
-}
 async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
   educationalVideoCount: number;
   voiceRoomUnlocked: boolean;
@@ -575,10 +547,11 @@ async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
     !!((userRows as any).rows ?? userRows)[0]
       ?.voice_room_education_unlocked;
 
-  // 🔓 AUTOMATIC UNLOCK AT 10 EDUCATIONAL VIDEOS
+  // Automatically unlock after 10 Educational videos.
   if (
     !voiceRoomUnlocked &&
-    educationalVideoCount >= VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS
+    educationalVideoCount >=
+      VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS
   ) {
     await db.execute(sql`
       UPDATE users
@@ -596,7 +569,6 @@ async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
     voiceRoomUnlocked,
   };
 }
-
   async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
     educationalPostCount: number;
     voiceRoomUnlocked: boolean;
@@ -1522,8 +1494,23 @@ app.post("/api/auth/register", async (req, res) => {
     const postIds = finalPosts.map((p: any) => p.id);
     const userIds = [...new Set(finalPosts.map((p: any) => String(p.user_id)))];
    const [usersRows, likesRows, commentsRows, likedRows, savedRows] = await Promise.all([
-  db.execute(sql`SELECT id, first_name, last_name, username, profile_image_url FROM users WHERE id IN ${userIds}`),
-  db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM likes WHERE post_id IN ${postIds} GROUP BY post_id`),
+   db.execute(sql`
+  SELECT
+    id,
+    first_name,
+    last_name,
+    username,
+    profile_image_url,
+    subscription_status,
+    subscription_plan,
+    premium_signature,
+    signature_style,
+    signature_active,
+    signature_expires_at
+  FROM users
+  WHERE id IN ${userIds}
+`)
+    db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM likes WHERE post_id IN ${postIds} GROUP BY post_id`),
   db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM comments WHERE post_id IN ${postIds} GROUP BY post_id`),
   db.execute(sql`SELECT post_id FROM likes WHERE post_id IN ${postIds} AND user_id = ${sessionUserId}`),
   db.execute(sql`SELECT post_id FROM saved_posts WHERE post_id IN ${postIds} AND user_id = ${sessionUserId}`),

@@ -920,14 +920,51 @@ filteredPosts.forEach((post, i) => {
                         {post.caption || `${post.user?.firstName}'s ${post.type === "live" ? "Live Stream" : post.type === "reel" ? "Reel" : post.type === "story" ? "Story" : "Post"}`}
                       </p>
                       <div className="flex items-center gap-1 text-[11px] text-zinc-500">
-                        <button
-                          className="flex items-center gap-1 hover:text-white transition-colors"
-                          onClick={() => navigate(`/profile/${post.userId}`)}
-                          data-testid={`link-user-${post.userId}`}
-                        >
-                          @{(post.user as any)?.username || post.user?.firstName?.toLowerCase()}
-                          {post.user?.isCelebrity && <CheckCircle2 className="w-3 h-3 text-blue-400 fill-blue-400" />}
-                        </button>
+                      <button
+  className="flex flex-wrap items-center gap-1 hover:text-white transition-colors text-left"
+  onClick={() => navigate(`/profile/${post.userId}`)}
+  data-testid={`link-user-${post.userId}`}
+>
+  <span>
+    @{(post.user as any)?.username ||
+      post.user?.firstName?.toLowerCase()}
+  </span>
+
+  {post.user?.isCelebrity && (
+    <CheckCircle2 className="w-3 h-3 text-blue-400 fill-blue-400" />
+  )}
+
+  {(post.user as any)?.signatureActive &&
+   (post.user as any)?.premiumSignature &&
+   (
+     !(post.user as any)?.signatureExpiresAt ||
+     new Date(
+       (post.user as any).signatureExpiresAt
+     ) > new Date()
+   ) && (
+    <span
+      title="Premium Signature"
+      className="
+        inline-flex
+        items-center
+        gap-0.5
+        px-1.5
+        py-0.5
+        rounded-full
+        bg-gradient-to-r
+        from-pink-500/20
+        to-violet-500/20
+        border
+        border-pink-400/30
+        text-pink-300
+        text-[8px]
+        font-bold
+      "
+    >
+      ✦ Premium
+    </span>
+  )}
+</button>
                            <FollowButtonSmall userId={post.userId} currentUserId={user?.id} />
                         <span>·</span>
                         <span>{post.likesCount || 0} likes</span>

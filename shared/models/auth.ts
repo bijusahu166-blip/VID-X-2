@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, timestamp, varchar, boolean, integer } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, timestamp, varchar, boolean, integer, text } from "drizzle-orm/pg-core";
 
 // Session storage table.
 export const sessions = pgTable(
@@ -13,8 +13,9 @@ export const sessions = pgTable(
 );
 
 // User storage table.
-export const users = pgTable("users", {
+ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
   email: varchar("email").unique(),
   password: varchar("password"),
   firstName: varchar("first_name"),
@@ -22,7 +23,14 @@ export const users = pgTable("users", {
   username: varchar("username").unique(),
   profileImageUrl: varchar("profile_image_url"),
   bio: varchar("bio"),
-  pet: varchar("pet"), // JSON string like '{"name":"Buddy","emoji":"🐶"}'
+  pet: varchar("pet"),
+
+  // Premium Signature
+  premiumSignature: text("premium_signature"),
+  signatureStyle: text("signature_style"),
+  signatureActive: boolean("signature_active").default(false),
+  signatureExpiresAt: timestamp("signature_expires_at"),
+
   isCelebrity: boolean("is_celebrity").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -49,12 +57,12 @@ export const users = pgTable("users", {
   subscriptionStatus: varchar("subscription_status").default("inactive"),
   subscriptionPlan: varchar("subscription_plan"),
   languagePreference: varchar("language_preference").default("en"),
-  blockedUsers: jsonb("blocked_users").default([]), // Array of user IDs
-  mutedUsers: jsonb("muted_users").default([]), // Array of user IDs
-  closeFriends: jsonb("close_friends").default([]), // Array of user IDs
-  contentVisibility: varchar("content_visibility").default("public"), // "public", "friends", "private"
-  storyVisibility: varchar("story_visibility").default("public"), // "public", "friends", "close_friends"
-  messagePrivacy: varchar("message_privacy").default("everyone"), // "everyone", "followers", "following", "none"
+  blockedUsers: jsonb("blocked_users").default([]),
+  mutedUsers: jsonb("muted_users").default([]),
+  closeFriends: jsonb("close_friends").default([]),
+  contentVisibility: varchar("content_visibility").default("public"),
+  storyVisibility: varchar("story_visibility").default("public"),
+  messagePrivacy: varchar("message_privacy").default("everyone"),
 },
 (table) => [
   index("IDX_users_email").on(table.email),

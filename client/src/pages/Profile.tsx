@@ -645,13 +645,67 @@ const sortedUserPosts = (userPosts ?? [])
         {/* Name + action buttons */}
         <div className="flex items-start justify-between mb-4">
           <div>
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-lg font-black text-white">{name}</h1>
-              {u?.isCelebrity && <span className="text-blue-400 text-sm">✓</span>}
-            </div>
-            <p className="text-[12px] text-pink-400/70 font-mono mt-0.5">
-              @{u?.username || u?.firstName?.toLowerCase() || "user"}
-            </p>
+           <div className="flex items-center gap-1.5 flex-wrap">
+  <h1 className="text-lg font-black text-white">
+    {name}
+  </h1>
+
+  {u?.isCelebrity && (
+    <span className="text-blue-400 text-sm">
+      ✓
+    </span>
+  )}
+
+  {u?.signatureActive &&
+   u?.premiumSignature &&
+   (
+     !u?.signatureExpiresAt ||
+     new Date(u.signatureExpiresAt) > new Date()
+   ) && (
+    <span
+      title="Premium Signature"
+      className="
+        inline-flex
+        items-center
+        gap-0.5
+        px-2
+        py-0.5
+        rounded-full
+        bg-gradient-to-r
+        from-pink-500/20
+        to-violet-500/20
+        border
+        border-pink-400/30
+        text-pink-300
+        text-[8px]
+        font-bold
+      "
+    >
+      ✦ Premium
+    </span>
+  )}
+</div>
+
+<p className="text-[12px] text-pink-400/70 font-mono mt-0.5">
+  @{u?.username || u?.firstName?.toLowerCase() || "user"}
+</p>
+
+{u?.signatureActive &&
+ u?.premiumSignature &&
+ (
+   !u?.signatureExpiresAt ||
+   new Date(u.signatureExpiresAt) > new Date()
+ ) && (
+  <div
+    className="mt-1 text-2xl text-white leading-tight"
+    style={{
+      fontFamily:
+        u?.signatureStyle || "cursive",
+    }}
+  >
+    {u.premiumSignature}
+  </div>
+)}
             {u?.bio && <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{u.bio}</p>}
           </div>
           {/* Follow + Message buttons */}

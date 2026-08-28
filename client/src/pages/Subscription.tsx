@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Header } from "@/components/layout/Header";
-import { ArrowLeft, Check, Loader2, Crown, Sparkles, Briefcase } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Loader2,
+  Sparkles,
+  PenTool,
+} from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useTranslation } from "@/contexts/LanguageContext";
 
 declare global {
   interface Window {
@@ -15,170 +20,557 @@ declare global {
 
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
+
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
+
     document.body.appendChild(script);
   });
 }
 
-const PLANS = [
-  {
-    type: "pro",
-    name: "Pro",
-    price: 50,
-    icon: Sparkles,
-    color: "#60a5fa",
-    features: ["No ads", "Pro chat UI modes", "Premium themes", "Priority support"],
-  },
-  {
-    type: "creator_pro",
-    name: "Creator Pro",
-    price: 299,
-    icon: Crown,
-    color: "#f472b6",
-    features: ["Everything in Pro", "Advanced analytics", "Higher upload limits", "Creator tools", "Priority support"],
-  },
-  {
-    type: "business",
-    name: "Business",
-    price: 999,
-    icon: Briefcase,
-    color: "#fbbf24",
-    features: ["Everything in Creator Pro", "Business profile", "Verified business badge", "Advertising tools"],
-  },
-];
+const SIGNATURE_PLAN = {
+  type: "signature",
+  name: "Premium Signature",
+  price: 99,
+  duration: "3 Months",
+  features: [
+    "Premium Signature on your profile",
+    "Choose from 10 attractive signature styles",
+    "Show your signature with your name",
+    "Signature appears with your uploaded posts",
+    "Premium profile appearance",
+  ],
+};
 
 export default function Subscription() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [subscribingType, setSubscribingType] = useState<string | null>(null);
-  const { t } = useTranslation();
 
-  const { data } = useQuery<{ subscription: any }>({
+  const [subscribing, setSubscribing] = useState(false);
+
+  const { data, isLoading } = useQuery<{
+    subscription: any;
+  }>({
     queryKey: ["/api/subscription/mine"],
     queryFn: async () => {
-      const res = await fetch("/api/subscription/mine", { credentials: "include" });
+      const res = await fetch("/api/subscription/mine", {
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        throw new Error("Could not load subscription");
+      }
+
       return res.json();
     },
   });
 
   const activePlan = data?.subscription?.plan_type;
 
-  const handleSubscribe = async (planType: string) => {
-    setSubscribingType(planType);
+  const isSignatureActive =
+    activePlan === "signature";
+
+  const handleSubscribe = async () => {
+    if (subscribing || isSignatureActive) return;
+
+    setSubscribing(true);
+
     try {
       const loaded = await loadRazorpayScript();
-      if (!loaded) throw new Error("Could not load payment gateway");
 
-      const res: any = await apiRequest("POST", "/api/subscription/create", { planType });
-      const orderData = res.json ? await res.json() : res;
+      if (!loaded) {
+        throw new Error(
+          "Could not load payment gateway"
+        );
+      }
+
+      /*
+       * Backend must create the Razorpay subscription
+       * for the "signature" plan.
+       */
+      const res: any = await apiRequest(
+        "POST",
+        "/api/subscription/create",
+        {
+          planType: "signature",
+        }
+      );
+
+      const orderData =
+        res.json ? await res.json() : res;
+
+      if (!orderData?.subscriptionId) {
+        throw new Error(
+          "Subscription could not be created"
+        );
+      }
 
       const options = {
         key: orderData.keyId,
-        subscription_id: orderData.subscriptionId,
+
+        subscription_id:
+          orderData.subscriptionId,
+
         name: "IQPartner",
-        description: `${planType} subscription`,
+
+        description:
+          "Premium Signature · ₹99 · 3 Months",
+
         handler: async () => {
-          qc.invalidateQueries({ queryKey: ["/api/subscription/mine"] });
-          qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
-          qc.invalidateQueries({ queryKey: ["/api/profile"] });
-          toast({ title: "Subscription activated!" });
-          setSubscribingType(null);
+          /*
+           * Refresh subscription/user data after
+           * Razorpay checkout completes.
+           */
+          await qc.invalidateQueries({
+            queryKey: ["/api/subscription/mine"],
+          });
+
+          await qc.invalidateQueries({
+            queryKey: ["/api/auth/user"],
+          });
+
+          await qc.invalidateQueries({
+            queryKey: ["/api/profile"],
+          });
+
+          toast({
+            title:
+              "Premium Signature activated! ✨",
+            description:
+              "Your ₹99 Premium Signature is active for 3 months.",
+          });
+
+          setSubscribing(false);
+
+          /*
+           * Go back to profile where the user can
+           * complete/select their signature.
+           */
+          navigate("/profile");
         },
+
         modal: {
-          ondismiss: () => setSubscribingType(null),
+          ondismiss: () => {
+            setSubscribing(false);
+          },
         },
-        theme: { color: "#ec4899" },
+
+        theme: {
+          color: "#ec4899",
+        },
       };
 
-      const rzp = new window.Razorpay(options);
+      const rzp =
+        new window.Razorpay(options);
+
       rzp.open();
     } catch (err: any) {
-      toast({ title: "Could not start subscription", description: err.message, variant: "destructive" });
-      setSubscribingType(null);
+      toast({
+        title:
+          "Could not start subscription",
+        description:
+          err?.message ||
+          "Please try again.",
+        variant: "destructive",
+      });
+
+      setSubscribing(false);
     }
   };
 
   const handleCancel = async () => {
     try {
-      await apiRequest("POST", "/api/subscription/cancel", {});
-      qc.invalidateQueries({ queryKey: ["/api/subscription/mine"] });
-      qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      qc.invalidateQueries({ queryKey: ["/api/profile"] });
-      toast({ title: "Subscription cancelled" });
+      await apiRequest(
+        "POST",
+        "/api/subscription/cancel",
+        {}
+      );
+
+      await qc.invalidateQueries({
+        queryKey: ["/api/subscription/mine"],
+      });
+
+      await qc.invalidateQueries({
+        queryKey: ["/api/auth/user"],
+      });
+
+      await qc.invalidateQueries({
+        queryKey: ["/api/profile"],
+      });
+
+      toast({
+        title: "Subscription cancelled",
+      });
     } catch (err: any) {
-      toast({ title: "Could not cancel", description: err.message, variant: "destructive" });
+      toast({
+        title: "Could not cancel",
+        description:
+          err?.message ||
+          "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   return (
-    <div className="min-h-screen bg-black pb-10">
+    <div className="min-h-screen bg-black text-white pb-10">
       <Header />
-      <main className="mx-auto max-w-[480px] px-4" style={{ paddingTop: "var(--header-total)" }}>
+
+      <main
+        className="mx-auto max-w-[480px] px-4"
+        style={{
+          paddingTop: "var(--header-total)",
+        }}
+      >
+        {/* Header */}
         <div className="flex items-center gap-3 py-4">
-          <button onClick={() => navigate("/")} className="w-8 h-8 rounded-full bg-white/6 flex items-center justify-center">
+          <button
+            onClick={() => navigate("/")}
+            className="
+              w-8 h-8
+              rounded-full
+              bg-white/10
+              flex
+              items-center
+              justify-center
+              hover:bg-white/15
+              transition-colors
+            "
+            aria-label="Go back"
+          >
             <ArrowLeft className="w-4 h-4 text-white" />
           </button>
-          <h1 className="text-white font-bold text-lg">{t("subscription.title")}</h1>
+
+          <h1 className="text-white font-bold text-lg">
+            Premium Signature
+          </h1>
         </div>
 
-        {activePlan && (
-          <div className="mb-4 p-4 rounded-2xl bg-green-500/10 border border-green-500/30 flex items-center justify-between">
-            <div>
-              <p className="text-green-400 text-xs font-bold uppercase">{t("subscription.active")}</p>
-              <p className="text-white font-bold capitalize">{activePlan.replace("_", " ")}</p>
+        {/* Active subscription */}
+        {isSignatureActive && (
+          <div
+            className="
+              mb-5
+              p-4
+              rounded-2xl
+              bg-green-500/10
+              border
+              border-green-500/30
+            "
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-green-400 text-xs font-bold uppercase">
+                  Premium Active
+                </p>
+
+                <p className="text-white font-bold mt-1">
+                  Premium Signature ✨
+                </p>
+
+                <p className="text-zinc-400 text-xs mt-1">
+                  ₹99 · 3 Months
+                </p>
+              </div>
+
+              <div className="w-10 h-10 rounded-xl bg-green-500/15 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-green-400" />
+              </div>
             </div>
-            <button onClick={handleCancel} className="text-red-400 text-xs font-semibold px-3 py-1.5 rounded-full border border-red-400/30">
-              {t("subscription.cancel")}
+
+            <button
+              onClick={handleCancel}
+              className="
+                mt-4
+                text-red-400
+                text-xs
+                font-semibold
+                px-3
+                py-1.5
+                rounded-full
+                border
+                border-red-400/30
+                hover:bg-red-500/10
+              "
+            >
+              Cancel Subscription
             </button>
           </div>
         )}
 
-        <div className="space-y-4">
-          {PLANS.map((plan) => {
-            const Icon = plan.icon;
-            const isActive = activePlan === plan.type;
-            return (
-              <div
-                key={plan.type}
-                className="rounded-2xl border p-5"
-                style={{ borderColor: `${plan.color}40`, background: `${plan.color}0a` }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${plan.color}22` }}>
-                    <Icon className="w-5 h-5" style={{ color: plan.color }} />
+        {/* Premium Signature Card */}
+        <div
+          className="
+            relative
+            overflow-hidden
+            rounded-3xl
+            border
+            border-pink-500/30
+            bg-gradient-to-br
+            from-pink-500/15
+            via-purple-500/10
+            to-cyan-500/10
+            p-6
+          "
+        >
+          {/* Decorative glow */}
+          <div
+            className="
+              absolute
+              -top-20
+              -right-20
+              w-48
+              h-48
+              rounded-full
+              bg-pink-500/10
+              blur-3xl
+              pointer-events-none
+            "
+          />
+
+          <div
+            className="
+              absolute
+              -bottom-20
+              -left-20
+              w-48
+              h-48
+              rounded-full
+              bg-purple-500/10
+              blur-3xl
+              pointer-events-none
+            "
+          />
+
+          <div className="relative">
+            {/* Icon */}
+            <div
+              className="
+                w-14
+                h-14
+                rounded-2xl
+                bg-gradient-to-br
+                from-pink-500
+                to-violet-600
+                flex
+                items-center
+                justify-center
+                shadow-lg
+                shadow-pink-500/20
+                mb-5
+              "
+            >
+              <PenTool className="w-7 h-7 text-white" />
+            </div>
+
+            {/* Title */}
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-black">
+                Premium Signature
+              </h2>
+
+              <span className="text-lg">
+                ✨
+              </span>
+            </div>
+
+            <p className="text-zinc-400 text-sm mt-2 leading-relaxed">
+              Create your own premium signature and
+              make your profile and posts stand out.
+            </p>
+
+            {/* Price */}
+            <div className="mt-6 flex items-end gap-2">
+              <span className="text-4xl font-black text-white">
+                ₹99
+              </span>
+
+              <span className="text-zinc-400 text-sm pb-1">
+                / 3 Months
+              </span>
+            </div>
+
+            {/* Features */}
+            <div className="mt-6 space-y-3">
+              {SIGNATURE_PLAN.features.map(
+                (feature) => (
+                  <div
+                    key={feature}
+                    className="flex items-start gap-3"
+                  >
+                    <div
+                      className="
+                        w-5
+                        h-5
+                        shrink-0
+                        rounded-full
+                        bg-pink-500/15
+                        flex
+                        items-center
+                        justify-center
+                        mt-0.5
+                      "
+                    >
+                      <Check className="w-3 h-3 text-pink-400" />
+                    </div>
+
+                    <span className="text-sm text-zinc-300">
+                      {feature}
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-white font-bold">{plan.name}</p>
-                    <p className="text-zinc-400 text-sm">₹{plan.price}/month</p>
-                  </div>
-                </div>
-                <ul className="space-y-1.5 mb-4">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
-                      <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: plan.color }} />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => handleSubscribe(plan.type)}
-                  disabled={subscribingType === plan.type || isActive || !!activePlan}
-                  className="w-full py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: isActive ? "#22c55e" : `linear-gradient(135deg, ${plan.color}, ${plan.color}aa)` }}
-                >
-                  {subscribingType === plan.type ? <Loader2 className="w-4 h-4 animate-spin" /> : isActive ? "Current Plan" : activePlan ? "Cancel current plan first" : `${t("subscription.cta")} · ₹${plan.price}`}
-                </button>
-              </div>
-            );
-          })}
+                )
+              )}
+            </div>
+
+            {/* Subscribe */}
+            <button
+              onClick={handleSubscribe}
+              disabled={
+                subscribing ||
+                isSignatureActive ||
+                isLoading
+              }
+              className="
+                w-full
+                mt-7
+                py-3.5
+                rounded-2xl
+                bg-gradient-to-r
+                from-pink-500
+                via-purple-500
+                to-violet-600
+                text-white
+                font-bold
+                text-sm
+                flex
+                items-center
+                justify-center
+                gap-2
+                shadow-lg
+                shadow-pink-500/20
+                hover:opacity-90
+                active:scale-[0.99]
+                transition-all
+                disabled:opacity-50
+              "
+            >
+              {subscribing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Opening Payment...
+                </>
+              ) : isSignatureActive ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Premium Signature Active
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Get Premium Signature · ₹99
+                </>
+              )}
+            </button>
+
+            <p className="text-center text-[10px] text-zinc-600 mt-3">
+              Premium Signature access for 3 months
+            </p>
+          </div>
+        </div>
+
+        {/* Signature preview */}
+        <div
+          className="
+            mt-5
+            rounded-2xl
+            border
+            border-white/10
+            bg-white/[0.03]
+            p-5
+          "
+        >
+          <p className="text-xs text-zinc-500 uppercase tracking-wider font-bold">
+            Your Premium Signature
+          </p>
+
+          <div className="mt-4 text-center">
+            <p className="text-zinc-500 text-xs mb-2">
+              After purchase
+            </p>
+
+            <p
+              className="
+                text-3xl
+                text-white
+                font-semibold
+                italic
+              "
+            >
+              Your Name
+            </p>
+
+            <p className="text-[10px] text-pink-400 mt-2">
+              ✦ Premium Signature ✦
+            </p>
+          </div>
+        </div>
+
+        {/* How it works */}
+        <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <p className="text-white font-bold text-sm">
+            How it works
+          </p>
+
+          <div className="mt-4 space-y-3">
+            <div className="flex gap-3">
+              <span className="text-pink-400 font-bold">
+                01
+              </span>
+              <p className="text-xs text-zinc-400">
+                Purchase Premium Signature for ₹99.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-pink-400 font-bold">
+                02
+              </span>
+              <p className="text-xs text-zinc-400">
+                Enter your name and choose one of
+                10 signature styles.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-pink-400 font-bold">
+                03
+              </span>
+              <p className="text-xs text-zinc-400">
+                Your signature appears on your
+                profile and uploaded content.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-pink-400 font-bold">
+                04
+              </span>
+              <p className="text-xs text-zinc-400">
+                Premium Signature remains active
+                for 3 months.
+              </p>
+            </div>
+          </div>
         </div>
       </main>
     </div>
   );
 }
-

@@ -994,68 +994,201 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
         ))}
       </div>
 
-      {/* ── Bottom Controls ── */}
-      <div className="px-3 py-3 border-t border-white/10 bg-black/40 backdrop-blur-xl"
-        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
-        <div className="flex items-center gap-2">
-          {!mySeat ? (
-            isLocked && !isHost ? (
-              <button
-                disabled
-                className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-zinc-500 font-bold text-sm flex items-center justify-center gap-2"
-              >
-                <Lock className="w-3.5 h-3.5" /> Room is locked
-              </button>
-            ) : (
-              <button
-                onClick={joinRoom}
-                disabled={joining || requestSent}
-                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-sm disabled:opacity-50"
-              >
-                {requestSent ? "Waiting for host approval..." : joining ? "Joining..." : room.join_cost > 0 ? `Join Room (${room.join_cost} coins)` : "Join Room"}
-              </button>
-            )
-          ) : (
-            <>
-              <button
-                onClick={() => { setGiftTargetUserId(room.host_id === currentUserId ? seats[1]?.user_id ?? null : room.host_id); setShowGiftPicker(true); }}
-                className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center"
-              >
-                <Gift className="w-4 h-4 text-pink-400" />
-              </button>
-              <button
-                onClick={toggleMute}
-                disabled={forceMuted}
-                className={`w-11 h-11 rounded-xl flex items-center justify-center ${(isMuted || forceMuted) ? "bg-red-500" : "bg-white/10"} disabled:opacity-70`}
-              >
-                {(isMuted || forceMuted) ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-white" />}
-              </button>
-              <input
-                value={chatText}
-                onChange={(e) => setChatText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && chatText.trim()) sendMessage.mutate(chatText.trim()); }}
-                placeholder="Type..."
-                className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none placeholder-zinc-500"
-              />
-              <button
-                onClick={() => chatText.trim() && sendMessage.mutate(chatText.trim())}
-                className="w-11 h-11 rounded-xl bg-pink-500 flex items-center justify-center"
-              >
-                <Send className="w-4 h-4 text-white" />
-              </button>
-              {isHost && (
-                <button
-                  onClick={endRoom}
-                  disabled={isEnding}
-                  className="px-3 py-2.5 rounded-xl bg-red-600 text-white text-xs font-bold disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isEnding ? "Ending..." : "End"}
-                </button>
-              )}
-            </>
-          )}
-        </div>
+     {/* ── Bottom Controls ── */}
+<div
+  className="px-3 py-3 border-t border-white/10 bg-black/40 backdrop-blur-xl"
+  style={{
+    paddingBottom:
+      "calc(0.75rem + env(safe-area-inset-bottom, 0px))",
+  }}
+>
+  {!mySeat ? (
+    /* =====================================================
+       VIEWER MODE
+       User room mein listener hai.
+       Voice seat join nahi ki hai.
+       Lekin Chat + Gift available hain.
+    ===================================================== */
+    <div className="space-y-2">
+      {/* Small Join button */}
+      <div className="flex justify-center">
+        {isLocked && !isHost ? (
+          <button
+            disabled
+            className="px-6 py-2 rounded-xl bg-white/5 border border-white/10 text-zinc-500 font-bold text-xs flex items-center justify-center gap-2"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            Room is locked
+          </button>
+        ) : (
+          <button
+            onClick={joinRoom}
+            disabled={joining || requestSent}
+            className="px-7 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 text-white font-bold text-xs disabled:opacity-50"
+          >
+            {requestSent
+              ? "Waiting for approval..."
+              : joining
+              ? "Joining..."
+              : room.join_cost > 0
+              ? `Join (${room.join_cost} coins)`
+              : "Join"}
+          </button>
+        )}
       </div>
+
+      {/* Chat + Gift */}
+      <div className="flex items-center gap-2">
+        {/* Gift */}
+        <button
+          type="button"
+          onClick={() => {
+            if (!room?.host_id) return;
+
+            setGiftTargetUserId(room.host_id);
+            setShowGiftPicker(true);
+          }}
+          disabled={!room?.host_id}
+          className="w-11 h-11 shrink-0 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center hover:bg-white/15 transition-colors disabled:opacity-50"
+          aria-label="Send gift"
+        >
+          <Gift className="w-4 h-4 text-pink-400" />
+        </button>
+
+        {/* Chat input */}
+        <input
+          value={chatText}
+          onChange={(e) => setChatText(e.target.value)}
+          onKeyDown={(e) => {
+            if (
+              e.key === "Enter" &&
+              chatText.trim() &&
+              !sendMessage.isPending
+            ) {
+              sendMessage.mutate(chatText.trim());
+            }
+          }}
+          placeholder="Chat in this room..."
+          className="flex-1 min-w-0 bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none placeholder-zinc-500 focus:border-pink-500/50"
+        />
+
+        {/* Send */}
+        <button
+          type="button"
+          onClick={() => {
+            if (
+              chatText.trim() &&
+              !sendMessage.isPending
+            ) {
+              sendMessage.mutate(chatText.trim());
+            }
+          }}
+          disabled={
+            !chatText.trim() ||
+            sendMessage.isPending
+          }
+          className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 flex items-center justify-center disabled:opacity-40"
+          aria-label="Send message"
+        >
+          <Send className="w-4 h-4 text-white" />
+        </button>
+      </div>
+
+      <p className="text-center text-[10px] text-zinc-600">
+        You are listening. Join only if you want to speak.
+      </p>
+    </div>
+  ) : (
+    /* =====================================================
+       MEMBER / SPEAKER MODE
+       User already has a seat.
+    ===================================================== */
+    <div className="flex items-center gap-2">
+      {/* Gift */}
+      <button
+        type="button"
+        onClick={() => {
+          const targetUserId =
+            room.host_id === currentUserId
+              ? seats.find(
+                  (s) =>
+                    s.user_id !== currentUserId
+                )?.user_id ?? null
+              : room.host_id;
+
+          setGiftTargetUserId(targetUserId);
+          setShowGiftPicker(true);
+        }}
+        className="w-11 h-11 shrink-0 rounded-xl bg-white/10 flex items-center justify-center"
+        aria-label="Send gift"
+      >
+        <Gift className="w-4 h-4 text-pink-400" />
+      </button>
+
+      {/* Mic */}
+      <button
+        onClick={toggleMute}
+        disabled={forceMuted}
+        className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${
+          isMuted || forceMuted
+            ? "bg-red-500"
+            : "bg-white/10"
+        } disabled:opacity-70`}
+        aria-label={
+          isMuted || forceMuted
+            ? "Unmute microphone"
+            : "Mute microphone"
+        }
+      >
+        {isMuted || forceMuted ? (
+          <MicOff className="w-4 h-4 text-white" />
+        ) : (
+          <Mic className="w-4 h-4 text-white" />
+        )}
+      </button>
+
+      {/* Chat */}
+      <input
+        value={chatText}
+        onChange={(e) =>
+          setChatText(e.target.value)
+        }
+        onKeyDown={(e) => {
+          if (
+            e.key === "Enter" &&
+            chatText.trim() &&
+            !sendMessage.isPending
+          ) {
+            sendMessage.mutate(chatText.trim());
+          }
+        }}
+        placeholder="Type..."
+        className="flex-1 min-w-0 bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none placeholder-zinc-500"
+      />
+
+      {/* Send */}
+      <button
+        type="button"
+        onClick={() => {
+          if (
+            chatText.trim() &&
+            !sendMessage.isPending
+          ) {
+            sendMessage.mutate(chatText.trim());
+          }
+        }}
+        disabled={
+          !chatText.trim() ||
+          sendMessage.isPending
+        }
+        className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 flex items-center justify-center disabled:opacity-40"
+        aria-label="Send message"
+      >
+        <Send className="w-4 h-4 text-white" />
+      </button>
+    </div>
+  )}
+</div>
 
       {/* ── Seat Control Modal (host: mute/kick/ban) ── */}
       {selectedSeat && (
