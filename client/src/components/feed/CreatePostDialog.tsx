@@ -81,7 +81,7 @@ const UPLOAD_OPTIONS = [
     id: "story",
     label: "Story",
     icon: Sparkles,
-    desc: "Disappears in 24h",
+    desc: "Disappears after your selected duration",
     gradient: "from-yellow-400 to-orange-500",
     bg: "rgba(234,179,8,0.1)",
     border: "rgba(234,179,8,0.35)",
@@ -815,6 +815,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
                     mediaUrl: videoUrl,
                     type: "video",
                     caption: caption || null,
+                    expiresIn: storyDuration,
                   }),
                 });
 
@@ -951,6 +952,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
             mediaUrl: cloudinaryImageUrl,
             type: "image",
             caption: caption || null,
+            expiresIn: storyDuration,
           }),
         });
 
@@ -970,7 +972,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
 
         toast({
           title: "Story published ✅",
-          description: "Your story is now live for 24 hours.",
+          description: `Your story is live for ${storyDuration === "6h" ? "6 hours" : storyDuration === "12h" ? "12 hours" : "24 hours"}.`,
         });
       } else {
         await createPost.mutateAsync({

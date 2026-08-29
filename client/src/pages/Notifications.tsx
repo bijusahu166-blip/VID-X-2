@@ -1,4 +1,3 @@
-import { BottomNav } from "@/components/layout/BottomNav";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, Heart, UserPlus, Radio, MessageCircle, Check, Phone, UserCheck, X, PhoneOff, Video, CheckCircle, Flag } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -283,7 +282,6 @@ export default function Notifications() {
         )}
       </div>
 
-      <BottomNav />
 
       {/* Active call screen */}
       {activeCall && (
