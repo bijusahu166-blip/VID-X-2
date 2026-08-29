@@ -1,18 +1,19 @@
-import { compressVideo } from "@/lib/compressvideo";
-
-// ─── Background Upload Manager ───────────────────────────────────────────
-// Runs compression + chunked upload OUTSIDE the dialog's React state,
-// so closing the dialog (or opening it again for another video) never
-// cancels or blocks an in-progress upload. Multiple uploads can run
-// at the same time — each tracked by its own id.
-
-export type UploadStatus = "compressing" | "uploading" | "finalizing" | "done" | "error";
+/**
+ * Background video uploader.
+ *
+ * IMPORTANT:
+ * - No client-side video compression/transcoding.
+ * - Original audio + video stream is uploaded unchanged.
+ * - Videos are uploaded in 1 MB chunks with per-file parallelism.
+ * - Multiple files can upload independently in the background.
+ */
+export type UploadStatus = "uploading" | "finalizing" | "done" | "error";
 
 export interface UploadTask {
   id: string;
   fileName: string;
   status: UploadStatus;
-  progress: number; // 0-100
+  progress: number;
   error?: string;
   videoUrl?: string;
 }
@@ -22,9 +23,12 @@ type Listener = (tasks: UploadTask[]) => void;
 const tasks = new Map<string, UploadTask>();
 const listeners = new Set<Listener>();
 
+const CHUNK_SIZE = 1 * 1024 * 1024;
+const CONCURRENCY = 6;
+const MAX_RETRIES = 4;
+
 function emit() {
-  const list = Array.from(tasks.values());
-  listeners.forEach((l) => l(list));
+  listeners.forEach((listener) => listener(Array.from(tasks.values())));
 }
 
 export function subscribeUploads(listener: Listener): () => void {
@@ -34,218 +38,184 @@ export function subscribeUploads(listener: Listener): () => void {
 }
 
 function updateTask(id: string, patch: Partial<UploadTask>) {
-  const t = tasks.get(id);
-  if (!t) return;
-  Object.assign(t, patch);
+  const task = tasks.get(id);
+  if (!task) return;
+
+  Object.assign(task, patch);
   emit();
-  // auto-clean finished tasks after a short delay so the UI can show "done"
+
   if (patch.status === "done" || patch.status === "error") {
-    setTimeout(() => {
+    window.setTimeout(() => {
       tasks.delete(id);
       emit();
-    }, 4000);
+    }, 5000);
   }
 }
 
-// Chunk upload settings — tuned for smoother, faster concurrent uploads
-const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB
-const CONCURRENCY = 6; // parallel chunk uploads per file
-const MAX_RETRIES = 3;
+function wait(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
 
-// ─── Hard server/plan limit ────────────────────────────────────────────────
-// The hosting plan REJECTS any file over 100MB — this isn't optional, so we
-// must guarantee the file we hand to uploadFileChunks is under this size,
-// even if that means compressing multiple times with lower and lower targets.
-const SERVER_HARD_LIMIT_MB = 80;
-const SAFE_TARGET_MB = 30; // leave a buffer under the hard limit
-const MAX_COMPRESSION_PASSES = 4;
-
-/**
- * Compresses a file, then re-checks the actual output size. If it's still
- * over the safe target (compressVideo's bitrate estimate can be off), it
- * compresses again with a lower target — up to MAX_COMPRESSION_PASSES times.
- * Guarantees the returned file is under SAFE_TARGET_MB, or throws if it
- * truly cannot be brought down further (e.g. compression isn't supported
- * in this browser).
- */
-async function compressUntilUnderLimit(
-  file: File,
-  onProgress: (pct: number) => void
-): Promise<File> {
-  let current = file;
-  let targetMB = SAFE_TARGET_MB;
-
-  for (let pass = 0; pass < MAX_COMPRESSION_PASSES; pass++) {
-    const sizeMB = current.size / (1024 * 1024);
-    if (sizeMB <= SAFE_TARGET_MB) return current; // already safe
-
-    const passStart = pass / MAX_COMPRESSION_PASSES;
-    const passEnd = (pass + 1) / MAX_COMPRESSION_PASSES;
-
-    const result = await compressVideo(current, targetMB, (pct) => {
-      onProgress(Math.round((passStart + (pct / 100) * (passEnd - passStart)) * 100));
-    });
-
-    // compressVideo() falls back to returning the original file if the
-    // browser can't compress (unsupported codec, capture error, etc.) —
-    // detect that "no progress" case so we don't loop forever.
-    if (result.size >= current.size) {
-      if (current.size / (1024 * 1024) <= SERVER_HARD_LIMIT_MB) {
-        return current; // under hard limit even if not under the safe target
-      }
-      throw new Error(
-        "Could not compress this video small enough for upload. Try a shorter clip or lower original resolution."
-      );
-    }
-
-    current = result;
-    // Push the target lower each pass in case the previous pass overshot
-    targetMB = Math.max(40, targetMB - 20);
+async function readError(response: Response): Promise<string> {
+  try {
+    const data = await response.json();
+    return String(data?.message || `HTTP ${response.status}`);
+  } catch {
+    return `HTTP ${response.status}`;
   }
-
-  const finalSizeMB = current.size / (1024 * 1024);
-  if (finalSizeMB > SERVER_HARD_LIMIT_MB) {
-    throw new Error(
-      "This video is too large to compress under the upload limit. Try a shorter clip or lower original resolution."
-    );
-  }
-  return current;
 }
 
 async function uploadFileChunks(
   file: File,
-  onProgress: (pct: number) => void
+  onProgress: (percent: number) => void,
 ): Promise<string> {
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  let completedChunks = 0;
-  let aborted = false;
-  let abortReason = "";
+  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
 
-  const uploadChunk = async (i: number): Promise<void> => {
-    if (aborted) return;
-    const start = i * CHUNK_SIZE;
+  let completed = 0;
+  let failed = false;
+  let failureMessage = "";
+
+  const uploadChunk = async (index: number) => {
+    if (failed) return;
+
+    const start = index * CHUNK_SIZE;
     const end = Math.min(start + CHUNK_SIZE, file.size);
     const chunk = file.slice(start, end);
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      if (aborted) return;
-      try {
-        const fd = new FormData();
-        fd.append("uploadId", uploadId);
-        fd.append("chunkIndex", String(i));
-        fd.append("totalChunks", String(totalChunks));
-        fd.append("chunk", chunk, file.name);
+      if (failed) return;
 
-        const resp = await fetch("/api/upload/chunk", {
+      try {
+        const form = new FormData();
+        form.append("uploadId", uploadId);
+        form.append("chunkIndex", String(index));
+        form.append("totalChunks", String(totalChunks));
+        form.append("chunk", chunk, file.name);
+
+        const response = await fetch("/api/upload/chunk", {
           method: "POST",
-          body: fd,
+          body: form,
           credentials: "include",
         });
 
-        if (resp.ok) {
-          completedChunks++;
-          onProgress(Math.round((completedChunks / totalChunks) * 90));
+        if (response.ok) {
+          completed += 1;
+          onProgress(Math.round((completed / totalChunks) * 92));
           return;
         }
 
-        let msg = `HTTP ${resp.status}`;
-        try { msg = (await resp.json()).message || msg; } catch {}
+        const message = await readError(response);
+        if (attempt === MAX_RETRIES - 1) {
+          failed = true;
+          failureMessage = `${message} (chunk ${index + 1}/${totalChunks})`;
+          return;
+        }
 
+        await wait(600 * (attempt + 1));
+      } catch (error: any) {
         if (attempt === MAX_RETRIES - 1) {
-          aborted = true;
-          abortReason = `${msg} (chunk ${i + 1}/${totalChunks})`;
-        } else {
-          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+          failed = true;
+          failureMessage =
+            `Network error on chunk ${index + 1}/${totalChunks}: ` +
+            (error?.message || "connection lost");
+          return;
         }
-      } catch (err: any) {
-        if (attempt === MAX_RETRIES - 1) {
-          aborted = true;
-          abortReason = `Network error on chunk ${i + 1}/${totalChunks}: ${err?.message || "connection lost"}`;
-        } else {
-          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-        }
+
+        await wait(800 * (attempt + 1));
       }
     }
   };
 
-  for (let batch = 0; batch < totalChunks; batch += CONCURRENCY) {
-    if (aborted) break;
-    const batchIndices = Array.from(
-      { length: Math.min(CONCURRENCY, totalChunks - batch) },
-      (_, k) => batch + k
+  for (let start = 0; start < totalChunks; start += CONCURRENCY) {
+    if (failed) break;
+
+    const batch = Array.from(
+      { length: Math.min(CONCURRENCY, totalChunks - start) },
+      (_, offset) => start + offset,
     );
-    await Promise.all(batchIndices.map(uploadChunk));
+
+    await Promise.all(batch.map(uploadChunk));
   }
 
-  if (aborted) throw new Error(abortReason);
+  if (failed) {
+    throw new Error(failureMessage || "Video upload failed");
+  }
 
-  onProgress(92);
-  const finalResp = await fetch("/api/upload/finalize", {
+  onProgress(94);
+  const finalizeResponse = await fetch("/api/upload/finalize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ uploadId, totalChunks, originalName: file.name }),
+    body: JSON.stringify({
+      uploadId,
+      totalChunks,
+      originalName: file.name,
+    }),
   });
 
-  if (!finalResp.ok) {
-    let msg = "Failed to assemble video";
-    try { msg = (await finalResp.json()).message || msg; } catch {}
-    throw new Error(msg);
+  if (!finalizeResponse.ok) {
+    throw new Error(await readError(finalizeResponse));
   }
 
-  const finalData = await finalResp.json();
+  const data = await finalizeResponse.json();
+  const url = String(data?.url || data?.videoUrl || "");
+
+  if (!url) {
+    throw new Error("Server did not return a video URL");
+  }
+
   onProgress(100);
-  return finalData.url;
+  return url;
 }
 
 /**
- * Kicks off compression + upload for one video in the background.
- * Does NOT block — caller can close the dialog immediately and start
- * another upload right away. Runs independently of any component's
- * mount/unmount lifecycle.
- *
- * onDone is called with the final Cloudinary video URL once ready —
- * use it to create the actual post (call your createPost mutation there).
+ * Starts upload immediately and returns a task id.
+ * The caller may close/unmount its dialog; the upload continues independently.
  */
 export function startBackgroundVideoUpload(
   file: File,
-  onDone: (videoUrl: string) => void,
-  onError: (err: string) => void
+  onDone: (videoUrl: string) => void | Promise<void>,
+  onError: (error: string) => void,
 ): string {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
   tasks.set(id, {
     id,
     fileName: file.name,
-    status: "compressing",
+    status: "uploading",
     progress: 0,
   });
   emit();
 
   (async () => {
     try {
-      let finalFile = file;
+      updateTask(id, { status: "uploading", progress: 1 });
 
-      // Compress if bigger than 20MB — guarantees output is under the
-      // server's hard 100MB limit, retrying with lower targets if needed.
-      if (file.size > 20 * 1024 * 1024) {
-        finalFile = await compressUntilUnderLimit(file, (pct) => {
-          updateTask(id, { status: "compressing", progress: Math.round(pct * 0.3) }); // compression = first 30%
+      const videoUrl = await uploadFileChunks(file, (progress) => {
+        updateTask(id, {
+          status: progress >= 94 ? "finalizing" : "uploading",
+          progress,
         });
-      }
-
-      updateTask(id, { status: "uploading", progress: 30 });
-      const videoUrl = await uploadFileChunks(finalFile, (pct) => {
-        // uploading = remaining 70%
-        updateTask(id, { status: "uploading", progress: 30 + Math.round(pct * 0.7) });
       });
 
-      updateTask(id, { status: "done", progress: 100, videoUrl });
-      onDone(videoUrl);
-    } catch (err: any) {
-      const msg = err?.message || "Upload failed";
-      updateTask(id, { status: "error", progress: 0, error: msg });
-      onError(msg);
+      updateTask(id, {
+        status: "done",
+        progress: 100,
+        videoUrl,
+      });
+
+      await onDone(videoUrl);
+    } catch (error: any) {
+      const message = error?.message || "Video upload failed";
+      updateTask(id, {
+        status: "error",
+        progress: 0,
+        error: message,
+      });
+      onError(message);
     }
   })();
 
