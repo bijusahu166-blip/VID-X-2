@@ -344,6 +344,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'inactive'`);
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50)`);
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS language_preference VARCHAR(10) DEFAULT 'en'`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_signature TEXT`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signature_style TEXT`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signature_active BOOLEAN DEFAULT FALSE`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signature_expires_at TIMESTAMP`);
     } catch (error) {
       console.error("[user columns]", error);
     }
@@ -491,73 +495,59 @@ async function ensureJobsTable() {
 }
 
 await ensureJobsTable();
-  // Permanent Voice Room unlock.
-  // V2 uses 10 successfully published Education-category posts.
-  async function ensureVoiceRoomUnlockColumn() {
-    try {
-      await db.execute(sql`
-        ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS voice_room_unlocked BOOLEAN DEFAULT FALSE
-      `);
 
-      // Separate V2 flag prevents the old "4 videos + 3 posts" rule from
-      // accidentally keeping a user unlocked after the rule changed.
-      await db.execute(sql`
-        ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS voice_room_education_unlocked BOOLEAN DEFAULT FALSE
-      `);
-    } catch (error) {
-      console.error("[voice room unlock column]", error);
-    }
+// ============================================================
+// VOICE ROOM UNLOCK
+// Rule: 10 normal videos/reels unlock Voice Rooms.
+// Photo posts do NOT count.
+// ============================================================
+async function ensureVoiceRoomUnlockColumn() {
+  try {
+    await db.execute(sql`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS voice_room_unlocked BOOLEAN DEFAULT FALSE
+    `);
+  } catch (error) {
+    console.error("[voice room unlock column]", error);
   }
+}
 
-  await ensureVoiceRoomUnlockColumn();
+await ensureVoiceRoomUnlockColumn();
 
-const VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS = 10;
+const VOICE_ROOM_REQUIRED_VIDEOS = 10;
 
-async function getEducationalVideoCount(userId: string): Promise<number> {
-  const rows = await db.execute(sql`
+async function getUserVideoCount(userId: string): Promise<number> {
+  const result = await db.execute(sql`
     SELECT COUNT(*) AS cnt
     FROM posts
     WHERE user_id = ${userId}
       AND type IN ('video', 'reel')
-      AND COALESCE(caption, '') ILIKE '%#Education%'
   `);
 
-  return Number(
-    ((rows as any).rows ?? rows)[0]?.cnt ?? 0
-  );
+  const rows = (result as any).rows ?? result;
+  return Number(rows?.[0]?.cnt ?? 0);
 }
 
-async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
-  educationalVideoCount: number;
+async function refreshVoiceRoomUnlock(userId: string): Promise<{
+  videoCount: number;
   voiceRoomUnlocked: boolean;
 }> {
-  const educationalVideoCount =
-    await getEducationalVideoCount(userId);
+  const videoCount = await getUserVideoCount(userId);
 
-  const userRows = await db.execute(sql`
-    SELECT voice_room_education_unlocked
+  const result = await db.execute(sql`
+    SELECT voice_room_unlocked
     FROM users
     WHERE id = ${userId}
     LIMIT 1
   `);
 
-  let voiceRoomUnlocked =
-    !!((userRows as any).rows ?? userRows)[0]
-      ?.voice_room_education_unlocked;
+  const rows = (result as any).rows ?? result;
+  let voiceRoomUnlocked = !!rows?.[0]?.voice_room_unlocked;
 
-  // Automatically unlock after 10 Educational videos.
-  if (
-    !voiceRoomUnlocked &&
-    educationalVideoCount >=
-      VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS
-  ) {
+  if (!voiceRoomUnlocked && videoCount >= VOICE_ROOM_REQUIRED_VIDEOS) {
     await db.execute(sql`
       UPDATE users
-      SET
-        voice_room_education_unlocked = TRUE,
-        voice_room_unlocked = TRUE
+      SET voice_room_unlocked = TRUE
       WHERE id = ${userId}
     `);
 
@@ -565,45 +555,10 @@ async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
   }
 
   return {
-    educationalVideoCount,
+    videoCount,
     voiceRoomUnlocked,
   };
 }
-  async function refreshVoiceRoomEducationUnlock(userId: string): Promise<{
-    educationalPostCount: number;
-    voiceRoomUnlocked: boolean;
-  }> {
-    const educationalPostCount = await getEducationalPostCount(userId);
-
-    const userRows = await db.execute(sql`
-      SELECT voice_room_education_unlocked
-      FROM users
-      WHERE id = ${userId}
-      LIMIT 1
-    `);
-
-    let voiceRoomUnlocked =
-      !!((userRows as any).rows ?? userRows)[0]?.voice_room_education_unlocked;
-
-    if (
-      !voiceRoomUnlocked &&
-      educationalPostCount >= VOICE_ROOM_REQUIRED_EDUCATIONAL_POSTS
-    ) {
-      await db.execute(sql`
-        UPDATE users
-        SET voice_room_education_unlocked = TRUE,
-            voice_room_unlocked = TRUE
-        WHERE id = ${userId}
-      `);
-
-      voiceRoomUnlocked = true;
-    }
-
-    return {
-      educationalPostCount,
-      voiceRoomUnlocked,
-    };
-  }
 
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
@@ -1556,25 +1511,21 @@ app.post("/api/auth/register", async (req, res) => {
 
       let voiceRoomProgress:
         | {
-            educationalPostCount: number;
-            requiredEducationalPosts: number;
+            videoCount: number;
+            requiredVideos: number;
             voiceRoomUnlocked: boolean;
           }
         | undefined;
 
-      const caption = String((post as any)?.caption ?? req.body?.caption ?? "");
       const type = String((post as any)?.type ?? req.body?.type ?? "");
 
-      const isEducational =
-        ["post", "video", "reel"].includes(type) &&
-        /(^|\s)#education(?:\s|$|[^a-z0-9_])/i.test(caption);
-
-      if (isEducational) {
-        const refreshed = await refreshVoiceRoomEducationUnlock(userId);
+      // Every successfully created video/reel counts toward the 10-video requirement.
+      if (["video", "reel"].includes(type)) {
+        const refreshed = await refreshVoiceRoomUnlock(userId);
 
         voiceRoomProgress = {
           ...refreshed,
-          requiredEducationalVideos: VOICE_ROOM_REQUIRED_EDUCATIONAL_VIDEOS,
+          requiredVideos: VOICE_ROOM_REQUIRED_VIDEOS,
         };
       }
 
@@ -2264,30 +2215,29 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
     }
   });
 
-app.get("/api/users/me/stats", isAuthenticated, async (req: any, res) => {
+app.get("/api/users/me/stats", isAuthenticated, async (req: any, res: any) => {
   try {
-    const userId = String(req.session.userId ?? "");
+    const userId = String(req.session?.userId ?? "");
 
     if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
-    const { postCount, voiceRoomUnlocked } =
+    const { videoCount, voiceRoomUnlocked } =
       await refreshVoiceRoomUnlock(userId);
 
     return res.json({
-      postCount,
-      requiredPosts: VOICE_ROOM_REQUIRED_POSTS,
+      videoCount,
+      requiredVideos: VOICE_ROOM_REQUIRED_VIDEOS,
       voiceRoomUnlocked,
     });
   } catch (err: any) {
     console.error("[creator stats]", err);
-
     return res.status(500).json({
       message: err?.message || "Could not load creator stats",
     });
   }
-}); 
+});
 
   // ══════════════════════════════════════════════════════════════════════════
   // USER ROUTES
@@ -3624,7 +3574,7 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
 
     const subscription = await razorpay.subscriptions.create({
       plan_id: planId,
-      customer_notify: 1,
+      customer_notify: true,
       total_count: 1,
       notes: {
         user_id: userId,
@@ -3763,19 +3713,17 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
       }
 
       // Server-side enforcement: frontend cannot bypass this.
-      const {
-  postCount,
-  voiceRoomUnlocked,
-} = await refreshVoiceRoomUnlock(hostId);
+      const { videoCount, voiceRoomUnlocked } =
+        await refreshVoiceRoomUnlock(hostId);
 
-if (!voiceRoomUnlocked) {
-  return res.status(403).json({
-    code: "VOICE_ROOM_LOCKED",
-    message: `Voice Room unlocks after ${VOICE_ROOM_REQUIRED_POSTS} posts`,
-    postCount,
-    requiredPosts: VOICE_ROOM_REQUIRED_POSTS,
-  });
-}
+      if (!voiceRoomUnlocked) {
+        return res.status(403).json({
+          code: "VOICE_ROOM_LOCKED",
+          message: `Voice Room unlocks after ${VOICE_ROOM_REQUIRED_VIDEOS} videos`,
+          videoCount,
+          requiredVideos: VOICE_ROOM_REQUIRED_VIDEOS,
+        });
+      }
       const { title, requiresApproval, roomType } = req.body;
       const normalizedType = ROOM_TYPE_SEATS[roomType] ? roomType : "group";
       const maxSeats = ROOM_TYPE_SEATS[normalizedType];
