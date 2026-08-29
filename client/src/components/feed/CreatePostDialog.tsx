@@ -25,7 +25,6 @@ import type { AREffect } from "@/lib/arEffects";
 import filterIconSrc from "@assets/image_1774511462472.png";
 import heroIconSrc from "@assets/image_1774512160722.png";
 import { SongPicker, type Song } from "@/components/shared/SongPicker";
-import { compressVideo } from "@/lib/compressvideo";
 import { startBackgroundVideoUpload } from "@/lib/uploadManager";
 
 type UploadType = "post" | "video" | "reel" | "story" | "job" | "editing";
@@ -125,81 +124,6 @@ function readFileAsDataURL(file: File): Promise<string> {
     reader.onload = (e) => resolve(e.target?.result as string);
     reader.onerror = reject;
     reader.readAsDataURL(file);
-  });
-}
-
-const THUMB_W = 480;
-const THUMB_H = 270;
-const THUMB_QUALITY = 0.55;
-
-// Helper: Convert data URL to blob and upload to Cloudinary
-async function uploadDataURLToCloudinary(dataUrl: string, filename: string): Promise<string> {
-  try {
-    const blob = await fetch(dataUrl).then(r => r.blob());
-    const formData = new FormData();
-    formData.append("image", blob, filename);
-    const res = await fetch("/api/upload/image", {
-      method: "POST",
-      body: formData,
-      credentials: "include",
-    });
-    if (!res.ok) throw new Error("Upload failed");
-    const data = await res.json();
-    return data.imageUrl;
-  } catch (err) {
-    console.warn("Failed to upload data URL to Cloudinary:", err);
-    return dataUrl; // Fallback to data URL if upload fails
-  }
-}
-
-function generateVideoThumbnail(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const fallback = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = THUMB_W; canvas.height = THUMB_H;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        const grad = ctx.createLinearGradient(0, 0, THUMB_W, THUMB_H);
-        grad.addColorStop(0, "#1a0030");
-        grad.addColorStop(0.5, "#0d1a40");
-        grad.addColorStop(1, "#200010");
-        ctx.fillStyle = grad; ctx.fillRect(0, 0, THUMB_W, THUMB_H);
-        ctx.fillStyle = "rgba(255,255,255,0.2)";
-        ctx.beginPath(); ctx.arc(THUMB_W / 2, THUMB_H / 2, 40, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,0.8)";
-        const cx = THUMB_W / 2, cy = THUMB_H / 2;
-        ctx.beginPath(); ctx.moveTo(cx - 12, cy - 16); ctx.lineTo(cx + 20, cy); ctx.lineTo(cx - 12, cy + 16); ctx.closePath(); ctx.fill();
-      }
-      resolve(canvas.toDataURL("image/jpeg", THUMB_QUALITY));
-    };
-    const video = document.createElement("video");
-    const objectUrl = URL.createObjectURL(file);
-    video.src = objectUrl;
-    video.crossOrigin = "anonymous";
-    video.muted = true;
-    video.preload = "metadata";
-    const timeout = setTimeout(() => { URL.revokeObjectURL(objectUrl); fallback(); }, 10000);
-    video.onloadeddata = () => {
-      video.currentTime = Math.min(1, video.duration * 0.1 || 0.1);
-    };
-    video.onseeked = () => {
-      clearTimeout(timeout);
-      try {
-        const canvas = document.createElement("canvas");
-        // Cap at THUMB_W×THUMB_H — never store a 4K canvas
-        const srcW = video.videoWidth || THUMB_W;
-        const srcH = video.videoHeight || THUMB_H;
-        const scale = Math.min(THUMB_W / srcW, THUMB_H / srcH, 1);
-        canvas.width = Math.round(srcW * scale);
-        canvas.height = Math.round(srcH * scale);
-        const ctx = canvas.getContext("2d");
-        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(objectUrl);
-        resolve(canvas.toDataURL("image/jpeg", THUMB_QUALITY));
-      } catch { URL.revokeObjectURL(objectUrl); clearTimeout(timeout); fallback(); }
-    };
-    video.onerror = () => { clearTimeout(timeout); URL.revokeObjectURL(objectUrl); fallback(); };
-    video.load();
   });
 }
 
@@ -313,7 +237,6 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
   const [videoDesc, setVideoDesc] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Vlog");
   const [visibility, setVisibility] = useState("public");
-  const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [storyDuration, setStoryDuration] = useState<"6h" | "12h" | "24h">("24h");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
@@ -386,8 +309,8 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
   // Video upload state
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isCompressing, setIsCompressing] = useState(false);
-  const [compressProgress, setCompressProgress] = useState(0);
+  const isCompressing = false;
+  const compressProgress = 0;
   const videoInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const reelVideoInputRef = useRef<HTMLInputElement>(null);
@@ -526,9 +449,6 @@ export function CreatePostDialog({ open, onOpenChange, defaultTab }: CreatePostD
     setCameraReady(false);
     setCameraMode(true);
   };
-  const MAX_VIDEO_SIZE_MB = 100;
-const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
-
 // NEW — raw file selection limit (compression happens after, before upload)
 const MAX_RAW_UPLOAD_SIZE_MB = 2000; // 2GB raw file allowed
 const MAX_RAW_UPLOAD_SIZE_BYTES = MAX_RAW_UPLOAD_SIZE_MB * 1024 * 1024;
@@ -575,13 +495,7 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
     setReelVideoFile(file);
     const url = URL.createObjectURL(file);
     setReelVideoUrl(url);
-    setIsReadingFile(true);
-    try {
-      const thumb = await generateVideoThumbnail(file);
-      setImageUrl(thumb);
-    } catch { /* thumbnail failed, skip */ } finally {
-      setIsReadingFile(false);
-    }
+    setIsReadingFile(false);
     e.target.value = "";
   };
 
@@ -697,16 +611,6 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
     if (!videoTitle) setVideoTitle(file.name.replace(/\.[^.]+$/, ""));
-    // Generate a persistent thumbnail (base64) to use as imageUrl in the DB
-    setIsReadingFile(true);
-    try {
-      const thumb = await generateVideoThumbnail(file);
-      setImageUrl(thumb);
-    } catch {
-      // fallback handled inside generateVideoThumbnail
-    } finally {
-      setIsReadingFile(false);
-    }
   };
 // Instagram-jaisa photo compression — resize + quality-optimize before upload
 function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise<File> {
@@ -813,41 +717,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
         ? `${finalCaption}\n${categoryTag}`.trim()
         : finalCaption;
 
-    const DEFAULT_THUMB =
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
-
-    // ---------------------------------------------------------
-    // AUTH
-    // ---------------------------------------------------------
-    if (!user?.id) {
-      toast({
-        title: "Not authenticated",
-        description: "Please log in to post.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // ---------------------------------------------------------
-    // THUMBNAIL
-    // ---------------------------------------------------------
-    let finalImageUrl = imageUrl;
-
-    if (
-      !finalImageUrl ||
-      finalImageUrl.startsWith("data:") ||
-      finalImageUrl.startsWith("blob:")
-    ) {
-      if (
-        thumbnailUrl &&
-        !thumbnailUrl.startsWith("data:") &&
-        !thumbnailUrl.startsWith("blob:")
-      ) {
-        finalImageUrl = thumbnailUrl;
-      } else {
-        finalImageUrl = DEFAULT_THUMB;
-      }
-    }
+    const finalImageUrl = imageUrl || "";
 
     // ---------------------------------------------------------
     // FIND VIDEO FILE
@@ -902,136 +772,17 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
           return;
         }
 
-        // -------------------------------------------------------
-        // COMPRESS ONLY WHEN ABOVE 100 MB
-        // -------------------------------------------------------
-        if (fileToUpload.size > MAX_VIDEO_SIZE_BYTES) {
-          setIsCompressing(true);
-          setCompressProgress(5);
-
-          toast({
-            title: "Compressing video…",
-            description: `Your ${formatFileSize(
-              fileToUpload.size
-            )} video will be compressed before upload.`,
-          });
-
-          try {
-            /*
-             * compressVideo is imported from @/lib/compressvideo.
-             * Cast to any so this component works with either the
-             * one-argument or optional-progress implementation.
-             */
-            const compressor = compressVideo as any;
-
-            setCompressProgress(15);
-
-            let compressedResult: unknown;
-
-            try {
-              // First try the common File -> File API.
-            const compressionTargetMB = 95;
-
-if (fileToUpload.size > 50 * 1024 * 1024) {
-  compressedResult = await compressor(
-    fileToUpload,
-    compressionTargetMB,
-    (progress: number) => {
-      if (Number.isFinite(progress)) {
-        setCompressProgress(
-          Math.max(0, Math.min(99, Math.round(progress)))
-        );
-      }
-    }
-  );
-} else {
-  compressedResult = fileToUpload;
-}
-            } catch (firstError) {
-              // Some implementations accept a progress callback.
-              compressedResult = await compressor(
-                fileToUpload,
-                (progress: number) => {
-                  if (Number.isFinite(progress)) {
-                    setCompressProgress(
-                      Math.max(
-                        0,
-                        Math.min(95, Math.round(progress))
-                      )
-                    );
-                  }
-                }
-              );
-            }
-
-            setCompressProgress(90);
-
-            if (compressedResult instanceof File) {
-              fileToUpload = compressedResult;
-            } else if (compressedResult instanceof Blob) {
-              fileToUpload = new File(
-                [compressedResult],
-                fileToUpload.name.replace(/\.[^/.]+$/, ".mp4"),
-                {
-                  type: compressedResult.type || "video/mp4",
-                }
-              );
-            } else {
-              throw new Error(
-                "compressVideo() did not return a File or Blob."
-              );
-            }
-
-            setCompressProgress(100);
-
-            // ---------------------------------------------------
-            // FINAL 100 MB CHECK AFTER COMPRESSION
-            // ---------------------------------------------------
-            if (fileToUpload.size > MAX_VIDEO_SIZE_BYTES) {
-              toast({
-                title: "Compression not enough",
-                description: `The compressed video is still ${formatFileSize(
-                  fileToUpload.size
-                )}. It must be below ${MAX_VIDEO_SIZE_MB} MB. Please use a shorter video or lower resolution.`,
-                variant: "destructive",
-              });
-              return;
-            }
-
-            toast({
-              title: "Compression complete ✅",
-              description: `${formatFileSize(
-                fileToUpload.size
-              )} — ready to upload.`,
-            });
-          } catch (compressionError: any) {
-            console.error(
-              "Video compression failed:",
-              compressionError
-            );
-
-            toast({
-              title: "Compression failed",
-              description:
-                compressionError?.message ||
-                "Could not compress this video. Please use a shorter or lower-resolution video.",
-              variant: "destructive",
-            });
-            return;
-          } finally {
-            setIsCompressing(false);
-          }
-        }
+        // No client-side video transcoding. Original audio/video is preserved.
 
         // -------------------------------------------------------
         // FINAL SAFETY CHECK
         // -------------------------------------------------------
-        if (fileToUpload.size > MAX_VIDEO_SIZE_BYTES) {
+        if (fileToUpload.size > MAX_RAW_UPLOAD_SIZE_BYTES) {
           toast({
             title: "Video too large",
             description: `Final video size is ${formatFileSize(
               fileToUpload.size
-            )}. Maximum allowed is ${MAX_VIDEO_SIZE_MB} MB.`,
+            )}. Maximum allowed is ${MAX_RAW_UPLOAD_SIZE_MB} MB.`,
             variant: "destructive",
           });
           return;
@@ -1054,30 +805,8 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
           // SUCCESS
           async (videoUrl: string) => {
             try {
-              let cloudinaryImageUrl = finalImageUrl;
-
-              // Convert generated data-URL thumbnail to a real URL.
-              if (
-                finalImageUrl &&
-                finalImageUrl.startsWith("data:")
-              ) {
-                try {
-                  cloudinaryImageUrl =
-                    await uploadDataURLToCloudinary(
-                      finalImageUrl,
-                      `thumbnail-${Date.now()}.jpg`
-                    );
-                } catch (thumbnailError) {
-                  console.warn(
-                    "Thumbnail Cloudinary upload failed:",
-                    thumbnailError
-                  );
-                  cloudinaryImageUrl = DEFAULT_THUMB;
-                }
-              }
-
               await createPost.mutateAsync({
-                imageUrl: cloudinaryImageUrl,
+                imageUrl: "",
                 caption: captionWithCategory,
                 userId: user.id,
                 type:
@@ -1086,7 +815,7 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
                     : uploadType,
                 videoUrl,
 
-                ...(uploadType === "story" && selectedSong
+                ...(selectedSong
                   ? {
                       songTitle: selectedSong.title,
                       songArtist: selectedSong.artist,
@@ -1141,7 +870,6 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
 
         return;
       } catch (err: any) {
-        setIsCompressing(false);
         setIsUploadingVideo(false);
 
         console.error(
@@ -1160,6 +888,9 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
         return;
       }
     }
+
+    const DEFAULT_THUMB =
+      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60";
 
     // =========================================================
     // PHOTO / NORMAL POST FLOW
@@ -1192,7 +923,7 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
         userId: user.id,
         type: uploadType,
 
-        ...(uploadType === "story" && selectedSong
+        ...(selectedSong
           ? {
               songTitle: selectedSong.title,
               songArtist: selectedSong.artist,
@@ -1234,7 +965,6 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
       setVideoDesc("");
       setSelectedCategory("Vlog");
       setVisibility("public");
-      setThumbnailUrl("");
       setSelectedFile(null);
       setPreviewUrl("");
       setSelectedArEffect(AR_EFFECTS[0]);
@@ -1257,8 +987,8 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
       setLivePostId(null);
       setIsUploadingVideo(false);
       setUploadProgress(0);
-      setIsCompressing(false);
-      setCompressProgress(0);
+      
+      
     }, 300);
   };
 
@@ -1341,7 +1071,7 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
                       {isReadingFile ? (
                         <>
                           <Loader2 className="w-4 h-4 text-yellow-400 shrink-0 animate-spin" />
-                          <span className="text-[11px] text-yellow-400 font-semibold">Generating thumbnail…</span>
+                          <span className="text-[11px] text-yellow-400 font-semibold">Video ready</span>
                         </>
                       ) : (
                         <>
@@ -1408,19 +1138,6 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
                   onChange={(e) => setVideoDesc(e.target.value)}
                   className="bg-white/5 border-white/10 focus:border-red-500/50 rounded-xl text-white placeholder:text-zinc-600 resize-none min-h-[90px]"
                   maxLength={500}
-                />
-              </div>
-
-              {/* Thumbnail */}
-              <div className="space-y-1.5">
-                <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <ImagePlus className="w-3 h-3" /> Thumbnail URL (optional)
-                </Label>
-                <Input
-                  placeholder="https://... (leave blank for auto-thumbnail)"
-                  value={thumbnailUrl}
-                  onChange={(e) => setThumbnailUrl(e.target.value)}
-                  className="bg-white/5 border-white/10 focus:border-red-500/50 rounded-xl text-white placeholder:text-zinc-600 text-[12px]"
                 />
               </div>
 
@@ -1499,7 +1216,7 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
                     </div>
                   </>
                 ) : null}
-                {!isCompressing && !isUploadingVideo && (isReadingFile ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating thumbnail…</> : createPost.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</> : <><Upload className="w-4 h-4" /> Publish Video</>)}
+                {!isCompressing && !isUploadingVideo && (isReadingFile ? <><Loader2 className="w-4 h-4 animate-spin" /> Video ready</> : createPost.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</> : <><Upload className="w-4 h-4" /> Publish Video</>)}
               </button>
             </form>
           )}
@@ -1851,6 +1568,40 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
                 </div>
               )}
 
+              {/* Reel music picker */}
+              {uploadType === "reel" && (imageUrl || reelVideoUrl) && (
+                <div className="space-y-2 pt-2 border-t border-white/8">
+                  <button
+                    type="button"
+                    onClick={() => setShowSongPicker(true)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/4 hover:border-violet-500/40 transition-all"
+                    data-testid="button-add-song-reel"
+                  >
+                    <Music className="w-4 h-4 text-violet-400" />
+                    {selectedSong ? (
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-violet-300 text-[12px] font-bold truncate">{selectedSong.title}</p>
+                        <p className="text-zinc-400 text-[10px] truncate">{selectedSong.artist}</p>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400 text-[12px] font-semibold">Add music to reel</span>
+                    )}
+                    {selectedSong && (
+                      <button type="button" onClick={e => { e.stopPropagation(); setSelectedSong(null); }} className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                        <X className="w-3 h-3 text-zinc-400" />
+                      </button>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              <Button className="w-full h-11 rounded-xl font-bold" onClick={() => setStep("details")}
+                disabled={reelMediaMode === "photo" ? !imageUrl : !reelVideoUrl}>
+                Next
+              </Button>
+            </div>
+          )}
+
           {/* ── STEP: DETAILS (Post / Story / Reel) ── */}
           {step === "details" && uploadType !== "video" && (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -2056,11 +1807,7 @@ if (fileToUpload.size > 50 * 1024 * 1024) {
                       </button>
                     ))}
                   </div>
-                  {selectedCategory === "Education" && (
-                    <p className="text-[10px] text-green-400">
-                      ✓ This successful post will count toward Voice Room unlock.
-                    </p>
-                  )}
+
                 </div>
               )}
 
