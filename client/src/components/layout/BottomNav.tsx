@@ -72,48 +72,28 @@ function isActiveRoute(location: string, href: string) {
 }
 
 /**
- * Bottom navigation should only appear on main navigation pages.
- *
- * Full-screen pages, chat screens, voice rooms, upload screens,
- * viewers and creation screens hide the global BottomNav.
+ * Bottom navigation is shown only on the main navigation screens.
+ * Full-screen/detail/action screens must never show it.
  */
 function shouldHideBottomNav(location: string) {
-  const path = (location.split("?")[0] || "/").replace(/\/+$/, "") || "/";
+  const path =
+    (location.split("?")[0] || "/").replace(/\/+$/, "") || "/";
 
-  // ============================================================
-  // DIRECT CHAT / CHAT DETAIL
-  // ============================================================
-
-  // Examples:
-  // /messages/123
-  // /messages/chat/123
-  // /messages/group/123
+  // Direct chat / chat detail
   if (path.startsWith("/messages/")) {
     return true;
   }
 
-  // ============================================================
-  // VOICE ROOMS
-  // ============================================================
-
-  // Voice room creation
+  // Voice rooms
   if (
     path === "/voice-room/create" ||
-    path === "/voice-rooms/create"
+    path === "/voice-rooms/create" ||
+    path.startsWith("/voice-rooms/")
   ) {
     return true;
   }
 
-  // Actual voice room
-  // /voice-rooms/123
-  if (path.startsWith("/voice-rooms/")) {
-    return true;
-  }
-
-  // ============================================================
-  // UPLOAD / CREATE SCREENS
-  // ============================================================
-
+  // Upload / create screens
   const hiddenExactRoutes = [
     "/upload",
     "/upload/video",
@@ -128,13 +108,27 @@ function shouldHideBottomNav(location: string) {
     "/photo/upload",
     "/reel/create",
     "/reels/create",
+
+    // Full-screen/action pages
+    "/camera",
+    "/record",
+    "/record-video",
+    "/record-audio",
+    "/live",
+    "/go-live",
+    "/live/create",
+
+    // Utility/action pages
+    "/subscription",
+    "/buy-coins",
+    "/notifications",
   ];
 
   if (hiddenExactRoutes.includes(path)) {
     return true;
   }
 
-  // Upload/create nested routes
+  // Nested upload/create routes
   if (
     path.startsWith("/upload/") ||
     path.startsWith("/create/") ||
@@ -143,10 +137,7 @@ function shouldHideBottomNav(location: string) {
     return true;
   }
 
-  // ============================================================
-  // FULL-SCREEN POST / VIDEO / STORY VIEWERS
-  // ============================================================
-
+  // Full-screen post/video/story viewers
   if (
     path.startsWith("/post/") ||
     path.startsWith("/posts/") ||
@@ -158,32 +149,9 @@ function shouldHideBottomNav(location: string) {
     return true;
   }
 
-  // ============================================================
-  // REEL DETAIL / FULL-SCREEN REEL
-  // ============================================================
-
-  if (
-    path.startsWith("/reels/") &&
-    path !== "/reels"
-  ) {
-    return true;
-  }
-
-  // ============================================================
-  // OTHER FULL-SCREEN / ACTION PAGES
-  // ============================================================
-
-  const otherHiddenRoutes = [
-    "/camera",
-    "/record",
-    "/record-video",
-    "/record-audio",
-    "/live",
-    "/go-live",
-    "/live/create",
-  ];
-
-  if (otherHiddenRoutes.includes(path)) {
+  // Reel details/full-screen reel.
+  // Keep the main /reels tab visible.
+  if (path.startsWith("/reels/") && path !== "/reels") {
     return true;
   }
 
@@ -193,20 +161,21 @@ function shouldHideBottomNav(location: string) {
 export function BottomNav() {
   const [location] = useLocation();
 
-  // ------------------------------------------------------------
   // IMPORTANT:
-  // Don't show global BottomNav on full-screen/action screens.
-  // ------------------------------------------------------------
-  if (shouldHideBottomNav(location)) {
-    return null;
-  }
+  // Keep hooks unconditional. Do not put useQuery behind an early return.
+  const hideBottomNav = shouldHideBottomNav(location);
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
-    refetchInterval: 30000,
+    enabled: !hideBottomNav,
+    refetchInterval: hideBottomNav ? false : 30000,
     staleTime: 10000,
     retry: 1,
   });
+
+  if (hideBottomNav) {
+    return null;
+  }
 
   const unreadCount = Number(unreadData?.count ?? 0);
 
@@ -219,61 +188,59 @@ export function BottomNav() {
       : item
   );
 
-  const content = (
+  return (
     <nav
       data-no-page-swipe="true"
       aria-label="Main navigation"
-      className="fixed left-0 right-0 z-40 pointer-events-none"
+      className="fixed left-0 right-0 z-[9999] pointer-events-none"
       style={{
-        bottom: 0,
-        transform: "translateZ(0)",
-        paddingBottom:
-          "max(env(safe-area-inset-bottom, 0px), 12px)",
+        bottom: "max(env(safe-area-inset-bottom, 0px), 8px)",
+        transform: "translate3d(0, 0, 0)",
+        WebkitTransform: "translate3d(0, 0, 0)",
+        padding: 0,
+        willChange: "transform",
       }}
     >
       <div
         className="mx-3 pointer-events-auto"
         style={{
-          paddingBottom: "2px",
+          padding: 0,
         }}
       >
         <div
-          className="flex items-center justify-around rounded-2xl border border-white/5"
+          className="mx-auto flex w-full max-w-[560px] items-center justify-around rounded-2xl border border-white/10"
           style={{
-            padding: "8px 4px",
+            minHeight: "64px",
+            padding: "7px 4px",
             background: "rgba(10,10,10,0.98)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
+            backdropFilter: "blur(18px)",
+            WebkitBackdropFilter: "blur(18px)",
             boxShadow:
-              "0 -4px 30px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.05)",
+              "0 -4px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)",
+            transform: "translateZ(0)",
+            WebkitTransform: "translateZ(0)",
           }}
         >
           {navItems.map((item) => {
             const Icon = item.icon;
-            const active = isActiveRoute(
-              location,
-              item.href
-            );
+            const active = isActiveRoute(location, item.href);
 
             return (
               <Link
                 key={item.id}
                 href={item.href}
-                className="flex-1"
+                className="min-w-0 flex-1"
               >
                 <div
                   data-testid={`link-${item.label.toLowerCase()}`}
                   className={cn(
-                    "relative flex flex-col items-center justify-center gap-0.5",
-                    "px-1 py-1.5 rounded-xl",
-                    "transition-all duration-200 ease-out",
-                    "active:scale-90 select-none touch-manipulation",
+                    "relative mx-0.5 flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl",
+                    "px-1 py-1.5 select-none touch-manipulation",
                     active
                       ? "text-primary"
                       : "text-zinc-500 hover:text-white",
-
                     item.id === "jobs" &&
-                      "bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20"
+                      "border border-blue-500/20 bg-gradient-to-br from-blue-500/10 to-purple-500/10"
                   )}
                 >
                   {active && (
@@ -282,45 +249,18 @@ export function BottomNav() {
 
                   <Icon
                     className={cn(
-                      item.id === "jobs"
-                        ? "w-6 h-6"
-                        : "w-5 h-5",
-
+                      item.id === "jobs" ? "h-6 w-6" : "h-5 w-5",
                       "relative z-[1] shrink-0",
-
-                      (active ||
-                        item.id === "jobs") &&
+                      (active || item.id === "jobs") &&
                         "drop-shadow-[0_0_6px_currentColor]"
                     )}
                   />
 
-                  {item.badge != null &&
-                    item.badge > 0 && (
-                      <span
-                        className="
-                          absolute
-                          top-0.5
-                          right-1
-                          min-w-[14px]
-                          h-[14px]
-                          bg-red-500
-                          text-white
-                          text-[8px]
-                          font-black
-                          rounded-full
-                          flex
-                          items-center
-                          justify-center
-                          px-0.5
-                          leading-none
-                          z-[2]
-                        "
-                      >
-                        {item.badge > 99
-                          ? "99+"
-                          : item.badge}
-                      </span>
-                    )}
+                  {item.badge != null && item.badge > 0 && (
+                    <span className="absolute right-0.5 top-0.5 z-[2] flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[8px] font-black leading-none text-white">
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
                 </div>
               </Link>
             );
@@ -329,6 +269,4 @@ export function BottomNav() {
       </div>
     </nav>
   );
-
- return content;
 }
