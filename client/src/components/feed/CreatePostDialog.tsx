@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useCreatePost } from "@/hooks/use-posts";
-import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useAgoraRTCBroadcaster } from "@/lib/useAgoraRTCBroadcaster";
@@ -81,7 +80,7 @@ const UPLOAD_OPTIONS = [
     id: "story",
     label: "Story",
     icon: Sparkles,
-    desc: "Disappears after your selected duration",
+    desc: "Disappears in 24h",
     gradient: "from-yellow-400 to-orange-500",
     bg: "rgba(234,179,8,0.1)",
     border: "rgba(234,179,8,0.35)",
@@ -806,49 +805,24 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
           // SUCCESS
           async (videoUrl: string) => {
             try {
-              if (uploadType === "story") {
-                const storyRes = await fetch("/api/stories", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "include",
-                  body: JSON.stringify({
-                    mediaUrl: videoUrl,
-                    type: "video",
-                    caption: caption || null,
-                    expiresIn: storyDuration,
-                  }),
-                });
+              await createPost.mutateAsync({
+                imageUrl: "",
+                caption: captionWithCategory,
+                userId: user.id,
+                type:
+                  uploadType === "video"
+                    ? "video"
+                    : uploadType,
+                videoUrl,
 
-                if (!storyRes.ok) {
-                  let message = "Failed to publish story";
-                  try {
-                    const data = await storyRes.json();
-                    message = data?.message || message;
-                  } catch {}
-                  throw new Error(message);
-                }
-
-                await storyRes.json();
-                await queryClient.invalidateQueries({
-                  queryKey: ["/api/stories"],
-                });
-              } else {
-                await createPost.mutateAsync({
-                  imageUrl: "",
-                  caption: captionWithCategory,
-                  userId: user.id,
-                  type: uploadType === "video" ? "video" : uploadType,
-                  videoUrl,
-
-                  ...(selectedSong
-                    ? {
-                        songTitle: selectedSong.title,
-                        songArtist: selectedSong.artist,
-                        songColor: selectedSong.color,
-                      }
-                    : {}),
-                } as any);
-              }
+                ...(selectedSong
+                  ? {
+                      songTitle: selectedSong.title,
+                      songArtist: selectedSong.artist,
+                      songColor: selectedSong.color,
+                    }
+                  : {}),
+              } as any);
 
               setIsUploadingVideo(false);
               setUploadProgress(100);
@@ -943,58 +917,25 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
     }
 
     try {
-      if (uploadType === "story") {
-        const storyRes = await fetch("/api/stories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            mediaUrl: cloudinaryImageUrl,
-            type: "image",
-            caption: caption || null,
-            expiresIn: storyDuration,
-          }),
-        });
+      await createPost.mutateAsync({
+        imageUrl: cloudinaryImageUrl,
+        caption: captionWithCategory,
+        userId: user.id,
+        type: uploadType,
 
-        if (!storyRes.ok) {
-          let message = "Failed to publish story";
-          try {
-            const data = await storyRes.json();
-            message = data?.message || message;
-          } catch {}
-          throw new Error(message);
-        }
+        ...(selectedSong
+          ? {
+              songTitle: selectedSong.title,
+              songArtist: selectedSong.artist,
+              songColor: selectedSong.color,
+            }
+          : {}),
+      } as any);
 
-        await storyRes.json();
-        await queryClient.invalidateQueries({
-          queryKey: ["/api/stories"],
-        });
-
-        toast({
-          title: "Story published ✅",
-          description: `Your story is live for ${storyDuration === "6h" ? "6 hours" : storyDuration === "12h" ? "12 hours" : "24 hours"}.`,
-        });
-      } else {
-        await createPost.mutateAsync({
-          imageUrl: cloudinaryImageUrl,
-          caption: captionWithCategory,
-          userId: user.id,
-          type: uploadType,
-
-          ...(selectedSong
-            ? {
-                songTitle: selectedSong.title,
-                songArtist: selectedSong.artist,
-                songColor: selectedSong.color,
-              }
-            : {}),
-        } as any);
-
-        toast({
-          title: "Published ✅",
-          description: "Your post has been published.",
-        });
-      }
+      toast({
+        title: "Published ✅",
+        description: "Your post has been published.",
+      });
 
       handleClose();
     } catch (err: any) {

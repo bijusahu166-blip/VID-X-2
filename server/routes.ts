@@ -2495,37 +2495,6 @@ app.get("/api/users/me/stats", isAuthenticated, async (req: any, res: any) => {
 
   app.get("/api/stories", isAuthenticated, async (req, res) => {
     try {
-      // Remove expired story rows before returning the active story feed.
-      const expiredResult = await db.execute(sql`
-        SELECT id, media_url
-        FROM stories
-        WHERE expires_at <= NOW()
-      `);
-
-      const expiredRows = (expiredResult as any).rows ?? expiredResult;
-
-      for (const story of expiredRows) {
-        await db.execute(sql`
-          DELETE FROM story_likes
-          WHERE story_id = ${story.id}
-        `);
-
-        await db.execute(sql`
-          DELETE FROM story_comments
-          WHERE story_id = ${story.id}
-        `);
-
-        await db.execute(sql`
-          DELETE FROM stories
-          WHERE id = ${story.id}
-        `);
-
-        if (story.media_url) {
-          deleteFromR2(story.media_url).catch(() => {});
-          deleteFromCloudinary(story.media_url).catch(() => {});
-        }
-      }
-
       const result = await db.execute(sql`
         SELECT s.*, u.first_name, u.last_name, u.username, u.profile_image_url
         FROM stories s
@@ -2533,63 +2502,27 @@ app.get("/api/users/me/stats", isAuthenticated, async (req: any, res: any) => {
         WHERE s.expires_at > NOW()
         ORDER BY s.created_at DESC
       `);
-
       const rows = (result as any).rows ?? result;
-      return res.json(rows.map(mapStoryRow));
+      res.json(rows.map(mapStoryRow));   // ← "res.json(rows)" ki jagah ye
     } catch (err: any) {
-      console.error("[get stories]", err);
-      return res.status(500).json({
-        message: err.message || "Failed to load stories",
-      });
+      res.status(500).json({ message: err.message });
     }
   });
 
   app.post("/api/stories", isAuthenticated, async (req, res) => {
     try {
       const userId = (req.session as any).userId;
-      const { mediaUrl, type, caption, expiresIn } = req.body;
-
-      if (!mediaUrl || typeof mediaUrl !== "string") {
-        return res.status(400).json({ message: "Story media is required" });
-      }
-
-      // Story duration is controlled by the creator:
-      // 6h, 12h or 24h. Anything invalid falls back to 24h.
-      const durationHours =
-        expiresIn === "6h" ? 6 :
-        expiresIn === "12h" ? 12 :
-        24;
-
-      const expiresAt = new Date(
-        Date.now() + durationHours * 60 * 60 * 1000
-      );
-
+      const { mediaUrl, type, caption } = req.body;
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
       const result = await db.execute(sql`
-        INSERT INTO stories (
-          user_id,
-          media_url,
-          type,
-          caption,
-          expires_at
-        )
-        VALUES (
-          ${userId},
-          ${mediaUrl},
-          ${type === "video" ? "video" : "image"},
-          ${caption || null},
-          ${expiresAt}
-        )
+        INSERT INTO stories (user_id, media_url, type, caption, expires_at)
+        VALUES (${userId}, ${mediaUrl}, ${type || 'image'}, ${caption || null}, ${expiresAt})
         RETURNING *
       `);
-
       const rows = (result as any).rows ?? result;
-
-      return res.status(201).json(rows[0]);
+      res.status(201).json(rows[0]);
     } catch (err: any) {
-      console.error("[create story]", err);
-      return res.status(500).json({
-        message: err.message || "Failed to create story",
-      });
+      res.status(500).json({ message: err.message });
     }
   });
 

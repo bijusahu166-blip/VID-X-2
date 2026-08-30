@@ -282,7 +282,6 @@ export default function Notifications() {
         )}
       </div>
 
-
       {/* Active call screen */}
       {activeCall && (
         <VideoCallScreen />

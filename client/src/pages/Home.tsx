@@ -751,13 +751,18 @@ filteredPosts.forEach((post, i) => {
             {(() => {
               const storyList = stories;
               if (storyList.length === 0) {
-                return (
-                  <div className="flex h-[148px] min-w-[180px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4">
-                    <span className="text-[10px] text-zinc-600 text-center">
-                      No active stories yet
-                    </span>
+                return REELS.map((reel) => (
+                  <div key={reel.id} className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group">
+                    <div className="w-[88px] h-[148px] rounded-xl overflow-hidden relative">
+                      <img src={reel.thumb} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                      <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full border-2 border-black overflow-hidden">
+                        <img src={reel.avatar} className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                    <span className="text-[9px] text-zinc-500 font-medium mt-2 max-w-[80px] truncate text-center">{reel.user}</span>
                   </div>
-                );
+                ));
               }
               return storyList.map((story, i) => {
                 const authorName = story.user ? `${story.user.firstName}` : "User";
@@ -774,30 +779,26 @@ filteredPosts.forEach((post, i) => {
                       <div className="absolute inset-0"
                         style={{ background: `linear-gradient(135deg, hsl(${(story.id * 53) % 360}, 60%, 14%), hsl(${(story.id * 53 + 140) % 360}, 50%, 18%))` }} />
                     {story.mediaUrl && !story.mediaUrl.startsWith("blob:") ? (
-                      story.type === "video" ? (
-                        <video
-                          src={story.mediaUrl}
-                          className="absolute inset-0 w-full h-full object-cover"
-                          muted
-                          playsInline
-                          autoPlay
-                          loop
-                          preload="metadata"
-                        />
+                        story.type === "video" ? (
+                          <video
+                            src={story.mediaUrl}
+                            className="absolute inset-0 w-full h-full object-contain bg-black"
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                        ) : (
+                          <img
+                            src={story.mediaUrl}
+                            alt="Story"
+                            className="absolute inset-0 w-full h-full object-contain bg-black"
+                          />
+                        )
                       ) : (
-                        <img
-                          src={story.mediaUrl}
-                          alt=""
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      )
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center p-2">
-                        <p className="text-[9px] text-white/60 text-center leading-tight line-clamp-4">
-                          {story.caption || "✨"}
-                        </p>
-                      </div>
-                    )}
+                        <div className="absolute inset-0 flex items-center justify-center p-2">
+                          <p className="text-[9px] text-white/60 text-center leading-tight line-clamp-4">{story.caption || "✨"}</p>
+                        </div>
+                      )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/10" />
                       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full p-[2px]"
                         style={{ background: "linear-gradient(135deg, #ec4899, #a855f7, #f97316)" }}>
