@@ -1,5 +1,6 @@
 import { FollowSuggestions } from "@/components/shared/FollowSuggestions";
 import { usePosts } from "@/hooks/use-posts";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
@@ -1036,7 +1037,7 @@ filteredPosts.forEach((post, i) => {
         </div>
       </main>
 
-     
+      <BottomNav />
 
       {openCommentPostId !== null && (
         <CommentsDrawer
