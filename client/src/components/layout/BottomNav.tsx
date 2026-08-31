@@ -192,7 +192,12 @@ export function BottomNav() {
     <nav
       data-no-page-swipe="true"
       aria-label="Main navigation"
-      className="fixed left-0 right-0 z-[9999] pointer-events-none"
+      // z-[45]: needs to sit above normal page content (sticky headers/tabs
+      // commonly use z-40) but BELOW modal dialogs — shadcn/Radix Dialog
+      // overlays and content use z-50 by default. At z-[9999] this nav used
+      // to render on top of any open dialog (e.g. the upload dialog's
+      // Publish/Share button), making that button unreachable.
+      className="fixed left-0 right-0 z-[45] pointer-events-none"
       style={{
         bottom: "max(env(safe-area-inset-bottom, 0px), 8px)",
         transform: "translate3d(0, 0, 0)",

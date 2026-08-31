@@ -1,11 +1,10 @@
-import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
 import {
   Heart, MessageCircle, Share2, Download, Play, VolumeX, Volume2,
-  Radio, Loader2, Bookmark, Send, Flag, CheckCheck, X as CloseIcon, User
+  Radio, Loader2, Bookmark, Send, Flag, CheckCheck, X as CloseIcon, User, RefreshCw
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { toCloudinaryVideoUrl } from "@/lib/utils";
@@ -30,6 +29,16 @@ interface ReelPost {
   hasSaved?: boolean;
 }
 
+// How many cards ahead/behind the active one actually mount their <video>
+// element + hooks. Everything outside this window renders as a lightweight
+// same-height spacer instead, so scroll-snap math stays correct without
+// paying the cost of 15 simultaneous video elements + comment/report state.
+const RENDER_WINDOW_BEHIND = 1;
+const RENDER_WINDOW_AHEAD = 4;
+// How many upcoming reels get their video warmed into the browser cache
+// ahead of time, so swiping to them is instant instead of showing a spinner.
+const PRECACHE_AHEAD = 4;
+
 function ReelCard({
   reel,
   isActive,
@@ -45,9 +54,11 @@ function ReelCard({
   const [,navigate] = useLocation();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<any[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [showReportMenu, setShowReportMenu] = useState(false);
   const [reportView, setReportView] = useState<"menu" | "success">("menu");
@@ -64,15 +75,31 @@ function ReelCard({
   useEffect(() => {
     let isMounted = true;
     if (showComments) {
+      setCommentsLoading(true);
       fetch(`/api/posts/${reel.id}/comments`, { credentials: "include" })
-        .then(r => r.json())
-        .then(data => {
-          if (isMounted) setComments(data);
+        .then(r => {
+          if (!r.ok) throw new Error("Failed to load comments");
+          return r.json();
         })
-        .catch(err => console.error("Failed to fetch comments", err));
+        .then(data => {
+          if (isMounted) setComments(Array.isArray(data) ? data : []);
+        })
+        .catch(() => {
+          if (isMounted) toast({ title: "Couldn't load comments", variant: "destructive" });
+        })
+        .finally(() => {
+          if (isMounted) setCommentsLoading(false);
+        });
     }
     return () => { isMounted = false; };
   }, [showComments, reel.id]);
+
+  // Reset per-reel playback state whenever the underlying reel changes
+  // (relevant when a spacer swaps back into a real ReelCard).
+  useEffect(() => {
+    setHasError(false);
+    setIsBuffering(true);
+  }, [reel.id]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -81,6 +108,7 @@ function ReelCard({
     if (isActive) {
       video.muted = isMuted;
       if (!video.src && reel.videoUrl) {
+        setHasError(false);
         video.src = toCloudinaryVideoUrl(reel.videoUrl);
         video.load();
       }
@@ -100,6 +128,16 @@ function ReelCard({
       video.load();
     }
   }, [isActive, isMuted, onToggleSound, reel.videoUrl]);
+
+  const retryVideo = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !reel.videoUrl) return;
+    setHasError(false);
+    setIsBuffering(true);
+    video.src = toCloudinaryVideoUrl(reel.videoUrl);
+    video.load();
+    video.play().then(() => setIsPlaying(true)).catch(() => null);
+  }, [reel.videoUrl]);
 
   const likeMutation = useMutation({
     mutationFn: async () => {
@@ -248,9 +286,10 @@ function ReelCard({
           muted={isMuted}
           preload="metadata"
           onWaiting={() => setIsBuffering(true)}
-          onPlaying={() => setIsBuffering(false)}
+          onPlaying={() => { setIsBuffering(false); setHasError(false); }}
+          onError={() => { setIsBuffering(false); setHasError(true); }}
           onClick={() => {
-            if (!videoRef.current) return;
+            if (!videoRef.current || hasError) return;
             if (isPlaying) videoRef.current.pause();
             else videoRef.current.play();
             setIsPlaying(!isPlaying);
@@ -260,7 +299,7 @@ function ReelCard({
         <img src={reel.imageUrl} className="w-full h-full object-cover" alt="Reel media" />
       )}
 
-      {!isPlaying && reel.videoUrl && !isBuffering && (
+      {!isPlaying && reel.videoUrl && !isBuffering && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none z-10">
           <div className="p-4 rounded-full bg-black/50 text-white animate-ping">
             <Play className="w-8 h-8 fill-white" />
@@ -268,14 +307,30 @@ function ReelCard({
         </div>
       )}
 
-      {isBuffering && (
+      {isBuffering && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-black/20">
           <Loader2 className="w-10 h-10 text-cyan-500 animate-spin" />
         </div>
       )}
 
+      {hasError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 z-10 text-white text-sm px-8 text-center">
+          <p>Couldn't load this video.</p>
+          <button
+            onClick={retryVideo}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/15 border border-white/25 text-xs font-semibold active:scale-95 transition-transform"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Try again
+          </button>
+        </div>
+      )}
+
       <div className="absolute right-4 bottom-24 flex flex-col gap-5 items-center z-20">
-        <button onClick={() => likeMutation.mutate()} className="flex flex-col items-center group active:scale-95 transition-transform">
+        <button
+          onClick={() => !likeMutation.isPending && likeMutation.mutate()}
+          disabled={likeMutation.isPending}
+          className="flex flex-col items-center group active:scale-95 transition-transform disabled:opacity-70"
+        >
           <Heart className={`w-7 h-7 transition-all ${liked ? "fill-red-500 text-red-500 scale-110" : "text-white drop-shadow-lg"}`} />
           <span className="text-xs font-semibold text-white mt-1 drop-shadow-md">{likeCount}</span>
         </button>
@@ -285,7 +340,11 @@ function ReelCard({
           <span className="text-xs font-semibold text-white mt-1 drop-shadow-md">{reel.commentsCount || 0}</span>
         </button>
 
-        <button onClick={() => saveMutation.mutate()} className="flex flex-col items-center active:scale-95 transition-transform">
+        <button
+          onClick={() => !saveMutation.isPending && saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          className="flex flex-col items-center active:scale-95 transition-transform disabled:opacity-70"
+        >
           <Bookmark className={`w-7 h-7 transition-all ${saved ? "fill-cyan-400 text-cyan-400" : "text-white drop-shadow-lg"}`} />
           <span className="text-xs font-semibold text-white mt-1 drop-shadow-md">{saved ? "Saved" : "Save"}</span>
         </button>
@@ -360,7 +419,11 @@ function ReelCard({
             <SheetTitle className="text-white">Comments ({comments.length})</SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto space-y-3 py-2 px-1">
-            {comments.length === 0 ? (
+            {commentsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
+              </div>
+            ) : comments.length === 0 ? (
               <p className="text-sm text-zinc-600 text-center py-8">No comments yet. Be the first!</p>
             ) : (
               comments.map((c: any) => (
@@ -464,48 +527,55 @@ export default function Reels() {
   const scrollTimeoutRef = useRef<number | null>(null);
   const { data: allPosts, isLoading } = usePosts();
 
-  const reels = (Array.isArray(allPosts) ? allPosts : []).filter(p => p.type === "reel");
-
   const userGoal = localStorage.getItem("user_goal") || "";
-  const allowedSubjects = getGoalSubjects(userGoal);
 
-  const filteredReels = reels.filter((r) => {
-    if (allowedSubjects.length === 0) return true;
-    const text = `${r.caption ?? ""}`.toLowerCase();
-    return allowedSubjects.some(subject => text.includes(subject));
-  });
-  const baseReels = filteredReels.length > 0 ? filteredReels : reels;
+  // ── Feed scoring — this used to run on EVERY render, including every
+  // scroll-driven activeIndex update. With lots of reels that recomputation
+  // (filter + shuffle + sort of the whole list) was the main source of lag,
+  // and re-shuffling mid-scroll made the list visually reorder under the
+  // user's thumb. Memoized so it only recomputes when the underlying posts
+  // actually change, not on every scroll frame.
+  const visibleReels = useMemo(() => {
+    const reels = (Array.isArray(allPosts) ? allPosts : []).filter((p: any) => p.type === "reel");
+    const allowedSubjects = getGoalSubjects(userGoal);
 
-  // Build a "what this user tends to watch" tag set from recently liked/saved reels,
-  // plus their goal subjects, so similar hashtag/title videos surface more often.
-  const interestTags = new Set<string>(allowedSubjects.map(s => s.toLowerCase()));
-  reels.forEach(r => {
-    if (r.hasLiked || (r as any).hasSaved) {
-      extractTags(r.caption).forEach(t => interestTags.add(t));
-    }
-  });
+    const filteredReels = reels.filter((r: any) => {
+      if (allowedSubjects.length === 0) return true;
+      const text = `${r.caption ?? ""}`.toLowerCase();
+      return allowedSubjects.some(subject => text.includes(subject));
+    });
+    const baseReels = filteredReels.length > 0 ? filteredReels : reels;
 
-  // Score = light engagement weight + interest-tag matches. Randomized within
-  // that so the feed doesn't feel statically ranked every time it loads.
-  const scoredReels = baseReels.map(r => {
-    const tags = extractTags(r.caption);
-    const matchCount = tags.filter(t => interestTags.has(t)).length;
-    const engagementScore = (r.likesCount ?? 0) * 0.5 + (r.commentsCount ?? 0) * 0.5;
-    const score = matchCount * 10 + engagementScore + Math.random() * 8;
-    return { reel: r, score };
-  });
+    const interestTags = new Set<string>(allowedSubjects.map(s => s.toLowerCase()));
+    reels.forEach((r: any) => {
+      if (r.hasLiked || r.hasSaved) {
+        extractTags(r.caption).forEach(t => interestTags.add(t));
+      }
+    });
 
-  const displayReels = shuffle(scoredReels)
-    .sort((a, b) => b.score - a.score)
-    .map(s => s.reel);
+    const scoredReels = baseReels.map((r: any) => {
+      const tags = extractTags(r.caption);
+      const matchCount = tags.filter(t => interestTags.has(t)).length;
+      const engagementScore = (r.likesCount ?? 0) * 0.5 + (r.commentsCount ?? 0) * 0.5;
+      const score = matchCount * 10 + engagementScore + Math.random() * 8;
+      return { reel: r, score };
+    });
 
-  const visibleReels = displayReels.slice(0, 15);
+    const displayReels = shuffle(scoredReels)
+      .sort((a, b) => b.score - a.score)
+      .map(s => s.reel);
+
+    return displayReels.slice(0, 15);
+    // Re-score when the post list or the user's goal changes — NOT on every
+    // scroll/activeIndex update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPosts, userGoal]);
 
   useEffect(() => {
-    const nextReel = visibleReels[activeIndex + 1];
-    if (nextReel?.videoUrl) precacheVideo(toCloudinaryVideoUrl(nextReel.videoUrl));
-    const nextNextReel = visibleReels[activeIndex + 2];
-    if (nextNextReel?.videoUrl) precacheVideo(toCloudinaryVideoUrl(nextNextReel.videoUrl));
+    for (let offset = 1; offset <= PRECACHE_AHEAD; offset++) {
+      const upcoming = visibleReels[activeIndex + offset];
+      if (upcoming?.videoUrl) precacheVideo(toCloudinaryVideoUrl(upcoming.videoUrl));
+    }
   }, [activeIndex, visibleReels]);
 
   const handleScroll = useCallback(() => {
@@ -539,18 +609,30 @@ export default function Reels() {
         {isLoading ? (
           <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-cyan-500 w-10 h-10" /></div>
         ) : (
-          visibleReels.map((reel, i) => (
-            <ReelCard
-              key={reel.id}
-              reel={reel}
-              isActive={i === activeIndex}
-              isMuted={isMuted}
-              onToggleSound={() => setIsMuted(prev => !prev)}
-            />
-          ))
+          visibleReels.map((reel, i) => {
+            const withinRenderWindow =
+              i >= activeIndex - RENDER_WINDOW_BEHIND && i <= activeIndex + RENDER_WINDOW_AHEAD;
+
+            // Outside the render window: a same-height spacer instead of a
+            // full ReelCard, so scroll-snap math (scrollTop / clientHeight)
+            // stays correct without mounting a <video> + all its hooks for
+            // reels the user isn't near yet.
+            if (!withinRenderWindow) {
+              return <div key={reel.id} className="snap-start h-[100dvh] w-full bg-black" />;
+            }
+
+            return (
+              <ReelCard
+                key={reel.id}
+                reel={reel}
+                isActive={i === activeIndex}
+                isMuted={isMuted}
+                onToggleSound={() => setIsMuted(prev => !prev)}
+              />
+            );
+          })
         )}
       </div>
-      <BottomNav />
     </div>
   );
 }
