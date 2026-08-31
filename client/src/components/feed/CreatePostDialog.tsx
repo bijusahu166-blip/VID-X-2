@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 import { useCreatePost } from "@/hooks/use-posts";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { queryClient } from "@/lib/queryClient";
 import { useAgoraRTCBroadcaster } from "@/lib/useAgoraRTCBroadcaster";
 import { useAgoraRTM } from "@/lib/useAgoraRTM";
 import {
@@ -805,32 +806,56 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
           // SUCCESS
           async (videoUrl: string) => {
             try {
-              await createPost.mutateAsync({
-                imageUrl: "",
-                caption: captionWithCategory,
-                userId: user.id,
-                type:
-                  uploadType === "video"
-                    ? "video"
-                    : uploadType,
-                videoUrl,
+              if (uploadType === "story") {
+                // Stories live in their own table/endpoint (/api/stories),
+                // NOT the generic posts table — posting through createPost
+                // here silently created an invisible "post" instead of a
+                // real story. This is the fix.
+                const storyRes = await fetch("/api/stories", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({
+                    mediaUrl: videoUrl,
+                    type: "video",
+                    caption: captionWithCategory || null,
+                  }),
+                });
+                if (!storyRes.ok) {
+                  const errData = await storyRes.json().catch(() => ({}));
+                  throw new Error(errData?.message || "Failed to publish story");
+                }
+                queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+              } else {
+                await createPost.mutateAsync({
+                  imageUrl: "",
+                  caption: captionWithCategory,
+                  userId: user.id,
+                  type:
+                    uploadType === "video"
+                      ? "video"
+                      : uploadType,
+                  videoUrl,
 
-                ...(selectedSong
-                  ? {
-                      songTitle: selectedSong.title,
-                      songArtist: selectedSong.artist,
-                      songColor: selectedSong.color,
-                    }
-                  : {}),
-              } as any);
+                  ...(selectedSong
+                    ? {
+                        songTitle: selectedSong.title,
+                        songArtist: selectedSong.artist,
+                        songColor: selectedSong.color,
+                      }
+                    : {}),
+                } as any);
+              }
 
               setIsUploadingVideo(false);
               setUploadProgress(100);
 
               toast({
-                title: "Video published ✅",
+                title: uploadType === "story" ? "Story published ✅" : "Video published ✅",
                 description:
-                  "Your video has been uploaded successfully.",
+                  uploadType === "story"
+                    ? "Your story has been uploaded successfully."
+                    : "Your video has been uploaded successfully.",
               });
             } catch (err: any) {
               setIsUploadingVideo(false);
@@ -841,10 +866,12 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
               );
 
               toast({
-                title: "Failed to publish video",
+                title: uploadType === "story" ? "Failed to publish story" : "Failed to publish video",
                 description:
                   err?.message ||
-                  "Video uploaded but post creation failed.",
+                  (uploadType === "story"
+                    ? "Video uploaded but story creation failed."
+                    : "Video uploaded but post creation failed."),
                 variant: "destructive",
               });
             }
@@ -917,24 +944,44 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
     }
 
     try {
-      await createPost.mutateAsync({
-        imageUrl: cloudinaryImageUrl,
-        caption: captionWithCategory,
-        userId: user.id,
-        type: uploadType,
+      if (uploadType === "story") {
+        // Same fix as the video flow above — stories go to /api/stories,
+        // not the generic /api/posts createPost mutation.
+        const storyRes = await fetch("/api/stories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            mediaUrl: cloudinaryImageUrl,
+            type: "image",
+            caption: captionWithCategory || null,
+          }),
+        });
+        if (!storyRes.ok) {
+          const errData = await storyRes.json().catch(() => ({}));
+          throw new Error(errData?.message || "Failed to publish story");
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      } else {
+        await createPost.mutateAsync({
+          imageUrl: cloudinaryImageUrl,
+          caption: captionWithCategory,
+          userId: user.id,
+          type: uploadType,
 
-        ...(selectedSong
-          ? {
-              songTitle: selectedSong.title,
-              songArtist: selectedSong.artist,
-              songColor: selectedSong.color,
-            }
-          : {}),
-      } as any);
+          ...(selectedSong
+            ? {
+                songTitle: selectedSong.title,
+                songArtist: selectedSong.artist,
+                songColor: selectedSong.color,
+              }
+            : {}),
+        } as any);
+      }
 
       toast({
-        title: "Published ✅",
-        description: "Your post has been published.",
+        title: uploadType === "story" ? "Story published ✅" : "Published ✅",
+        description: uploadType === "story" ? "Your story has been published." : "Your post has been published.",
       });
 
       handleClose();
@@ -942,7 +989,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
       console.error("Create post failed:", err);
 
       toast({
-        title: "Failed to post",
+        title: uploadType === "story" ? "Failed to publish story" : "Failed to post",
         description:
           err?.message ||
           "Something went wrong. Please try again.",

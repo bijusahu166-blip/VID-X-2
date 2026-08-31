@@ -388,6 +388,16 @@ function Router() {
       </Switch>
     </SwipeTabs>
 
+    {/* Rendered OUTSIDE SwipeTabs' motion.div on purpose: that div carries
+        Framer Motion's transform (and will-change-transform) for the page
+        slide animation, and CSS makes ANY transformed ancestor become the
+        containing block for position:fixed descendants. BottomNav was
+        getting trapped inside it — sticking to the bottom of the page
+        content instead of the real viewport. Its own internal route check
+        (shouldHideBottomNav) already decides when to hide itself, so one
+        instance here covers every page. */}
+    <BottomNav />
+
     <GlobalCallOverlay />
   </>
 );
