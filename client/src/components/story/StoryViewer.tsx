@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Trash2, X, Volume2, VolumeX, Heart, Send, MessageCircle, Loader2 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -202,7 +203,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
   const isVideo = story.type === "video" || /\.(mp4|webm|mov|mkv|3gp)(\?|$)/i.test(story.mediaUrl || "");
   const media = story.mediaUrl || "";
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[10000] bg-black flex items-center justify-center overflow-hidden"
       onTouchStart={(e) => { touchStartX.current = e.touches[0]?.clientX ?? null; }}
@@ -447,7 +448,8 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
