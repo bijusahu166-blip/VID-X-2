@@ -3602,7 +3602,47 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
     });
   }
 });
+  // ── Promo code redemption — grants free Pro access ──
+  // Server-side check on purpose: a frontend-only check would expose the
+  // code in the JS bundle and let anyone bypass it via dev tools.
+  const PROMO_CODES: Record<string, string> = {
+    "765wwiqpartner": "pro", // add more codes here as needed, lowercase key
+  };
 
+  app.post("/api/subscription/redeem-code", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const rawCode = String(req.body?.code ?? "").trim();
+      if (!rawCode) {
+        return res.status(400).json({ message: "Enter a code" });
+      }
+
+      const grantedPlan = PROMO_CODES[rawCode.toLowerCase()];
+      if (!grantedPlan) {
+        return res.status(400).json({ message: "Invalid or expired code" });
+      }
+
+      const [existing] = await db.select({
+        isPro: users.isPro,
+        subscriptionStatus: users.subscriptionStatus,
+      }).from(users).where(eq(users.id, userId)).limit(1);
+
+      if (existing?.isPro || existing?.subscriptionStatus === "active") {
+        return res.status(400).json({ message: "You already have an active subscription" });
+      }
+
+      await db.update(users).set({
+        isPro: true,
+        subscriptionStatus: "active",
+        subscriptionPlan: grantedPlan,
+        updatedAt: new Date(),
+      }).where(eq(users.id, userId));
+
+      res.json({ success: true, plan: grantedPlan });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Could not redeem code" });
+    }
+  });
   // Razorpay Dashboard → Webhooks me ye URL add karni hogi (Step 6 me detail)
   app.post(
     "/api/subscription/webhook",

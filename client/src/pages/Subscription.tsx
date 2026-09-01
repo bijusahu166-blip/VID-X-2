@@ -7,6 +7,7 @@ import {
   Loader2,
   Sparkles,
   PenTool,
+  Ticket,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -55,6 +56,8 @@ export default function Subscription() {
   const qc = useQueryClient();
 
   const [subscribing, setSubscribing] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [redeeming, setRedeeming] = useState(false);
 
   const { data, isLoading } = useQuery<{
     subscription: any;
@@ -217,6 +220,40 @@ export default function Subscription() {
           "Please try again.",
         variant: "destructive",
       });
+    }
+  };
+
+  // ── Promo code redemption ──
+  // Server verifies the code and grants the "signature" plan directly
+  // (see POST /api/subscription/redeem-code). The code is never checked
+  // on the client — only the server knows which codes are valid, so it
+  // can't be read out of the JS bundle or bypassed via dev tools.
+  const handleRedeemCode = async () => {
+    const code = promoCode.trim();
+    if (!code || redeeming) return;
+
+    setRedeeming(true);
+    try {
+      await apiRequest("POST", "/api/subscription/redeem-code", { code });
+
+      await qc.invalidateQueries({ queryKey: ["/api/subscription/mine"] });
+      await qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      await qc.invalidateQueries({ queryKey: ["/api/profile"] });
+
+      toast({
+        title: "Code redeemed! ✨",
+        description: "Premium Signature is now active for 3 months.",
+      });
+
+      setPromoCode("");
+    } catch (err: any) {
+      toast({
+        title: "Could not redeem code",
+        description: err?.message || "Please check the code and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRedeeming(false);
     }
   };
 
@@ -486,6 +523,81 @@ export default function Subscription() {
           </div>
         </div>
 
+        {/* Promo code redemption */}
+        {!isSignatureActive && (
+          <div
+            className="
+              mt-5
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/[0.03]
+              p-5
+            "
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Ticket className="w-4 h-4 text-pink-400" />
+              <p className="text-white font-bold text-sm">
+                Have a code?
+              </p>
+            </div>
+            <p className="text-xs text-zinc-500 mb-3">
+              Redeem a promo code to unlock Premium Signature for free.
+            </p>
+
+            <div className="flex gap-2">
+              <input
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleRedeemCode(); }}
+                placeholder="Enter code"
+                disabled={redeeming}
+                className="
+                  flex-1
+                  bg-white/5
+                  border
+                  border-white/10
+                  rounded-xl
+                  px-4
+                  py-2.5
+                  text-sm
+                  text-white
+                  outline-none
+                  focus:border-pink-500
+                  transition-colors
+                  placeholder:text-zinc-600
+                  disabled:opacity-60
+                "
+              />
+              <button
+                onClick={handleRedeemCode}
+                disabled={redeeming || !promoCode.trim()}
+                className="
+                  px-4
+                  py-2.5
+                  rounded-xl
+                  bg-white/10
+                  border
+                  border-white/15
+                  text-white
+                  text-sm
+                  font-bold
+                  hover:bg-white/15
+                  active:scale-95
+                  transition-all
+                  disabled:opacity-40
+                  flex
+                  items-center
+                  gap-2
+                  shrink-0
+                "
+              >
+                {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : "Redeem"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Signature preview */}
         <div
           className="
@@ -535,7 +647,7 @@ export default function Subscription() {
                 01
               </span>
               <p className="text-xs text-zinc-400">
-                Purchase Premium Signature for ₹99.
+                Purchase Premium Signature for ₹99, or redeem a promo code.
               </p>
             </div>
 
