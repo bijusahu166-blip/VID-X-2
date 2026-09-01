@@ -3609,6 +3609,10 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
     "765wwiqpartner": "pro", // add more codes here as needed, lowercase key
   };
 
+   const PROMO_CODES: Record<string, string> = {
+    "765wwiqpartner": "signature",
+  };
+
   app.post("/api/subscription/redeem-code", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
@@ -3625,10 +3629,14 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
       const [existing] = await db.select({
         isPro: users.isPro,
         subscriptionStatus: users.subscriptionStatus,
+        subscriptionPlan: users.subscriptionPlan,
       }).from(users).where(eq(users.id, userId)).limit(1);
 
-      if (existing?.isPro || existing?.subscriptionStatus === "active") {
-        return res.status(400).json({ message: "You already have an active subscription" });
+      // Only block if THIS exact plan is already active — don't let
+      // unrelated/leftover subscription state stop a valid code from
+      // granting the plan it's actually for.
+      if (existing?.subscriptionStatus === "active" && existing?.subscriptionPlan === grantedPlan) {
+        return res.status(400).json({ message: "This code's plan is already active on your account" });
       }
 
       await db.update(users).set({
