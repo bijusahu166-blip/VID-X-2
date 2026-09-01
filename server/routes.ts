@@ -3605,9 +3605,7 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
   // ── Promo code redemption — grants free Pro access ──
   // Server-side check on purpose: a frontend-only check would expose the
   // code in the JS bundle and let anyone bypass it via dev tools.
-  const PROMO_CODES: Record<string, string> = {
-    "765wwiqpartner": "pro", // add more codes here as needed, lowercase key
-  };
+
 
    const PROMO_CODES: Record<string, string> = {
     "765wwiqpartner": "signature",
