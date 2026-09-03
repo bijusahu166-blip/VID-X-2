@@ -3720,7 +3720,35 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
       res.status(500).json({ message: err.message });
     }
   });
+app.patch("/api/profile/signature", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.session.userId;
+    const { signatureText, signatureStyle } = req.body;
 
+    const [row] = await db.select({ isPro: users.isPro }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!row?.isPro) {
+      return res.status(403).json({ message: "Premium Signature subscription required" });
+    }
+
+    if (!signatureText || !signatureText.trim()) {
+      return res.status(400).json({ message: "Signature text required" });
+    }
+    if (signatureText.length > 30) {
+      return res.status(400).json({ message: "Signature too long (max 30 chars)" });
+    }
+
+    await db.update(users).set({
+      premiumSignature: signatureText.trim(),
+      signatureStyle: signatureStyle || "cursive",
+      signatureActive: true,
+      updatedAt: new Date(),
+    }).where(eq(users.id, userId));
+
+    res.json({ success: true, premiumSignature: signatureText.trim(), signatureStyle });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
   // ══════════════════════════════════════════════════════════════════════════
   // VOICE ROOMS + 1v1/2v2 BATTLE
   // ══════════════════════════════════════════════════════════════════════════
