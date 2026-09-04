@@ -44,6 +44,7 @@ import Messages from "@/pages/Messages";
 import Notifications from "@/pages/Notifications";
 import Jobs from "@/pages/Jobs";
 import Subscription from "@/pages/Subscription";
+import DeleteAccount from "./pages/DeleteAccount";
 
 const API_BASE = Capacitor.isNativePlatform() ? "https://iqpartner.xyz" : "";
 
@@ -350,6 +351,11 @@ function Router() {
 
   useServerVersionWatcher();
 
+  // Public page — must be reachable without login (Play Store requirement)
+  if (typeof window !== "undefined" && window.location.pathname === "/delete-account") {
+    return <DeleteAccount />;
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -383,7 +389,8 @@ function Router() {
         <Route path="/notifications" component={Notifications} />
         <Route path="/profile/:id" component={Profile} />
         <Route path="/subscription" component={Subscription} />
-
+        <Route path="/delete-account" component={DeleteAccount} />
+        
         <Route component={NotFound} />
       </Switch>
     </SwipeTabs>
