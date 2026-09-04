@@ -63,6 +63,33 @@ export default function DeleteAccount() {
             ))}
           </ul>
         </div>
+        
+        {/* Delete individual content */}
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 p-5 mb-6">
+          <h2 className="text-lg font-bold mb-4">Delete specific content (without deleting your account)</h2>
+          <p className="text-sm text-zinc-400 mb-3">
+            You don't have to delete your entire account to remove content. You can delete individual posts,
+            videos, reels, or books at any time:
+          </p>
+          <ol className="space-y-3">
+            {[
+              "Open the Vampire app and log in to your account.",
+              "Go to the post, video, or reel you want to remove.",
+              "Tap the ⋮ (three-dot) menu on that post.",
+              "Select \"Delete Post\" and confirm.",
+            ].map((step, i) => (
+              <li key={i} className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  {i + 1}
+                </div>
+                <p className="text-sm text-zinc-300 leading-relaxed">{step}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="text-sm text-zinc-400 mt-3">
+            Deleted posts, along with their likes and comments, are removed instantly and permanently.
+          </p>
+        </div>
 
         {/* Retention */}
         <div className="rounded-2xl border border-white/10 bg-zinc-950 p-5 mb-6">
