@@ -582,18 +582,55 @@ export default function Reels() {
       .sort((a, b) => b.score - a.score)
       .map(s => s.reel);
 
-    return displayReels.slice(0, 15);
+    // No hard cap here anymore — the full scored pool is kept. Looping back
+    // through it (instead of stopping) is handled below via modulo indexing
+    // into virtual slots, so we don't want to throw away reels the loop
+    // will need to cycle through.
+    return displayReels;
     // Re-score when the post list or the user's goal changes — NOT on every
     // scroll/activeIndex update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allPosts, userGoal]);
 
+  // ── Infinite virtual list ─────────────────────────────────────────────
+  // `loadedCount` is how many scroll "slots" currently exist. It's NOT the
+  // number of distinct reels — once the user scrolls past the actual reel
+  // pool, slots start looping back through `visibleReels` via modulo, so
+  // the feed never hits a dead end even with a small content library.
+  const INITIAL_LOAD = 15;
+  const LOAD_CHUNK = 10;
+  const [loadedCount, setLoadedCount] = useState(INITIAL_LOAD);
+
+  // Reset the virtual slot count whenever the underlying reel pool changes
+  // (new posts fetched, or goal/filter changed) so we don't carry over a
+  // huge loadedCount built for a different pool.
+  useEffect(() => {
+    setLoadedCount(Math.min(INITIAL_LOAD, Math.max(visibleReels.length, RENDER_WINDOW_AHEAD + 1)));
+  }, [visibleReels]);
+
+  // Grow the virtual list as the user approaches the current end, so more
+  // slots (and therefore more loops through the pool) are always ready
+  // just ahead of the scroll position.
+  useEffect(() => {
+    if (visibleReels.length === 0) return;
+    if (activeIndex >= loadedCount - RENDER_WINDOW_AHEAD - 2) {
+      setLoadedCount(c => c + LOAD_CHUNK);
+    }
+  }, [activeIndex, loadedCount, visibleReels.length]);
+
+  // Maps a virtual scroll slot to an actual reel, cycling through the pool
+  // once the user has scrolled past the last distinct reel.
+  const getReelAt = useCallback(
+    (slot: number) => (visibleReels.length > 0 ? visibleReels[slot % visibleReels.length] : undefined),
+    [visibleReels]
+  );
+
   useEffect(() => {
     for (let offset = 1; offset <= PRECACHE_AHEAD; offset++) {
-      const upcoming = visibleReels[activeIndex + offset];
+      const upcoming = getReelAt(activeIndex + offset);
       if (upcoming?.videoUrl) precacheVideo(toCloudinaryVideoUrl(upcoming.videoUrl));
     }
-  }, [activeIndex, visibleReels]);
+  }, [activeIndex, getReelAt]);
 
   const handleScroll = useCallback(() => {
     if (scrollTimeoutRef.current) {
