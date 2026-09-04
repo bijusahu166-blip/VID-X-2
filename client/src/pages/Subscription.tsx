@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Header } from "@/components/layout/Header";
 import {
@@ -49,6 +49,19 @@ const SIGNATURE_PLAN = {
     "Premium profile appearance",
   ],
 };
+
+const SIGNATURE_STYLES = [
+  { css: "cursive", label: "Cursive" },
+  { css: "'Brush Script MT', cursive", label: "Brush Script" },
+  { css: "'Segoe Script', cursive", label: "Segoe Script" },
+  { css: "'Georgia', serif", label: "Georgia" },
+  { css: "'Times New Roman', serif", label: "Times" },
+  { css: "'Courier New', monospace", label: "Typewriter" },
+  { css: "'Comic Sans MS', cursive", label: "Comic" },
+  { css: "'Impact', sans-serif", label: "Impact" },
+  { css: "'Trebuchet MS', sans-serif", label: "Trebuchet" },
+  { css: "'Palatino Linotype', serif", label: "Palatino" },
+];
 
 export default function Subscription() {
   const [, navigate] = useLocation();
@@ -152,12 +165,6 @@ export default function Subscription() {
           });
 
           setSubscribing(false);
-
-          /*
-           * Go back to profile where the user can
-           * complete/select their signature.
-           */
-          navigate("/profile");
         },
 
         modal: {
@@ -598,42 +605,54 @@ export default function Subscription() {
           </div>
         )}
 
-        {/* Signature preview */}
-        <div
-          className="
-            mt-5
-            rounded-2xl
-            border
-            border-white/10
-            bg-white/[0.03]
-            p-5
-          "
-        >
-          <p className="text-xs text-zinc-500 uppercase tracking-wider font-bold">
-            Your Premium Signature
-          </p>
-
-          <div className="mt-4 text-center">
-            <p className="text-zinc-500 text-xs mb-2">
-              After purchase
+        {/* Signature editor (active) OR locked preview (not subscribed yet) */}
+        {isSignatureActive ? (
+          <SignatureEditor
+            currentText={data?.subscription?.premium_signature}
+            currentStyle={data?.subscription?.signature_style}
+            onSaved={() => {
+              qc.invalidateQueries({ queryKey: ["/api/subscription/mine"] });
+              qc.invalidateQueries({ queryKey: ["/api/auth/user"] });
+              qc.invalidateQueries({ queryKey: ["/api/profile"] });
+            }}
+          />
+        ) : (
+          <div
+            className="
+              mt-5
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/[0.03]
+              p-5
+            "
+          >
+            <p className="text-xs text-zinc-500 uppercase tracking-wider font-bold">
+              Your Premium Signature
             </p>
 
-            <p
-              className="
-                text-3xl
-                text-white
-                font-semibold
-                italic
-              "
-            >
-              Your Name
-            </p>
+            <div className="mt-4 text-center">
+              <p className="text-zinc-500 text-xs mb-2">
+                After purchase
+              </p>
 
-            <p className="text-[10px] text-pink-400 mt-2">
-              ✦ Premium Signature ✦
-            </p>
+              <p
+                className="
+                  text-3xl
+                  text-white
+                  font-semibold
+                  italic
+                "
+              >
+                Your Name
+              </p>
+
+              <p className="text-[10px] text-pink-400 mt-2">
+                ✦ Premium Signature ✦
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* How it works */}
         <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -683,6 +702,123 @@ export default function Subscription() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Signature Editor — text input + 10 style picker + live preview
+// Shown only when the Premium Signature subscription is active.
+// Saves via PATCH /api/profile/signature.
+// ══════════════════════════════════════════════════════════════════════════
+function SignatureEditor({
+  currentText,
+  currentStyle,
+  onSaved,
+}: {
+  currentText?: string;
+  currentStyle?: string;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [text, setText] = useState(currentText || "");
+  const [style, setStyle] = useState(currentStyle || SIGNATURE_STYLES[0].css);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (currentText) setText(currentText);
+    if (currentStyle) setStyle(currentStyle);
+  }, [currentText, currentStyle]);
+
+  const handleSave = async () => {
+    if (!text.trim()) {
+      toast({ title: "Enter your signature text", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiRequest("PATCH", "/api/profile/signature", {
+        signatureText: text.trim(),
+        signatureStyle: style,
+      });
+      toast({ title: "Signature saved! ✨" });
+      onSaved();
+    } catch (err: any) {
+      toast({
+        title: "Could not save signature",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-5 rounded-2xl border border-pink-500/20 bg-white/[0.03] p-5">
+      <p className="text-xs text-zinc-500 uppercase tracking-wider font-bold mb-1">
+        Your Premium Signature
+      </p>
+      <p className="text-[11px] text-zinc-600 mb-4">
+        Type your name and pick a style — it'll show on your profile and posts.
+      </p>
+
+      {/* Live preview */}
+      <div className="rounded-xl border border-white/10 bg-black/30 py-6 text-center mb-4">
+        <p
+          className="text-3xl text-white break-words px-4"
+          style={{ fontFamily: style }}
+        >
+          {text.trim() || "Your Name"}
+        </p>
+        <p className="text-[10px] text-pink-400 mt-2">✦ Premium Signature ✦</p>
+      </div>
+
+      {/* Text input */}
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value.slice(0, 30))}
+        placeholder="Enter your signature name"
+        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-pink-500 transition-colors placeholder:text-zinc-600 mb-1"
+      />
+      <p className="text-[10px] text-zinc-600 text-right mb-4">{text.length}/30</p>
+
+      {/* Style picker */}
+      <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wide mb-2">
+        Choose a style
+      </p>
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {SIGNATURE_STYLES.map((s) => (
+          <button
+            key={s.css}
+            onClick={() => setStyle(s.css)}
+            className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+              style === s.css
+                ? "border-pink-400/60 bg-pink-400/10"
+                : "border-white/10 hover:bg-white/5"
+            }`}
+          >
+            <p className="text-lg text-white truncate" style={{ fontFamily: s.css }}>
+              {text.trim() || "Aa Bb"}
+            </p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">{s.label}</p>
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={saving || !text.trim()}
+        className="w-full py-3 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-violet-600 text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+      >
+        {saving ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" /> Saving…
+          </>
+        ) : (
+          "Save Signature"
+        )}
+      </button>
     </div>
   );
 }

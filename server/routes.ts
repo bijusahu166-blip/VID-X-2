@@ -3500,24 +3500,32 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
   signature: process.env.RAZORPAY_PLAN_SIGNATURE!,
 };
 
-  app.get("/api/subscription/mine", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.session.userId;
-      const [row] = await db.select({
-        isPro: users.isPro,
-        subscriptionStatus: users.subscriptionStatus,
-        subscriptionPlan: users.subscriptionPlan,
-      }).from(users).where(eq(users.id, userId)).limit(1);
+ app.get("/api/subscription/mine", isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.session.userId;
+    const [row] = await db.select({
+      isPro: users.isPro,
+      subscriptionStatus: users.subscriptionStatus,
+      subscriptionPlan: users.subscriptionPlan,
+      premiumSignature: users.premiumSignature,
+      signatureStyle: users.signatureStyle,
+    }).from(users).where(eq(users.id, userId)).limit(1);
 
-      const subscription = row?.subscriptionStatus === "active"
-        ? { plan_type: row.subscriptionPlan || "pro", status: row.subscriptionStatus, is_pro: !!row.isPro }
-        : null;
+    const subscription = row?.subscriptionStatus === "active"
+      ? {
+          plan_type: row.subscriptionPlan || "pro",
+          status: row.subscriptionStatus,
+          is_pro: !!row.isPro,
+          premium_signature: row.premiumSignature,
+          signature_style: row.signatureStyle,
+        }
+      : null;
 
-      res.json({ subscription });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
+    res.json({ subscription });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
  app.post("/api/subscription/create", isAuthenticated, async (req: any, res: any) => {
   try {
@@ -3716,6 +3724,49 @@ app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) 
 
       await db.update(users).set({ isPro: false, subscriptionStatus: "cancelled", updatedAt: new Date() }).where(eq(users.id, userId));
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+    // ══════════════════════════════════════════════════════════════════════════
+  // PREMIUM SIGNATURE — save/update signature text + style
+  // ══════════════════════════════════════════════════════════════════════════
+  const SIGNATURE_STYLES = [
+    "cursive", "'Brush Script MT', cursive", "'Segoe Script', cursive",
+    "'Georgia', serif", "'Times New Roman', serif", "'Courier New', monospace",
+    "'Comic Sans MS', cursive", "'Impact', sans-serif", "'Trebuchet MS', sans-serif",
+    "'Palatino Linotype', serif",
+  ];
+
+  app.get("/api/profile/signature/styles", isAuthenticated, async (_req, res) => {
+    res.json({ styles: SIGNATURE_STYLES });
+  });
+
+  app.patch("/api/profile/signature", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { signatureText, signatureStyle } = req.body;
+
+      const [row] = await db.select({ isPro: users.isPro, subscriptionStatus: users.subscriptionStatus })
+        .from(users).where(eq(users.id, userId)).limit(1);
+      if (!row?.isPro || row.subscriptionStatus !== "active") {
+        return res.status(403).json({ message: "Premium Signature subscription required" });
+      }
+
+      const text = String(signatureText ?? "").trim();
+      if (!text) return res.status(400).json({ message: "Signature text required" });
+      if (text.length > 30) return res.status(400).json({ message: "Signature too long (max 30 characters)" });
+
+      const style = SIGNATURE_STYLES.includes(signatureStyle) ? signatureStyle : SIGNATURE_STYLES[0];
+
+      await db.update(users).set({
+        premiumSignature: text,
+        signatureStyle: style,
+        signatureActive: true,
+        updatedAt: new Date(),
+      }).where(eq(users.id, userId));
+
+      res.json({ success: true, premiumSignature: text, signatureStyle: style });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
