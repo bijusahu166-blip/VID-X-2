@@ -32,12 +32,14 @@ interface ReelPost {
 // How many cards ahead/behind the active one actually mount their <video>
 // element + hooks. Everything outside this window renders as a lightweight
 // same-height spacer instead, so scroll-snap math stays correct without
-// paying the cost of 15 simultaneous video elements + comment/report state.
+// paying the cost of many simultaneous video elements + comment/report state.
 const RENDER_WINDOW_BEHIND = 1;
-const RENDER_WINDOW_AHEAD = 4;
+const RENDER_WINDOW_AHEAD = 5;
 // How many upcoming reels get their video warmed into the browser cache
 // ahead of time, so swiping to them is instant instead of showing a spinner.
-const PRECACHE_AHEAD = 4;
+// Kept equal to RENDER_WINDOW_AHEAD so we never precache a reel that isn't
+// actually mounted yet (that would just waste bandwidth).
+const PRECACHE_AHEAD = 5;
 
 function ReelCard({
   reel,
@@ -116,10 +118,14 @@ function ReelCard({
       video.play()
         .then(() => setIsPlaying(true))
         .catch(() => {
-          if (isMuted) return;
+          // Autoplay-with-sound was blocked by the browser. Fall back to a
+          // LOCAL mute on just this <video> element so playback still
+          // starts — but never touch the app-wide `isMuted` state here.
+          // Calling onToggleSound() used to flip the user's global sound
+          // preference every time this happened, which is why sound had
+          // to be re-enabled on almost every new reel.
           video.muted = true;
-          onToggleSound();
-          video.play().catch(() => null);
+          video.play().then(() => setIsPlaying(true)).catch(() => null);
         });
     } else {
       video.pause();
@@ -127,7 +133,7 @@ function ReelCard({
       video.removeAttribute('src');
       video.load();
     }
-  }, [isActive, isMuted, onToggleSound, reel.videoUrl]);
+  }, [isActive, isMuted, reel.videoUrl]);
 
   const retryVideo = useCallback(() => {
     const video = videoRef.current;
@@ -553,11 +559,22 @@ export default function Reels() {
       }
     });
 
+    // When the content library is small, engagement score alone would push
+    // the same handful of "popular" reels to the top for every single user
+    // (since matchCount/engagementScore are the same for everyone, and the
+    // old Math.random()*8 was too small to meaningfully outweigh them).
+    // That's why every user was seeing the same order. Give randomness a
+    // much bigger say when there isn't much content to rank yet, so each
+    // user/session actually gets a different feed order. As content grows,
+    // randomness weight shrinks back down and engagement/relevance take over.
+    const lowContentThreshold = 20;
+    const randomWeight = baseReels.length <= lowContentThreshold ? 40 : 8;
+
     const scoredReels = baseReels.map((r: any) => {
       const tags = extractTags(r.caption);
       const matchCount = tags.filter(t => interestTags.has(t)).length;
       const engagementScore = (r.likesCount ?? 0) * 0.5 + (r.commentsCount ?? 0) * 0.5;
-      const score = matchCount * 10 + engagementScore + Math.random() * 8;
+      const score = matchCount * 10 + engagementScore + Math.random() * randomWeight;
       return { reel: r, score };
     });
 
