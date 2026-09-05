@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -446,7 +445,6 @@ export default function Reading() {
           ) : null}
         </AnimatePresence>
       </main>
-      <BottomNav />
     </div>
   );
 }

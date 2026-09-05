@@ -1,4 +1,3 @@
-import { BottomNav } from "@/components/layout/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -798,7 +797,6 @@ const sortedUserPosts = (userPosts ?? [])
       </>
       )}
 
-      <BottomNav />
 
       {viewingPost && (
         <PostViewerModal
@@ -2782,7 +2780,6 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
         }
       `}</style>
 
-      <BottomNav />
 
       {viewingMyPost && (
         <PostViewerModal

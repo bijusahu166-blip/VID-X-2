@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,6 +20,7 @@ import { playSend, playReceive } from "@/lib/sounds";
 import { encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
+import { useHideBottomNavWhenOpen } from "@/contexts/BottomNavVisibilityContext";
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DirectMessage {
   id: number;
@@ -706,9 +706,17 @@ function ChatView({ chat, currentUserId, onBack }: { chat: ChatContact; currentU
     qc.invalidateQueries({ queryKey: ["/api/direct-chats"] });
   }, [chat.id, messages.length]);
 
+  const scrollMessagesToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const marker = bottomRef.current;
+    const viewport = marker?.closest("[data-radix-scroll-area-viewport]") as HTMLElement | null;
+    if (!viewport) return;
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+  }, []);
+
   useEffect(() => {
-  bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-}, [messages.length]);
+    const frame = window.requestAnimationFrame(() => scrollMessagesToBottom("auto"));
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages.length, scrollMessagesToBottom]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -904,7 +912,6 @@ const notifyTyping = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed || !partnerId) return;
     setText("");
-    focusComposer();
     try {
       const encrypted = await encryptMessage(trimmed, currentUserId, partnerId);
       sendMsg.mutate({ content: encrypted, type: "text", replyToId: replyTo?.id, expiresInSeconds: disappearing ? 30 : undefined });
@@ -913,7 +920,10 @@ const notifyTyping = useCallback(() => {
       setText((current) => current || trimmed);
       toast({ title: "Message encryption failed", description: err?.message || "Please try again", variant: "destructive" });
     } finally {
-      focusComposer();
+      window.setTimeout(() => {
+        textareaRef.current?.focus({ preventScroll: true });
+        scrollMessagesToBottom("smooth");
+      }, 0);
     }
   };
 
@@ -1549,6 +1559,8 @@ export default function Messages() {
 
   const currentUserId: string = (user as any)?.claims?.sub ?? (user as any)?.id ?? "";
 
+  useHideBottomNavWhenOpen(activeChat !== null);
+
   useEffect(() => {
     const params = new URLSearchParams(location.split("?")[1] || "");
     const chatId = params.get("openChatId");
@@ -1576,7 +1588,6 @@ export default function Messages() {
           pendingOpenChatId={pendingOpenChatId}
         />
       </div>
-      <BottomNav />
     </div>
   );
 }

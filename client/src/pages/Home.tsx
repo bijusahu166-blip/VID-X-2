@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { BannerAd } from "@/components/ads/BannerAd";
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -140,7 +141,14 @@ const addComment = useMutation({
 
   if (!open) return null;
 
-  return (
+  // Rendered via a portal straight onto document.body: Home is a descendant
+  // of SwipeTabs' animated motion.div (App.tsx), which carries a CSS
+  // `transform` for the page-slide animation. Any transformed ancestor
+  // becomes the containing block for `position: fixed` descendants — so
+  // without the portal, this "fixed inset-0" sheet was fixing itself to
+  // the bottom of that motion.div (i.e. the bottom of the page CONTENT)
+  // instead of the actual screen viewport.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-md mx-auto rounded-t-3xl bg-zinc-950 border-t border-zinc-800 flex flex-col" style={{ maxHeight: "75vh" }}>
@@ -213,7 +221,8 @@ const addComment = useMutation({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -267,10 +276,18 @@ function PostActionMenu({
     onError: () => toast({ title: "Could not submit report", variant: "destructive" }),
   });
 
-  return (
+  // Same portal fix as CommentsDrawer above — without it, this "fixed
+  // inset-0" report/delete menu sticks to the bottom of Home's page content
+  // (inside SwipeTabs' transformed motion.div) instead of the screen's
+  // actual bottom, which is exactly the "menu shows up where the content
+  // ends" bug.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md mx-auto rounded-t-3xl bg-zinc-950 border-t border-zinc-800 overflow-hidden">
+      <div
+        className="relative w-full max-w-md max-h-[85dvh] mx-auto overflow-y-auto rounded-t-3xl bg-zinc-950 border-t border-zinc-800"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-zinc-700" />
         </div>
@@ -398,7 +415,8 @@ function PostActionMenu({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 function RecommendedVideoCard({ video, onSkip }: { video: any; onSkip: (videoId: string) => void }) {

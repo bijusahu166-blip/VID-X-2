@@ -1,4 +1,3 @@
-import { BottomNav } from "@/components/layout/BottomNav";
 import { Header } from "@/components/layout/Header";
 import { Search as SearchIcon, Users, X, CheckCircle2, UserCircle2, BookOpen, Newspaper } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -243,8 +242,6 @@ export default function Search() {
         </AnimatePresence>
       </div>
 
-      <BottomNav />
     </div>
   );
 }
-

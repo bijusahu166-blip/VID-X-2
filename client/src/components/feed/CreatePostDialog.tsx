@@ -36,6 +36,29 @@ interface CreatePostDialogProps {
   defaultTab?: UploadType;
 }
 
+async function uploadDataURLToCloudinary(dataUrl: string, fileName: string): Promise<string> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const file = new File([blob], fileName, { type: blob.type || "image/jpeg" });
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const uploadResponse = await fetch("/api/upload/image", {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+
+  if (!uploadResponse.ok) {
+    const errorData = await uploadResponse.json().catch(() => ({}));
+    throw new Error(errorData.message || "Image upload failed");
+  }
+
+  const data = await uploadResponse.json();
+  if (!data.imageUrl) throw new Error("Image upload returned no URL");
+  return data.imageUrl;
+}
+
 const CATEGORIES = ["Vlog", "Gaming", "Music", "Travel", "Food", "Tech", "Education", "Comedy", "Fitness", "Fashion"];
 const VISIBILITY = [
   { id: "public", label: "Public", icon: Globe, desc: "Everyone can see" },
@@ -691,6 +714,11 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const currentUser = user;
+    if (!currentUser) {
+      toast({ title: "Please sign in to upload", variant: "destructive" });
+      return;
+    }
 
     const finalCaption =
       uploadType === "video"
@@ -830,7 +858,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
                 await createPost.mutateAsync({
                   imageUrl: "",
                   caption: captionWithCategory,
-                  userId: user.id,
+                  userId: currentUser.id,
                   type:
                     uploadType === "video"
                       ? "video"
@@ -966,7 +994,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
         await createPost.mutateAsync({
           imageUrl: cloudinaryImageUrl,
           caption: captionWithCategory,
-          userId: user.id,
+          userId: currentUser.id,
           type: uploadType,
 
           ...(selectedSong
@@ -1041,7 +1069,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md bg-black border border-white/10 shadow-2xl overflow-hidden p-0 rounded-2xl">
+      <DialogContent className="sm:max-w-md z-[60] bg-black border border-white/10 shadow-2xl overflow-hidden p-0 rounded-2xl">
         <DialogDescription className="sr-only">Create new content</DialogDescription>
 
         {/* Header */}

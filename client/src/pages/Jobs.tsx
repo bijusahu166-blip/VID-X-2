@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { BottomNav } from "@/components/layout/BottomNav";
 import "./Jobs.css";
 
 type JobScreen = "browse" | "post" | "myjobs";
@@ -654,7 +653,6 @@ export default function Jobs() {
       )}
 
       <div style={{ height: "100px" }} />
-      <BottomNav />
     </div>
   );
 }

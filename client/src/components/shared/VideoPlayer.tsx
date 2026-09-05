@@ -43,6 +43,7 @@ try {
 function setGlobalMuted(value: boolean) {
   globalMuted = value;
   try { localStorage.setItem("videoMuted", String(value)); } catch {}
+  window.dispatchEvent(new CustomEvent("video-muted-change", { detail: value }));
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,15 @@ export function VideoPlayer({
   const [firstFrame, setFirstFrame] = useState(false);
 
   const { dataSaver, quality } = useVideoSettings();
+
+  useEffect(() => {
+    const onMuteChange = (event: Event) => {
+      const value = (event as CustomEvent<boolean>).detail;
+      if (typeof value === "boolean") setMuted(value);
+    };
+    window.addEventListener("video-muted-change", onMuteChange);
+    return () => window.removeEventListener("video-muted-change", onMuteChange);
+  }, []);
 
   // ── HLS.js setup ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -156,6 +166,7 @@ export function VideoPlayer({
   const playWhenReady = useCallback((video: HTMLVideoElement) => {
     const token = claimPlayback(video);
     const reqId = ++playRequestRef.current;
+    video.muted = muted;
 
     const doPlay = () => {
       if (playRequestRef.current !== reqId) return;
@@ -176,7 +187,7 @@ export function VideoPlayer({
       };
       video.addEventListener("canplay", onCanPlay);
     }
-  }, []);
+  }, [muted]);
 
   // Hard-stop helper — pauses, resets, and releases the global slot.
   // Used whenever a video scrolls out of view or unmounts, so audio/video

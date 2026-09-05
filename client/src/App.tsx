@@ -22,8 +22,8 @@ import {
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from "react";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { AnimatePresence, motion } from "framer-motion";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
@@ -396,17 +396,6 @@ function Router() {
       </Switch>
     </SwipeTabs>
 
-    {/* Rendered OUTSIDE SwipeTabs' motion.div on purpose: that div carries
-        Framer Motion's transform (and will-change-transform) for the page
-        slide animation, and CSS makes ANY transformed ancestor become the
-        containing block for position:fixed descendants. BottomNav was
-        getting trapped inside it — sticking to the bottom of the page
-        content instead of the real viewport. Its own internal route check
-        (shouldHideBottomNav) already decides when to hide itself, so one
-        instance here covers every page. It ALSO reads
-        BottomNavVisibilityContext (provided further up, in App()) so any
-        component — a chat thread, a settings panel, a comment/report sheet
-        — can hide it too, even without changing the route. */}
     <BottomNav />
 
     <GlobalCallOverlay />
