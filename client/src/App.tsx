@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react";
 import { CallProvider, useCall } from "@/contexts/CallContext";
 import { VideoSettingsProvider } from "@/contexts/VideoSettingsContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { BottomNavVisibilityProvider } from "@/contexts/BottomNavVisibilityContext";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
 import { IncomingCallScreen } from "@/components/call/IncomingCallScreen";
 import {
@@ -402,7 +403,10 @@ function Router() {
         getting trapped inside it — sticking to the bottom of the page
         content instead of the real viewport. Its own internal route check
         (shouldHideBottomNav) already decides when to hide itself, so one
-        instance here covers every page. */}
+        instance here covers every page. It ALSO reads
+        BottomNavVisibilityContext (provided further up, in App()) so any
+        component — a chat thread, a settings panel, a comment/report sheet
+        — can hide it too, even without changing the route. */}
     <BottomNav />
 
     <GlobalCallOverlay />
@@ -468,8 +472,14 @@ function App() {
         <LanguageProvider>
           <VideoSettingsProvider>
             <CallProvider>
-              <Toaster />
-              <AppContent />
+              {/* Must wrap BOTH BottomNav (in Router) and every page/overlay
+                  that might need to hide it — Home's comment/report sheets,
+                  Profile's settings panel, Messages' chat thread, etc. —
+                  so it needs to sit above Router in the tree, not inside it. */}
+              <BottomNavVisibilityProvider>
+                <Toaster />
+                <AppContent />
+              </BottomNavVisibilityProvider>
             </CallProvider>
           </VideoSettingsProvider>
         </LanguageProvider>

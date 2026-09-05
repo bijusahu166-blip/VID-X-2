@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { useBottomNavVisibility } from "@/contexts/BottomNavVisibilityContext";
 
 type NavItem = {
   id: string;
@@ -72,90 +73,40 @@ function isActiveRoute(location: string, href: string) {
 }
 
 /**
- * Bottom navigation is shown only on the main navigation screens.
- * Full-screen/detail/action screens must never show it.
+ * Bottom navigation is shown ONLY on the main tab screens — everywhere else
+ * it's hidden by default.
+ *
+ * This is deliberately a WHITELIST, not a blacklist. An earlier version
+ * hid known problem routes and showed the nav on everything else — which
+ * meant any new screen that forgot to get added to that list would show
+ * the nav by mistake. Whitelisting the handful of real main-tab routes
+ * means the safe/default outcome for every other route (existing or
+ * future) is "hidden", with zero maintenance needed elsewhere.
+ *
+ * NOTE: this only covers routes that actually change the URL. Overlays
+ * that open WITHOUT a route change — a chat thread opened as internal
+ * state inside /messages, a settings panel inside /profile, a
+ * comment/report bottom sheet on the home feed — do NOT go through here.
+ * Those are handled separately via BottomNavVisibilityContext (see
+ * useHideBottomNavWhenOpen), which any component can call regardless of
+ * the current route. Between the two, the nav can only ever be visible
+ * on a bare main-tab screen with no overlay open.
  */
+const MAIN_TAB_ROUTES = ["/", "/search", "/jobs", "/reels", "/messages", "/profile"];
+
+function isMainTabRoute(path: string) {
+  if (MAIN_TAB_ROUTES.includes(path)) return true;
+  // Viewing someone else's profile (/profile/:id) is still the same "Me"
+  // tab experience, just for another user — keep it visible there too.
+  if (path.startsWith("/profile/")) return true;
+  return false;
+}
+
 function shouldHideBottomNav(location: string) {
   const path =
     (location.split("?")[0] || "/").replace(/\/+$/, "") || "/";
 
-  // Direct chat / chat detail
-  if (path.startsWith("/messages/")) {
-    return true;
-  }
-
-  // Voice rooms
-  if (
-    path === "/voice-room/create" ||
-    path === "/voice-rooms/create" ||
-    path.startsWith("/voice-rooms/")
-  ) {
-    return true;
-  }
-
-  // Upload / create screens
-  const hiddenExactRoutes = [
-    "/upload",
-    "/upload/video",
-    "/upload/image",
-    "/upload/photo",
-    "/create",
-    "/create-post",
-    "/create-post/video",
-    "/create-post/photo",
-    "/post/create",
-    "/video/upload",
-    "/photo/upload",
-    "/reel/create",
-    "/reels/create",
-
-    // Full-screen/action pages
-    "/camera",
-    "/record",
-    "/record-video",
-    "/record-audio",
-    "/live",
-    "/go-live",
-    "/live/create",
-
-    // Utility/action pages
-    "/subscription",
-    "/buy-coins",
-    "/notifications",
-  ];
-
-  if (hiddenExactRoutes.includes(path)) {
-    return true;
-  }
-
-  // Nested upload/create routes
-  if (
-    path.startsWith("/upload/") ||
-    path.startsWith("/create/") ||
-    path.startsWith("/create-post/")
-  ) {
-    return true;
-  }
-
-  // Full-screen post/video/story viewers
-  if (
-    path.startsWith("/post/") ||
-    path.startsWith("/posts/") ||
-    path.startsWith("/video/") ||
-    path.startsWith("/videos/") ||
-    path.startsWith("/story/") ||
-    path.startsWith("/stories/")
-  ) {
-    return true;
-  }
-
-  // Reel details/full-screen reel.
-  // Keep the main /reels tab visible.
-  if (path.startsWith("/reels/") && path !== "/reels") {
-    return true;
-  }
-
-  return false;
+  return !isMainTabRoute(path);
 }
 
 export function BottomNav() {
@@ -163,7 +114,9 @@ export function BottomNav() {
 
   // IMPORTANT:
   // Keep hooks unconditional. Do not put useQuery behind an early return.
-  const hideBottomNav = shouldHideBottomNav(location);
+  const hideByRoute = shouldHideBottomNav(location);
+  const { isHidden: hideByOverlay } = useBottomNavVisibility();
+  const hideBottomNav = hideByRoute || hideByOverlay;
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],

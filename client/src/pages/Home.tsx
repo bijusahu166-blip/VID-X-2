@@ -23,6 +23,7 @@ import { PostViewerModal } from "@/components/post/PostViewerModal";
 import { StoryViewer } from "@/components/story/StoryViewer";
 import { playLike, playUnlike } from "@/lib/sounds";
 import { getGoalSubjects } from "@/lib/goal-subjects";
+import { useHideBottomNavWhenOpen } from "@/contexts/BottomNavVisibilityContext";
 
 const CATEGORIES = [
   { label: "All", icon: null },
@@ -502,6 +503,18 @@ export default function Home() {
   const [livePost, setLivePost] = useState<any | null>(null);
   const [viewingPost, setViewingPost] = useState<any | null>(null);
   const [viewingStoryIdx, setViewingStoryIdx] = useState<number | null>(null);
+
+  // These are all internal-state overlays — opening them never changes the
+  // URL, so the bottom nav's own route-based check never sees them. This is
+  // what was letting it sit on top of the comment box, the report/delete
+  // menu, and the live/post/story full-screen viewers on the home feed.
+  useHideBottomNavWhenOpen(
+    openCommentPostId !== null ||
+    !!actionMenuPost ||
+    !!livePost ||
+    !!viewingPost ||
+    viewingStoryIdx !== null
+  );
 
   // ✅ SIRF YE EK BLOCK RAHE
 const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
