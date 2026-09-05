@@ -663,21 +663,31 @@ export default function Reels() {
         {isLoading ? (
           <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-cyan-500 w-10 h-10" /></div>
         ) : (
-          visibleReels.map((reel, i) => {
+          // Render `loadedCount` virtual slots, NOT visibleReels.length — once
+          // the user scrolls past the last distinct reel, getReelAt() wraps
+          // back around (modulo) so the feed loops instead of dead-ending.
+          Array.from({ length: loadedCount }, (_, i) => {
+            const reel = getReelAt(i);
+            if (!reel) return null;
+
             const withinRenderWindow =
               i >= activeIndex - RENDER_WINDOW_BEHIND && i <= activeIndex + RENDER_WINDOW_AHEAD;
+
+            // Slot key includes the virtual index (not just reel.id) because
+            // the same reel can now appear at multiple slots once we loop.
+            const slotKey = `${reel.id}-${i}`;
 
             // Outside the render window: a same-height spacer instead of a
             // full ReelCard, so scroll-snap math (scrollTop / clientHeight)
             // stays correct without mounting a <video> + all its hooks for
             // reels the user isn't near yet.
             if (!withinRenderWindow) {
-              return <div key={reel.id} className="snap-start h-[100dvh] w-full bg-black" />;
+              return <div key={slotKey} className="snap-start h-[100dvh] w-full bg-black" />;
             }
 
             return (
               <ReelCard
-                key={reel.id}
+                key={slotKey}
                 reel={reel}
                 isActive={i === activeIndex}
                 isMuted={isMuted}
