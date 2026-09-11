@@ -14,6 +14,7 @@ import {
   Shield, UserMinus, UserCheck, VolumeX, Volume2, Gavel, Settings, Flame, Target, Wallet, Activity, Download, Mic, Image as ImageIcon, Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/queryClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Group {
@@ -136,7 +137,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
   const mutation = useMutation({
     mutationFn: async () => {
       setErrorMsg("");
-      const r = await fetch("/api/groups", {
+      const r = await fetch(apiUrl("/api/groups"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, description: desc, isPublic }),
@@ -241,7 +242,7 @@ function CreateTestModal({ groupId, onClose }: { groupId: number; onClose: () =>
         negativeMarking > 0 ? `Negative: ${negativeMarking}` : "",
       ].filter(Boolean).join(" | ");
 
-      const r = await fetch(`/api/groups/${groupId}/tests`, {
+      const r = await fetch(apiUrl(`/api/groups/${groupId}/tests`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -549,7 +550,7 @@ function TakeTest({ testId, onClose, onResult }: {
 }) {
   const { data: test, isLoading } = useQuery<TestWithQuestions>({
     queryKey: [`/api/tests/${testId}`],
-    queryFn: () => fetch(`/api/tests/${testId}`).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/tests/${testId}`)).then(r => r.json()),
   });
 
   const [currentQ, setCurrentQ] = useState(0);
@@ -562,7 +563,7 @@ function TakeTest({ testId, onClose, onResult }: {
   const submitMutation = useMutation({
     mutationFn: async () => {
       const timeTaken = Math.floor((Date.now() - startTime) / 1000);
-      const r = await fetch(`/api/tests/${testId}/attempt`, {
+      const r = await fetch(apiUrl(`/api/tests/${testId}/attempt`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers, timeTaken }),
@@ -734,7 +735,7 @@ function TestResult({ result, testId, onClose, onLeaderboard }: {
 }) {
   const { data: attemptDetail } = useQuery({
     queryKey: [`/api/attempts/${result.attemptId}`],
-    queryFn: () => fetch(`/api/attempts/${result.attemptId}`).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/attempts/${result.attemptId}`)).then(r => r.json()),
   });
 
   const pct = result.percentage;
@@ -815,7 +816,7 @@ function Leaderboard({ testId, testTitle, onClose }: { testId: number; testTitle
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
   const { data: board = [] } = useQuery<LeaderboardEntry[]>({
     queryKey: [`/api/tests/${testId}/leaderboard`],
-    queryFn: () => fetch(`/api/tests/${testId}/leaderboard`).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/tests/${testId}/leaderboard`)).then(r => r.json()),
   });
 
   const medals = ["🥇", "🥈", "🥉"];
@@ -942,32 +943,32 @@ function GroupDetail({ groupId, onBack }: { groupId: number; onBack: () => void 
 
   const { data: group } = useQuery<Group & { my_role?: string }>({
     queryKey: [`/api/groups/${groupId}`],
-    queryFn: () => fetch(`/api/groups/${groupId}`).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/groups/${groupId}`)).then(r => r.json()),
   });
   const { data: feed = [] } = useQuery<GroupPost[]>({
     queryKey: [`/api/groups/${groupId}/posts`],
-    queryFn: () => fetch(`/api/groups/${groupId}/posts`).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/groups/${groupId}/posts`)).then(r => r.json()),
   });
   const { data: groupTests = [] } = useQuery<any[]>({
     queryKey: [`/api/groups/${groupId}/tests`],
-    queryFn: () => fetch(`/api/groups/${groupId}/tests`).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/groups/${groupId}/tests`)).then(r => r.json()),
   });
   const { data: myStats = [] } = useQuery<any[]>({
     queryKey: ["/api/me/test-stats"],
-    queryFn: () => fetch("/api/me/test-stats").then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/me/test-stats")).then(r => r.json()),
   });
   const { data: members = [] } = useQuery<GroupMemberEntry[]>({
     queryKey: [`/api/groups/${groupId}/members`],
-    queryFn: () => fetch(`/api/groups/${groupId}/members`).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/groups/${groupId}/members`)).then(r => r.json()),
   });
   const { data: joinRequests = [] } = useQuery<JoinRequestEntry[]>({
     queryKey: [`/api/groups/${groupId}/join-requests`],
-    queryFn: () => fetch(`/api/groups/${groupId}/join-requests`).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/groups/${groupId}/join-requests`)).then(r => r.json()),
     enabled: group?.my_role === "admin",
   });
 
   const joinMutation = useMutation({
-    mutationFn: () => fetch(`/api/groups/${groupId}/join`, { method: "POST" }).then(r => r.json()),
+    mutationFn: () => fetch(apiUrl(`/api/groups/${groupId}/join`), { method: "POST" }).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`/api/groups/${groupId}`] });
       qc.invalidateQueries({ queryKey: [`/api/groups/${groupId}/members`] });
@@ -975,7 +976,7 @@ function GroupDetail({ groupId, onBack }: { groupId: number; onBack: () => void 
     },
   });
   const postMutation = useMutation({
-    mutationFn: (payload?: { content?: string; imageUrl?: string | null; type?: string; testId?: number | null }) => fetch(`/api/groups/${groupId}/posts`, {
+    mutationFn: (payload?: { content?: string; imageUrl?: string | null; type?: string; testId?: number | null }) => fetch(apiUrl(`/api/groups/${groupId}/posts`), {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         content: payload?.content ?? postText,
@@ -995,7 +996,7 @@ function GroupDetail({ groupId, onBack }: { groupId: number; onBack: () => void 
     },
   });
   const groupBasicsMutation = useMutation({
-    mutationFn: () => fetch(`/api/groups/${groupId}`, {
+    mutationFn: () => fetch(apiUrl(`/api/groups/${groupId}`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1011,7 +1012,7 @@ function GroupDetail({ groupId, onBack }: { groupId: number; onBack: () => void 
     },
   });
   const permissionMutation = useMutation({
-    mutationFn: () => fetch(`/api/groups/${groupId}/permissions`, {
+    mutationFn: () => fetch(apiUrl(`/api/groups/${groupId}/permissions`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1039,7 +1040,7 @@ function GroupDetail({ groupId, onBack }: { groupId: number; onBack: () => void 
   });
   const joinRequestActionMutation = useMutation({
     mutationFn: ({ requestId, action }: { requestId: number; action: "approve" | "reject" }) =>
-      fetch(`/api/groups/${groupId}/join-requests/${requestId}`, {
+      fetch(apiUrl(`/api/groups/${groupId}/join-requests/${requestId}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
@@ -1192,7 +1193,7 @@ function GroupDetail({ groupId, onBack }: { groupId: number; onBack: () => void 
       if (noteKind === "pdf") {
         const formData = new FormData();
         formData.append("pdf", file);
-        const response = await fetch("/api/upload/book-pdf", { method: "POST", credentials: "include", body: formData });
+        const response = await fetch(apiUrl("/api/upload/book-pdf"), { method: "POST", credentials: "include", body: formData });
         if (!response.ok) throw new Error("PDF upload failed");
         const body = await response.json();
         setNoteFileUrl(body.pdfUrl || "");
@@ -1995,7 +1996,7 @@ export default function Groups() {
 
   const { data: groupsList = [], isLoading } = useQuery<Group[]>({
     queryKey: ["/api/groups"],
-    queryFn: () => fetch("/api/groups").then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/groups")).then(r => r.json()),
   });
 
   const qc = useQueryClient();

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import "./Jobs.css";
+import { apiUrl } from "@/lib/queryClient";
 
 type JobScreen = "browse" | "post" | "myjobs";
 
@@ -118,7 +119,7 @@ export default function Jobs() {
   const loadJobs = async () => {
     setLoadingJobs(true);
     try {
-      const res = await fetch("/api/jobs?limit=50&page=1", {
+      const res = await fetch(apiUrl("/api/jobs?limit=50&page=1"), {
         method: "GET",
         credentials: "include",
         headers: { Accept: "application/json" },
@@ -217,7 +218,7 @@ export default function Jobs() {
       const formData = new FormData();
       formData.append("image", jobImageFile);
 
-      const res = await fetch("/api/jobs/upload", {
+      const res = await fetch(apiUrl("/api/jobs/upload"), {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -287,7 +288,7 @@ export default function Jobs() {
         ? `mailto:${applyValue}`
         : applyValue;
 
-      const res = await fetch("/api/jobs", {
+      const res = await fetch(apiUrl("/api/jobs"), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -335,7 +336,7 @@ export default function Jobs() {
 
     setDeletingId(jobId);
     try {
-      const res = await fetch(`/api/jobs/${jobId}`, {
+      const res = await fetch(apiUrl(`/api/jobs/${jobId}`), {
         method: "DELETE",
         credentials: "include",
         headers: { Accept: "application/json" },

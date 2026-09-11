@@ -2,7 +2,7 @@ import { X, Heart, MessageCircle, Share2, Play, ChevronLeft, ChevronRight, Bookm
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, apiUrl} from "@/lib/queryClient";
 import { playLike, playUnlike } from "@/lib/sounds";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -38,7 +38,7 @@ function CommentsSheet({ postId, open, onClose }: { postId: number; open: boolea
 
   const { data: comments, isLoading } = useQuery<any[]>({
     queryKey: ["/api/posts", postId, "comments"],
-    queryFn: () => fetch(`/api/posts/${postId}/comments`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/posts/${postId}/comments`), { credentials: "include" }).then(r => r.json()),
     enabled: open,
     refetchInterval: open ? 4000 : false,
   });
@@ -156,7 +156,7 @@ const [showLikers, setShowLikers] = useState(false);
 
 const { data: likers } = useQuery<any[]>({
   queryKey: ["/api/posts", currentPost.id, "likes"],
-  queryFn: () => fetch(`/api/posts/${currentPost.id}/likes`, { credentials: "include" }).then(r => r.json()),
+  queryFn: () => fetch(apiUrl(`/api/posts/${currentPost.id}/likes`), { credentials: "include" }).then(r => r.json()),
   enabled: showLikers,
 });
   const idx = allPosts?.findIndex(p => p.id === currentPost.id) ?? -1;
@@ -167,7 +167,7 @@ const { data: likers } = useQuery<any[]>({
 
   const { data: comments } = useQuery<any[]>({
     queryKey: ["/api/posts", currentPost.id, "comments"],
-    queryFn: () => fetch(`/api/posts/${currentPost.id}/comments`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/posts/${currentPost.id}/comments`), { credentials: "include" }).then(r => r.json()),
   });
 
   const [liked, setLiked] = useState(!!currentPost.hasLiked);

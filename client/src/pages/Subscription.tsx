@@ -10,7 +10,7 @@ import {
   Ticket,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiUrl} from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 declare global {
@@ -77,7 +77,7 @@ export default function Subscription() {
   }>({
     queryKey: ["/api/subscription/mine"],
     queryFn: async () => {
-      const res = await fetch("/api/subscription/mine", {
+      const res = await fetch(apiUrl("/api/subscription/mine"), {
         credentials: "include",
       });
 

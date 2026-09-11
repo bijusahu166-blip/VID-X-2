@@ -1,4 +1,15 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
+
+// Same rule as everywhere else in the app: in the native (Capacitor) build,
+// relative fetch URLs resolve against the webview's local origin, not the
+// real server, and fail silently. Every request needs this prefix.
+const API_BASE = Capacitor.isNativePlatform() ? "https://iqpartner.xyz" : "";
+
+function withApiBase(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url; // already absolute, leave it
+  return `${API_BASE}${url}`;
+}
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -12,7 +23,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const res = await fetch(withApiBase(url), {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -29,7 +40,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await fetch(withApiBase(queryKey.join("/") as string), {
       credentials: "include",
     });
 
@@ -55,4 +66,3 @@ export const queryClient = new QueryClient({
     },
   },
 });
-

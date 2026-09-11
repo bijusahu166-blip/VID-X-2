@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Header } from "@/components/layout/Header";
 import { ArrowLeft, Mic, Lock, CheckCircle2, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiUrl} from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 const REQUIRED_VIDEOS = 10;
@@ -49,7 +49,7 @@ export default function VoiceRoomCreate() {
   } = useQuery<CreatorStats>({
     queryKey: ["/api/users/me/stats"],
     queryFn: async () => {
-      const response = await fetch("/api/users/me/stats", {
+      const response = await fetch(apiUrl("/api/users/me/stats"), {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Could not load video progress");

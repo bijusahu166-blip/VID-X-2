@@ -5,7 +5,7 @@ import {
   Shield, Lock, Unlock, Volume2, VolumeX, Trash2, Ban,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiUrl} from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import AgoraRTC, { IAgoraRTCClient, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
@@ -101,7 +101,7 @@ export default function VoiceRoomScreen() {
   const { data: room, refetch: refetchRoom } = useQuery<Room>({
     queryKey: ["/api/voice-rooms", roomId],
     queryFn: async () => {
-      const res = await fetch(`/api/voice-rooms/${roomId}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/voice-rooms/${roomId}`), { credentials: "include" });
       if (!res.ok) throw new Error("Room not found");
       return res.json();
     },
@@ -111,7 +111,7 @@ export default function VoiceRoomScreen() {
   const { data: messages = [] } = useQuery<RoomMessage[]>({
     queryKey: ["/api/voice-rooms", roomId, "messages"],
     queryFn: async () => {
-      const res = await fetch(`/api/voice-rooms/${roomId}/messages`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/voice-rooms/${roomId}/messages`), { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -121,7 +121,7 @@ export default function VoiceRoomScreen() {
   const { data: coinData } = useQuery<{ balance: number }>({
     queryKey: ["/api/coins/balance"],
     queryFn: async () => {
-      const res = await fetch("/api/coins/balance", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/coins/balance"), { credentials: "include" });
       return res.json();
     },
   });
@@ -129,7 +129,7 @@ export default function VoiceRoomScreen() {
   const { data: giftCatalog = [] } = useQuery<{ id: number; name: string; icon: string; price_coins: number }[]>({
     queryKey: ["/api/gifts/catalog"],
     queryFn: async () => {
-      const res = await fetch("/api/gifts/catalog", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/gifts/catalog"), { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -148,7 +148,7 @@ export default function VoiceRoomScreen() {
       const hostId = room?.host_id;
       if (!hostId || hostId === currentUserId) return { following: false };
 
-      const res = await fetch(`/api/users/${hostId}/follow-status`, {
+      const res = await fetch(apiUrl(`/api/users/${hostId}/follow-status`), {
         credentials: "include",
         cache: "no-store",
       });
@@ -172,7 +172,7 @@ export default function VoiceRoomScreen() {
         return { following: false };
       }
 
-      const res = await fetch(`/api/users/${hostId}/follow`, {
+      const res = await fetch(apiUrl(`/api/users/${hostId}/follow`), {
         method: nextFollowing ? "POST" : "DELETE",
         credentials: "include",
         headers: {
@@ -252,7 +252,7 @@ export default function VoiceRoomScreen() {
   const { data: joinRequests = [] } = useQuery<JoinRequest[]>({
     queryKey: ["/api/voice-rooms", roomId, "join-requests"],
     queryFn: async () => {
-      const res = await fetch(`/api/voice-rooms/${roomId}/join-requests`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/voice-rooms/${roomId}/join-requests`), { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -518,6 +518,13 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
   }, [room?.is_active, cleanupVoiceConnection, navigate]);
 
   const leaveRoom = async () => {
+    // Host ke back dabane par room sirf "leave" nahi hona chahiye — warna
+    // room database mein active/zombie reh jaata hai. Host ke liye ye
+    // properly room end karta hai; baaki participants ke liye normal leave.
+    if (isHost) {
+      await endRoom();
+      return;
+    }
     try {
       await cleanupVoiceConnection();
       await apiRequest("POST", `/api/voice-rooms/${roomId}/leave`, {}).catch(() => {});
@@ -541,7 +548,7 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
 
     setIsEnding(true);
     try {
-      const res = await fetch(`/api/voice-rooms/${roomId}/end`, {
+      const res = await fetch(apiUrl(`/api/voice-rooms/${roomId}/end`), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -693,7 +700,7 @@ if (data.type === "voice_room_message") {          // 👈 ye poora block naya h
       giftId: number;
       receiverId: string;
     }) => {
-      const res = await fetch("/api/gifts/send", {
+      const res = await fetch(apiUrl("/api/gifts/send"), {
         method: "POST",
         credentials: "include",
         headers: {

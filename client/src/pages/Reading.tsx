@@ -6,7 +6,7 @@ import { BookOpen, Upload, Download, Play, Pause, User, Sparkles, ChevronLeft, L
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, apiUrl} from "@/lib/queryClient";
 import { BannerAd } from "@/components/ads/BannerAd";
 
 interface Book {
@@ -66,7 +66,7 @@ export default function Reading() {
 
   const uploadMutation = useMutation({
     mutationFn: async (newBook: any) => {
-      const res = await fetch("/api/books", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(newBook) });
+      const res = await fetch(apiUrl("/api/books"), { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(newBook) });
       if (!res.ok) throw new Error("Upload failed");
       return res.json();
     },
@@ -93,7 +93,7 @@ export default function Reading() {
         const formData = new FormData();
         formData.append("pdf", file);
         formData.append("file", file);
-        const res = await fetch("/api/upload/book-pdf", {
+        const res = await fetch(apiUrl("/api/upload/book-pdf"), {
           method: "POST",
           credentials: "include",
           body: formData,
@@ -192,12 +192,11 @@ export default function Reading() {
             <h1 className="text-2xl font-display font-bold">{selectedBook ? "Reading" : selectedArticle ? "Article" : "Books & News"}</h1>
           </div>
           {!selectedBook && !selectedArticle && activeTab === "books" && (
-          <Button 
-  onClick={() => toast({ 
-    title: "Not Available", 
-    description: "Book upload is currently not available.",
-    variant: "destructive"
-  })} 
+          <Button
+  onClick={() => toast({
+    title: "Upcoming Features",
+    description: "Book upload will be available in a future update.",
+  })}
   size="sm" 
   className="gap-2 rounded-full opacity-60"
   data-testid="button-upload-book"

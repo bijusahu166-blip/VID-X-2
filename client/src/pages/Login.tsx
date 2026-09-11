@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Capacitor } from "@capacitor/core";
 import OneSignal from "onesignal-cordova-plugin";
 import logoSrc from "@assets/WhatsApp_Image_2026-02-25_at_11.51.01_AM_1774520807664.jpeg";
+import { apiUrl } from "@/lib/queryClient";
 
 // ── API BASE ──────────────────────────────────────────────────────────────
 // Native app (Capacitor) loads from capacitor://localhost, so relative fetch
@@ -70,13 +71,13 @@ function ForgotPasswordView({ onBack }: { onBack: () => void }) {
     const trimmed = email.toLowerCase().trim();
     if (!trimmed) throw new Error("Please enter your email address");
     if (!isValidEmail(trimmed)) throw new Error("Please enter a valid email address");
-    const checkRes = await fetch(`${API_BASE}/api/users/check-email?email=${encodeURIComponent(trimmed)}`, { credentials: "include" });
+    const checkRes = await fetch(apiUrl(`${API_BASE}/api/users/check-email?email=${encodeURIComponent(trimmed)}`), { credentials: "include" });
     const checkData = await checkRes.json();
     if (!checkRes.ok) throw new Error(checkData.message || "No account found");
 
     let otpRes: Response;
     try {
-      otpRes = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+      otpRes = await fetch(apiUrl(`${API_BASE}/api/auth/forgot-password`), {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ email: trimmed }),
         signal: AbortSignal.timeout(15000),
@@ -98,7 +99,7 @@ function ForgotPasswordView({ onBack }: { onBack: () => void }) {
 
   const verifyOtp = useMutation({
     mutationFn: async (code: string) => {
-      const res = await fetch(`${API_BASE}/api/auth/verify-reset-otp`, {
+      const res = await fetch(apiUrl(`${API_BASE}/api/auth/verify-reset-otp`), {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ email: email.toLowerCase().trim(), otp: code }),
       });

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Music, Search, Play, Pause, X, Check, Film, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
+import { apiUrl } from "@/lib/queryClient";
 
 export interface Song {
   id: number;
@@ -79,7 +80,7 @@ export function SongPicker({ onSelect, selectedSong, onClose }: SongPickerProps)
 
   const { data: reelSongs = [] } = useQuery<any[]>({
     queryKey: ["/api/posts/reel-songs"],
-    queryFn: () => fetch("/api/posts/reel-songs", { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/posts/reel-songs"), { credentials: "include" }).then(r => r.json()),
   });
 
   const filtered = SONG_LIBRARY.filter(s => {

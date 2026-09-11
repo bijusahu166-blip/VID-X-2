@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Trash2, X, Volume2, VolumeX, Heart, Send, MessageCircle, Loader2 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiUrl} from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -88,7 +88,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
     if (!story || deleting) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/stories/${story.id}`, {
+      const res = await fetch(apiUrl(`/api/stories/${story.id}`), {
         method: "DELETE",
         credentials: "include",
       });
@@ -121,7 +121,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
   const { data: likesData } = useQuery<any[]>({
     queryKey: likesQueryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/stories/${story!.id}/likes`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/stories/${story!.id}/likes`), { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -133,7 +133,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
 
   const toggleLikeMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/stories/${story!.id}/like`, {
+      const res = await fetch(apiUrl(`/api/stories/${story!.id}/like`), {
         method: "POST",
         credentials: "include",
       });
@@ -163,7 +163,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
   const { data: commentsData, isLoading: commentsLoading } = useQuery<any[]>({
     queryKey: commentsQueryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/stories/${story!.id}/comments`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/stories/${story!.id}/comments`), { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -173,7 +173,7 @@ export function StoryViewer({ stories, initialIndex = 0, onClose }: StoryViewerP
 
   const addCommentMutation = useMutation({
     mutationFn: async (content: string) => {
-      const res = await fetch(`/api/stories/${story!.id}/comment`, {
+      const res = await fetch(apiUrl(`/api/stories/${story!.id}/comment`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

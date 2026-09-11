@@ -46,6 +46,7 @@ import Notifications from "@/pages/Notifications";
 import Jobs from "@/pages/Jobs";
 import Subscription from "@/pages/Subscription";
 import DeleteAccount from "./pages/DeleteAccount";
+import { apiUrl } from "@/lib/queryClient";
 
 const API_BASE = Capacitor.isNativePlatform() ? "https://iqpartner.xyz" : "";
 
@@ -107,7 +108,7 @@ function useServerVersionWatcher() {
 
     const check = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/version`, {
+        const res = await fetch(apiUrl(`${API_BASE}/api/version`), {
           cache: "no-store",
           credentials: "include",
         });
@@ -365,7 +366,34 @@ function Router() {
     );
   }
 
-  if (!user) return <Login />;
+  // Guest mode: Home / Search / Reels stay browsable without an account —
+  // Play Store and Uptodown both reject apps whose entire content sits
+  // behind a login wall with nothing visible first. Routes that touch
+  // personal data (messages, jobs, profile, voice rooms, coins) still
+  // require login, and any write action a guest tries (like, comment,
+  // post, follow) gets a normal 401 from the server — GuestGate below
+  // catches that and redirects to Login instead of leaving it silent.
+  if (!user) {
+    return (
+      <>
+        <SwipeTabs>
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/search" component={Search} />
+            <Route path="/reels" component={Reels} />
+            <Route path="/post/:id" component={PostView} />
+            <Route path="/profile/:id" component={Profile} />
+            <Route path="/delete-account" component={DeleteAccount} />
+            <Route>
+              <Login />
+            </Route>
+          </Switch>
+        </SwipeTabs>
+
+        <BottomNav />
+      </>
+    );
+  }
 
   const localGoal = localStorage.getItem("user_goal");
   if (!(user as any).goal && !localGoal) return <AimSelection />;
@@ -489,7 +517,7 @@ function AppContent() {
       queryClient.prefetchQuery({
         queryKey: ["/api/posts"],
         queryFn: async () => {
-          const res = await fetch(`${API_BASE}/api/posts`, {
+          const res = await fetch(apiUrl(`${API_BASE}/api/posts`), {
             credentials: "include",
           });
           if (!res.ok) return [];
@@ -501,7 +529,7 @@ function AppContent() {
       queryClient.prefetchQuery({
         queryKey: ["/api/stories"],
         queryFn: async () => {
-          const res = await fetch(`${API_BASE}/api/stories`, {
+          const res = await fetch(apiUrl(`${API_BASE}/api/stories`), {
             credentials: "include",
           });
 
@@ -510,7 +538,7 @@ function AppContent() {
             return Array.isArray(data) ? data : [];
           }
 
-          const fallback = await fetch(`${API_BASE}/api/posts`, {
+          const fallback = await fetch(apiUrl(`${API_BASE}/api/posts`), {
             credentials: "include",
           });
           if (!fallback.ok) return [];
@@ -525,7 +553,7 @@ function AppContent() {
       queryClient.prefetchQuery({
         queryKey: ["/api/voice-rooms"],
         queryFn: async () => {
-          const res = await fetch(`${API_BASE}/api/voice-rooms`, {
+          const res = await fetch(apiUrl(`${API_BASE}/api/voice-rooms`), {
             credentials: "include",
           });
           if (!res.ok) return [];
@@ -537,7 +565,7 @@ function AppContent() {
       queryClient.prefetchQuery({
         queryKey: ["/api/books"],
         queryFn: async () => {
-          const res = await fetch(`${API_BASE}/api/books`, {
+          const res = await fetch(apiUrl(`${API_BASE}/api/books`), {
             credentials: "include",
           });
           if (!res.ok) return [];

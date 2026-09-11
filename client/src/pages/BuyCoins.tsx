@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Header } from "@/components/layout/Header";
 import { ArrowLeft, Coins, Loader2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiUrl} from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface CoinPackage {
@@ -84,7 +84,7 @@ export default function BuyCoins() {
   } = useQuery<CoinPackage[]>({
     queryKey: ["/api/coins/packages"],
     queryFn: async () => {
-      const res = await fetch("/api/coins/packages", {
+      const res = await fetch(apiUrl("/api/coins/packages"), {
         credentials: "include",
         headers: { Accept: "application/json" },
       });
@@ -102,7 +102,7 @@ export default function BuyCoins() {
   const { data: coinData } = useQuery<{ balance: number }>({
     queryKey: ["/api/coins/balance"],
     queryFn: async () => {
-      const res = await fetch("/api/coins/balance", {
+      const res = await fetch(apiUrl("/api/coins/balance"), {
         credentials: "include",
         headers: { Accept: "application/json" },
       });

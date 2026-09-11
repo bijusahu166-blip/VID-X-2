@@ -14,6 +14,7 @@ import { useLocation } from "wouter";
 import { precacheVideo } from "@/lib/videoPrecache";
 import { usePosts } from "@/hooks/use-posts";
 import { ShareToSheet } from "@/components/post/ShareToSheet";
+import { apiUrl } from "@/lib/queryClient";
 
 interface ReelPost {
   id: number;
@@ -78,7 +79,7 @@ function ReelCard({
     let isMounted = true;
     if (showComments) {
       setCommentsLoading(true);
-      fetch(`/api/posts/${reel.id}/comments`, { credentials: "include" })
+      fetch(apiUrl(`/api/posts/${reel.id}/comments`), { credentials: "include" })
         .then(r => {
           if (!r.ok) throw new Error("Failed to load comments");
           return r.json();
@@ -147,7 +148,7 @@ function ReelCard({
 
   const likeMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/posts/${reel.id}/like`, {
+      const res = await fetch(apiUrl(`/api/posts/${reel.id}/like`), {
         method: "POST",
         credentials: "include",
       });
@@ -171,7 +172,7 @@ function ReelCard({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/posts/${reel.id}/save`, {
+      const res = await fetch(apiUrl(`/api/posts/${reel.id}/save`), {
         method: "POST",
         credentials: "include",
       });
@@ -188,7 +189,7 @@ function ReelCard({
 
   const followMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/users/${reel.userId}/follow`, {
+      const res = await fetch(apiUrl(`/api/users/${reel.userId}/follow`), {
         method: "POST",
         credentials: "include",
       });
@@ -208,7 +209,7 @@ function ReelCard({
 
   const reportMutation = useMutation({
     mutationFn: async (reason: string) => {
-      const res = await fetch(`/api/posts/${reel.id}/report`, {
+      const res = await fetch(apiUrl(`/api/posts/${reel.id}/report`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -259,7 +260,7 @@ function ReelCard({
     if (!commentText.trim() || isSubmittingComment) return;
     setIsSubmittingComment(true);
     try {
-      const res = await fetch(`/api/posts/${reel.id}/comments`, {
+      const res = await fetch(apiUrl(`/api/posts/${reel.id}/comments`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

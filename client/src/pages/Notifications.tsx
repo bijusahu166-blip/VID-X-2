@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Heart, UserPlus, Radio, MessageCircle, Check, Phone, UserCheck, X, PhoneOff, Video, CheckCircle, Flag } from "lucide-react";
+import { Bell, Heart, UserPlus, MessageCircle, Check, Phone, UserCheck, X, PhoneOff, Video, CheckCircle, Flag } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { playFollow, playNotification } from "@/lib/sounds";
 import { VideoCallScreen } from "@/components/call/VideoCallScreen";
+import { apiUrl } from "@/lib/queryClient";
 
 interface Notification {
   id: number;
@@ -36,11 +37,6 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "new_user") return (
     <div className="w-6 h-6 rounded-full bg-emerald-500/90 flex items-center justify-center shadow animate-pulse">
       <UserPlus className="w-3 h-3 text-white" />
-    </div>
-  );
-  if (type === "live") return (
-    <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center shadow animate-pulse">
-      <Radio className="w-3 h-3 text-white" />
     </div>
   );
   if (type === "comment") return (
@@ -83,7 +79,7 @@ export default function Notifications() {
   });
 
   const readAll = useMutation({
-    mutationFn: () => fetch("/api/notifications/read-all", { method: "POST", credentials: "include" }).then(r => r.json()),
+    mutationFn: () => fetch(apiUrl("/api/notifications/read-all"), { method: "POST", credentials: "include" }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
@@ -92,7 +88,7 @@ export default function Notifications() {
 
   const followBack = async (userId: string) => {
     try {
-      await fetch(`/api/users/${userId}/follow`, { method: "POST", credentials: "include" });
+      await fetch(apiUrl(`/api/users/${userId}/follow`), { method: "POST", credentials: "include" });
       setFollowedBack(prev => new Set(Array.from(prev).concat(userId)));
       playFollow();
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
@@ -289,4 +285,3 @@ export default function Notifications() {
     </div>
   );
 }
-

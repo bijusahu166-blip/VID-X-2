@@ -2,12 +2,13 @@ import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toCloudinaryVideoUrl } from "@/lib/utils";
+import { apiUrl } from "@/lib/queryClient";
 
 export default function PostView() {
   const { id } = useParams<{ id: string }>();
   const { data: post, isLoading } = useQuery<any>({
     queryKey: ["/api/posts", id],
-    queryFn: () => fetch(`/api/posts/${id}`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/posts/${id}`), { credentials: "include" }).then(r => r.json()),
   });
 
   if (isLoading) {

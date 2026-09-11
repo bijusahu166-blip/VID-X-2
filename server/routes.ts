@@ -11,7 +11,7 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { authStorage } from "./replit_integrations/auth/storage";
-import { setupAuth, registerAuthRoutes, registerSmsOtpRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, registerSmsOtpRoutes, isAuthenticated, optionalAuth } from "./replit_integrations/auth";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { api } from "@shared/routes";
 import multer from "multer";
@@ -1397,9 +1397,9 @@ app.post("/api/auth/register", async (req, res) => {
   // POST ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get(api.posts.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.posts.list.path, optionalAuth, async (req, res) => {
   try {
-    const sessionUserId = (req.session as any).userId;
+    const sessionUserId = (req.session as any)?.userId as string | undefined;
     const filterUserId = req.query.userId as string | undefined;
 
     // ── Pagination — chahe 1 lakh ho ya 5 lakh, ek baar mein sirf 20 posts ──
@@ -1423,19 +1423,24 @@ app.post("/api/auth/register", async (req, res) => {
       return res.json([]);
     }
 
-    // Block filtering — chhoti list pe hi (max 50 posts), fast rehta hai
-    const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
-      .where(and(eq(pendingBlocks.blockedUserId, sessionUserId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
-    const blockedPostIds = new Set(blockedPosts.map(b => b.postId));
-
-    const myBlockRows = await db.execute(sql`
-      SELECT blocked_id, blocker_id FROM blocks
-      WHERE blocker_id = ${sessionUserId} OR blocked_id = ${sessionUserId}
-    `);
+    // Block filtering — chhoti list pe hi (max 50 posts), fast rehta hai.
+    // Guests (no sessionUserId) have no blocks, so skip these queries entirely.
+    const blockedPostIds = new Set<any>();
     const relatedIds = new Set<string>();
-    ((myBlockRows as any).rows ?? myBlockRows).forEach((r: any) => {
-      relatedIds.add(r.blocker_id === sessionUserId ? r.blocked_id : r.blocker_id);
-    });
+
+    if (sessionUserId) {
+      const blockedPosts = await db.select({ postId: pendingBlocks.postId }).from(pendingBlocks)
+        .where(and(eq(pendingBlocks.blockedUserId, sessionUserId), sql`${pendingBlocks.blockUntil} > CURRENT_TIMESTAMP`));
+      blockedPosts.forEach(b => blockedPostIds.add(b.postId));
+
+      const myBlockRows = await db.execute(sql`
+        SELECT blocked_id, blocker_id FROM blocks
+        WHERE blocker_id = ${sessionUserId} OR blocked_id = ${sessionUserId}
+      `);
+      ((myBlockRows as any).rows ?? myBlockRows).forEach((r: any) => {
+        relatedIds.add(r.blocker_id === sessionUserId ? r.blocked_id : r.blocker_id);
+      });
+    }
 
     const finalPosts = rawPosts.filter((p: any) =>
       !blockedPostIds.has(p.id) && !relatedIds.has(String(p.user_id))
@@ -1467,12 +1472,33 @@ app.post("/api/auth/register", async (req, res) => {
 `),
   db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM likes WHERE post_id IN ${postIds} GROUP BY post_id`),
   db.execute(sql`SELECT post_id, COUNT(*) as cnt FROM comments WHERE post_id IN ${postIds} GROUP BY post_id`),
-  db.execute(sql`SELECT post_id FROM likes WHERE post_id IN ${postIds} AND user_id = ${sessionUserId}`),
-  db.execute(sql`SELECT post_id FROM saved_posts WHERE post_id IN ${postIds} AND user_id = ${sessionUserId}`),
+  sessionUserId
+    ? db.execute(sql`SELECT post_id FROM likes WHERE post_id IN ${postIds} AND user_id = ${sessionUserId}`)
+    : Promise.resolve([]),
+  sessionUserId
+    ? db.execute(sql`SELECT post_id FROM saved_posts WHERE post_id IN ${postIds} AND user_id = ${sessionUserId}`)
+    : Promise.resolve([]),
 ]);
    
 
-    const userMap = new Map(((usersRows as any).rows ?? usersRows).map((u: any) => [String(u.id), u]));
+    const userMap = new Map(
+      ((usersRows as any).rows ?? usersRows).map((u: any) => [
+        String(u.id),
+        {
+          id: u.id,
+          firstName: u.first_name,
+          lastName: u.last_name,
+          username: u.username,
+          profileImageUrl: u.profile_image_url,
+          subscriptionStatus: u.subscription_status,
+          subscriptionPlan: u.subscription_plan,
+          premiumSignature: u.premium_signature,
+          signatureStyle: u.signature_style,
+          signatureActive: u.signature_active,
+          signatureExpiresAt: u.signature_expires_at,
+        },
+      ])
+    );
     const likesMap = new Map(((likesRows as any).rows ?? likesRows).map((r: any) => [r.post_id, parseInt(r.cnt)]));
     const commentsMap = new Map(((commentsRows as any).rows ?? commentsRows).map((r: any) => [r.post_id, parseInt(r.cnt)]));
     const likedSet = new Set(((likedRows as any).rows ?? likedRows).map((r: any) => r.post_id));
@@ -1928,6 +1954,41 @@ app.post("/api/posts/:id/send", isAuthenticated, async (req, res) => {
       `);
       const last7Days = parseInt(((last7Rows as any).rows ?? last7Rows)[0]?.cnt ?? "0");
       res.json({ total, last7Days });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CHANGE PASSWORD (Security → Change Password)
+  // ══════════════════════════════════════════════════════════════════════════
+  app.post("/api/change-password", isAuthenticated, async (req: any, res) => {
+    try {
+      const bcrypt = await import("bcryptjs");
+      const userId = req.session.userId;
+      const { currentPassword, newPassword } = req.body ?? {};
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "currentPassword and newPassword are required" });
+      }
+      if (String(newPassword).length < 6) {
+        return res.status(400).json({ message: "New password must be at least 6 characters" });
+      }
+
+      const user = await authStorage.getUser(userId);
+      if (!user || !user.password) {
+        return res.status(400).json({ message: "Password login is not set up for this account" });
+      }
+
+      const match = await bcrypt.compare(currentPassword, user.password);
+      if (!match) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+
+      const hashed = await bcrypt.hash(newPassword, 10);
+      await authStorage.upsertUser({ ...user, password: hashed } as any);
+
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -2493,7 +2554,7 @@ app.get("/api/users/me/stats", isAuthenticated, async (req: any, res: any) => {
   // STORY ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/stories", isAuthenticated, async (req, res) => {
+  app.get("/api/stories", optionalAuth, async (req, res) => {
     try {
       const result = await db.execute(sql`
         SELECT s.*, u.first_name, u.last_name, u.username, u.profile_image_url
@@ -3434,6 +3495,12 @@ app.get("/api/withdrawals/mine", isAuthenticated, async (req: any, res) => {
 });
 
 app.post("/api/withdrawals/request", isAuthenticated, async (req: any, res) => {
+  // Disabled — see Profile "Withdraw" panel: shown as "Upcoming Feature".
+  // A manual bank/UPI payout flow isn't set up to go live yet.
+  return res.status(503).json({ message: "Withdrawals are not available yet. This feature is coming soon." });
+});
+
+async function _unusedWithdrawRequestHandler(req: any, res: any) {
   try {
     const userId = req.session.userId;
     const { coins, method, upiId, bankAccountNumber, bankIfsc, bankHolderName } = req.body;
@@ -3469,7 +3536,7 @@ app.post("/api/withdrawals/request", isAuthenticated, async (req: any, res) => {
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
-});
+}
 
 app.patch("/api/withdrawals/:id/status", isAuthenticated, async (req: any, res) => {
    const ADMIN_USER_IDS = ["your-user-id-yahan"]; // ⚠️ apni user id daalo

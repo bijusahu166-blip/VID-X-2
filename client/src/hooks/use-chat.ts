@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
+import { apiUrl } from "@/lib/queryClient";
 
 // Types based on server/replit_integrations/chat/storage.ts
 interface Conversation {
@@ -19,7 +20,7 @@ export function useConversations() {
   return useQuery({
     queryKey: ["/api/conversations"],
     queryFn: async () => {
-      const res = await fetch("/api/conversations", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/conversations"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch conversations");
       return await res.json() as Conversation[];
     },
@@ -31,7 +32,7 @@ export function useConversation(id: number | null) {
     queryKey: ["/api/conversations", id],
     queryFn: async () => {
       if (!id) return null;
-      const res = await fetch(`/api/conversations/${id}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/conversations/${id}`), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch conversation");
       return await res.json() as Conversation & { messages: Message[] };
     },
@@ -43,7 +44,7 @@ export function useCreateConversation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (title: string = "New Chat") => {
-      const res = await fetch("/api/conversations", {
+      const res = await fetch(apiUrl("/api/conversations"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
@@ -74,7 +75,7 @@ export function useChatStream(conversationId: number | null) {
     abortControllerRef.current = new AbortController();
 
     try {
-      const res = await fetch(`/api/conversations/${conversationId}/messages`, {
+      const res = await fetch(apiUrl(`/api/conversations/${conversationId}/messages`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),

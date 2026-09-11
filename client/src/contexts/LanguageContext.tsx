@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { apiUrl } from "@/lib/queryClient";
 
 type Language = "en" | "hi";
 
@@ -55,7 +56,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined") {
       window.localStorage.setItem("app-language", value);
     }
-    fetch("/api/preferences", {
+    fetch(apiUrl("/api/preferences"), {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },

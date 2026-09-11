@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiUrl} from "@/lib/queryClient";
 import {
   ArrowLeft, Send, Mic, MicOff, Image, MoreVertical,
   Lock, Smile, Paperclip, Check, CheckCheck, Pin,
@@ -949,7 +949,7 @@ const notifyTyping = useCallback(() => {
 
     try {
       toast({ title: `Uploading ${isVideo ? "video" : "photo"}...` });
-      const res = await fetch(`/api/upload/${isVideo ? "video" : "image"}`, {
+      const res = await fetch(apiUrl(`/api/upload/${isVideo ? "video" : "image"}`), {
         method: "POST",
         body: formData,
         credentials: "include",

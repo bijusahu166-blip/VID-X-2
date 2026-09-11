@@ -7,7 +7,7 @@ import { BannerAd } from "@/components/ads/BannerAd";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, apiUrl} from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { VideoPlayer } from "@/components/shared/VideoPlayer";
@@ -19,7 +19,6 @@ import {
   Trash2, Flag, AlertTriangle, ShieldAlert, EyeOff, Ban, CheckCheck
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { LiveStreamViewer } from "@/components/live/LiveStreamViewer";
 import { PostViewerModal } from "@/components/post/PostViewerModal";
 import { StoryViewer } from "@/components/story/StoryViewer";
 import { playLike, playUnlike } from "@/lib/sounds";
@@ -42,7 +41,7 @@ function FollowButtonSmall({ userId, currentUserId }: { userId: string; currentU
 
   const { data: followStatus } = useQuery<{ following: boolean }>({
     queryKey: ["/api/users", userId, "follow-status"],
-    queryFn: () => fetch(`/api/users/${userId}/follow-status`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/users/${userId}/follow-status`), { credentials: "include" }).then(r => r.json()),
     enabled: !isOwn && !!currentUserId,
   });
 
@@ -56,7 +55,7 @@ function FollowButtonSmall({ userId, currentUserId }: { userId: string; currentU
     setLoading(true);
     try {
       const method = isFollowing ? "DELETE" : "POST";
-      await fetch(`/api/users/${userId}/follow`, { method, credentials: "include" });
+      await fetch(apiUrl(`/api/users/${userId}/follow`), { method, credentials: "include" });
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "follow-status"] });
     } finally {
       setLoading(false);
@@ -78,12 +77,12 @@ function FollowButtonSmall({ userId, currentUserId }: { userId: string; currentU
   );
 }
 const REELS = [
-  { id: 1, user: "Alex_Gamer", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex", thumb: "https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=200&h=350&fit=crop", live: false },
-  { id: 2, user: "TravelQueen", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Travel", thumb: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=200&h=350&fit=crop", live: true },
-  { id: 3, user: "ChefMike", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike", thumb: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=200&h=350&fit=crop", live: false },
-  { id: 4, user: "MusicVibes", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Music", thumb: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&h=350&fit=crop", live: false },
-  { id: 5, user: "TechNerd99", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Tech", thumb: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=200&h=350&fit=crop", live: true },
-  { id: 6, user: "NatureLens", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Nature", thumb: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=200&h=350&fit=crop", live: false },
+  { id: 1, user: "Alex_Gamer", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex", thumb: "https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=200&h=350&fit=crop" },
+  { id: 2, user: "TravelQueen", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Travel", thumb: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=200&h=350&fit=crop" },
+  { id: 3, user: "ChefMike", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike", thumb: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=200&h=350&fit=crop" },
+  { id: 4, user: "MusicVibes", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Music", thumb: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&h=350&fit=crop" },
+  { id: 5, user: "TechNerd99", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Tech", thumb: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=200&h=350&fit=crop" },
+  { id: 6, user: "NatureLens", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Nature", thumb: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=200&h=350&fit=crop" },
 ];
 
 function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boolean; onClose: () => void }) {
@@ -94,7 +93,7 @@ function CommentsDrawer({ postId, open, onClose }: { postId: number; open: boole
 
   const { data: comments, isLoading } = useQuery<any[]>({
     queryKey: ["/api/posts", postId, "comments"],
-    queryFn: () => fetch(`/api/posts/${postId}/comments`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/posts/${postId}/comments`), { credentials: "include" }).then(r => r.json()),
     enabled: open,
     refetchInterval: open ? 5000 : false,
   });
@@ -261,7 +260,7 @@ function PostActionMenu({
   const { toast } = useToast();
 
   const deleteMutation = useMutation({
-    mutationFn: () => fetch(`/api/posts/${post.id}`, { method: "DELETE", credentials: "include" }).then(r => r.json()),
+    mutationFn: () => fetch(apiUrl(`/api/posts/${post.id}`), { method: "DELETE", credentials: "include" }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
       setView("deleted");
@@ -511,14 +510,14 @@ function RecommendedVideoCard({ video, onSkip }: { video: any; onSkip: (videoId:
 export default function Home() {
   const { data: postsData, isLoading } = usePosts();
   const posts = Array.isArray(postsData)
-    ? postsData.filter(p => p.type !== "story")
+    ? postsData.filter(p => p.type !== "story" && p.type !== "live")
     : [];
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [activeCategory, setActiveCategory] = useState("All");
   const [openCommentPostId, setOpenCommentPostId] = useState<number | null>(null);
   const [actionMenuPost, setActionMenuPost] = useState<any | null>(null);
-  const [livePost, setLivePost] = useState<any | null>(null);
+  // Live stream feature removed — voice rooms cover this now.
   const [viewingPost, setViewingPost] = useState<any | null>(null);
   const [viewingStoryIdx, setViewingStoryIdx] = useState<number | null>(null);
 
@@ -529,7 +528,7 @@ export default function Home() {
   useHideBottomNavWhenOpen(
     openCommentPostId !== null ||
     !!actionMenuPost ||
-    !!livePost ||
+    false ||
     !!viewingPost ||
     viewingStoryIdx !== null
   );
@@ -538,7 +537,7 @@ export default function Home() {
 const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
     queryKey: ["/api/stories"],
     queryFn: async () => {
-      const res = await fetch("/api/stories", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/stories"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stories");
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -553,7 +552,7 @@ const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
   const { data: voiceRooms = [] } = useQuery<any[]>({
     queryKey: ["/api/voice-rooms"],
     queryFn: async () => {
-      const res = await fetch("/api/voice-rooms", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/voice-rooms"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch voice rooms");
       return res.json();
     },
@@ -565,7 +564,7 @@ const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
   const { data: allBooks = [] } = useQuery<any[]>({
     queryKey: ["/api/books"],
     queryFn: async () => {
-      const res = await fetch("/api/books", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/books"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch books");
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -580,7 +579,7 @@ const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
  const { data: recommendedVideosRaw = [] } = useQuery<any[]>({
     queryKey: ["/api/youtube/feed", userGoal],
     queryFn: async () => {
-      const res = await fetch(`/api/youtube/feed?query=${encodeURIComponent(userGoal || "trending")}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/youtube/feed?query=${encodeURIComponent(userGoal || "trending")}`), { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -632,7 +631,7 @@ const { data: storiesData, refetch: refetchStories } = useQuery<any[]>({
     },
   });
 
-  const isVideoPost = (post: any) => post.type === "video" || post.type === "live" || post.type === "reel";
+  const isVideoPost = (post: any) => post.type === "video" || post.type === "reel";
   const isPhotoPost = (post: any) => post.type === "post" || post.type === "story";
 
   const filteredPosts = (posts ?? []).filter((post) => {
@@ -932,12 +931,6 @@ filteredPosts.forEach((post, i) => {
                       </div>
                     )}
 
-                    {post.type === "live" && (
-                      <div className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE
-                      </div>
-                    )}
-
                     {post.type === "reel" && (
                       <div className="absolute top-2 left-2 flex items-center gap-0.5 bg-black/60 text-pink-400 text-[8px] font-black px-1.5 py-0.5 rounded-md">
                         <Play className="w-2 h-2 fill-current" /> REEL
@@ -961,7 +954,7 @@ filteredPosts.forEach((post, i) => {
 
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-white leading-snug line-clamp-2 mb-1">
-                        {post.caption || `${post.user?.firstName}'s ${post.type === "live" ? "Live Stream" : post.type === "reel" ? "Reel" : post.type === "story" ? "Story" : "Post"}`}
+                        {post.caption || `${post.user?.firstName}'s ${post.type === "reel" ? "Reel" : post.type === "story" ? "Story" : "Post"}`}
                       </p>
                       <div className="flex items-center gap-1 text-[11px] text-zinc-500">
                       <button
@@ -1083,9 +1076,7 @@ filteredPosts.forEach((post, i) => {
         />
       )}
 
-      {livePost && (
-        <LiveStreamViewer post={livePost} onClose={() => setLivePost(null)} />
-      )}
+        {/* Live stream feature removed — voice rooms cover this now */}
 
       {viewingPost && (
         <PostViewerModal

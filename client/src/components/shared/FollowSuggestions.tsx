@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, apiUrl} from "@/lib/queryClient";
 import { CheckCircle2, UserPlus, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
@@ -14,7 +14,7 @@ export function FollowSuggestions({ currentUserId, onNavigate }: Props) {
  const { data: users = [] } = useQuery<any[]>({
   queryKey: ["/api/users"],
   queryFn: async () => {
-    const res = await fetch("/api/users", { credentials: "include" });
+    const res = await fetch(apiUrl("/api/users"), { credentials: "include" });
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   },
@@ -24,7 +24,7 @@ export function FollowSuggestions({ currentUserId, onNavigate }: Props) {
     queryKey: ["/api/following-ids"],
     queryFn: async () => {
       if (!currentUserId) return [];
-      const res = await fetch(`/api/users/${currentUserId}/following`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/users/${currentUserId}/following`), { credentials: "include" });
       const data = await res.json();
       return Array.isArray(data) ? data.map((u: any) => String(u.id)) : [];
     },

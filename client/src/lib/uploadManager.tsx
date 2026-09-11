@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/queryClient";
 /**
  * Background video uploader.
  *
@@ -95,7 +96,7 @@ async function uploadFileChunks(
         form.append("totalChunks", String(totalChunks));
         form.append("chunk", chunk, file.name);
 
-        const response = await fetch("/api/upload/chunk", {
+        const response = await fetch(apiUrl("/api/upload/chunk"), {
           method: "POST",
           body: form,
           credentials: "include",
@@ -145,7 +146,7 @@ async function uploadFileChunks(
   }
 
   onProgress(94);
-  const finalizeResponse = await fetch("/api/upload/finalize", {
+  const finalizeResponse = await fetch(apiUrl("/api/upload/finalize"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

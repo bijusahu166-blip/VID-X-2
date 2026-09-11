@@ -8,7 +8,7 @@ import { useLocation } from "wouter";
 import { useCreatePost } from "@/hooks/use-posts";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiUrl} from "@/lib/queryClient";
 import { useAgoraRTCBroadcaster } from "@/lib/useAgoraRTCBroadcaster";
 import { useAgoraRTM } from "@/lib/useAgoraRTM";
 import {
@@ -43,7 +43,7 @@ async function uploadDataURLToCloudinary(dataUrl: string, fileName: string): Pro
   const formData = new FormData();
   formData.append("image", file);
 
-  const uploadResponse = await fetch("/api/upload/image", {
+  const uploadResponse = await fetch(apiUrl("/api/upload/image"), {
     method: "POST",
     body: formData,
     credentials: "include",
@@ -541,7 +541,7 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
 
     try {
       const thumb = imageUrl || `https://api.dicebear.com/7.x/shapes/svg?seed=${Date.now()}`;
-      const res = await fetch("/api/live/start", {
+      const res = await fetch(apiUrl("/api/live/start"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -555,7 +555,7 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
         // Poll real viewer count from DB every 10 seconds
         const postId = data.post.id;
         liveIntervalRef.current = setInterval(() => {
-          fetch(`/api/live/${postId}/viewers`, { credentials: "include" })
+          fetch(apiUrl(`/api/live/${postId}/viewers`), { credentials: "include" })
             .then(r => r.json())
             .then(d => { if (typeof d.viewerCount === "number") setLiveViewers(d.viewerCount); })
             .catch(() => {});
@@ -570,7 +570,7 @@ const MAX_VIDEO_DURATION_SECONDS = 1800;
   const endLiveStream = useCallback(async () => {
     if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
     if (livePostId) {
-      await fetch(`/api/live/end/${livePostId}`, {
+      await fetch(apiUrl(`/api/live/end/${livePostId}`), {
         method: "POST", credentials: "include",
       }).catch(() => {});
     }
@@ -690,7 +690,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
 
       const formData = new FormData();
       formData.append("image", compressedFile);
-      const res = await fetch("/api/upload/image", {
+      const res = await fetch(apiUrl("/api/upload/image"), {
         method: "POST",
         body: formData,
         credentials: "include",
@@ -839,7 +839,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
                 // NOT the generic posts table — posting through createPost
                 // here silently created an invisible "post" instead of a
                 // real story. This is the fix.
-                const storyRes = await fetch("/api/stories", {
+                const storyRes = await fetch(apiUrl("/api/stories"), {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   credentials: "include",
@@ -975,7 +975,7 @@ function compressImage(file: File, maxDimension = 1920, quality = 0.82): Promise
       if (uploadType === "story") {
         // Same fix as the video flow above — stories go to /api/stories,
         // not the generic /api/posts createPost mutation.
-        const storyRes = await fetch("/api/stories", {
+        const storyRes = await fetch(apiUrl("/api/stories"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",

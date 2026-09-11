@@ -5,6 +5,7 @@ import { usePosts } from "@/hooks/use-posts";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiUrl } from "@/lib/queryClient";
 
 interface UserResult {
   id: string;
@@ -66,7 +67,7 @@ export default function Search() {
 
   const { data: userResults, isLoading: usersLoading } = useQuery<UserResult[]>({
     queryKey: ["/api/users/search", searchQuery],
-    queryFn: () => fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/users/search?q=${encodeURIComponent(searchQuery)}`), { credentials: "include" }).then(r => r.json()),
     enabled: searchQuery.length >= 1,
     staleTime: 1000,
   });

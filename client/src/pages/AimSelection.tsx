@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl } from "@/lib/queryClient";
 
 const AimSelection = () => {
     const [selectedAim, setSelectedAim] = useState('');
@@ -35,7 +36,7 @@ const AimSelection = () => {
         if (!selectedAim) return alert("Pehle ek Goal chuno!");
         setLoading(true);
         try {
-            const res = await fetch('/api/user/goal', {
+            const res = await fetch(apiUrl('/api/user/goal'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ goal: selectedAim }),

@@ -9,7 +9,7 @@ import { useLikePost, useAddComment } from "@/hooks/use-posts";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, apiUrl} from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 const REPORT_REASONS = [
@@ -53,7 +53,7 @@ export function PostCard({ post }: PostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const { data: commentsList, isLoading: commentsLoading } = useQuery<any[]>({
     queryKey: ["/api/posts", post.id, "comments"],
-    queryFn: () => fetch(`/api/posts/${post.id}/comments`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/posts/${post.id}/comments`), { credentials: "include" }).then(r => r.json()),
     enabled: showComments,
   });
 

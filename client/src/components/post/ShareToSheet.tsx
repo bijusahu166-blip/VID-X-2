@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Loader2, Check, Send, Search, Share } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Share as CapacitorShare } from "@capacitor/share";
+import { apiUrl } from "@/lib/queryClient";
 
 export function ShareToSheet({
   open,
@@ -21,7 +22,7 @@ export function ShareToSheet({
 
   const { data: following, isLoading } = useQuery<any[]>({
     queryKey: ["/api/users/following"],
-    queryFn: () => fetch("/api/users/following", { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl("/api/users/following"), { credentials: "include" }).then(r => r.json()),
     enabled: open,
   });
 
@@ -38,7 +39,7 @@ export function ShareToSheet({
 
   const sendMutation = useMutation({
     mutationFn: () =>
-      fetch(`/api/posts/${postId}/send`, {
+      fetch(apiUrl(`/api/posts/${postId}/send`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -58,7 +59,7 @@ export function ShareToSheet({
 
   const followMutation = useMutation({
     mutationFn: (userId: string) =>
-      fetch(`/api/users/${userId}/follow`, { method: "POST", credentials: "include" }).then(r => {
+      fetch(apiUrl(`/api/users/${userId}/follow`), { method: "POST", credentials: "include" }).then(r => {
         if (!r.ok) throw new Error("Follow failed");
         return r.json();
       }),

@@ -37,7 +37,7 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiUrl} from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Camera, Pencil } from "lucide-react";
 import { useTranslation } from "@/contexts/LanguageContext";
@@ -208,7 +208,7 @@ function ReportUserDialog({
 
   const reportMutation = useMutation({
     mutationFn: () =>
-      fetch(`/api/users/${targetUserId}/report`, {
+      fetch(apiUrl(`/api/users/${targetUserId}/report`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -278,7 +278,7 @@ function BlockedAccountsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
  const { data: blocked, isLoading } = useQuery<any[]>({
     queryKey: ["/api/users/blocked"],
     queryFn: async () => {
-      const r = await fetch("/api/users/blocked", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/users/blocked"), { credentials: "include" });
       const data = await r.json();
       return Array.isArray(data) ? data : [];
     },
@@ -287,7 +287,7 @@ function BlockedAccountsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const unblockMutation = useMutation({
     mutationFn: (userId: string) =>
-      fetch(`/api/users/${userId}/block`, { method: "DELETE", credentials: "include" }).then((r) => {
+      fetch(apiUrl(`/api/users/${userId}/block`), { method: "DELETE", credentials: "include" }).then((r) => {
         if (!r.ok) throw new Error("Unblock failed");
         return r.json();
       }),
@@ -348,7 +348,7 @@ function RemoveAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
   const removeMutation = useMutation({
     mutationFn: () =>
-      fetch("/api/account", {
+      fetch(apiUrl("/api/account"), {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -433,7 +433,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
 
   const { data: profileData, isLoading } = useQuery<any>({
     queryKey: ["/api/users", userId],
-    queryFn: () => fetch(`/api/users/${userId}`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/users/${userId}`), { credentials: "include" }).then(r => r.json()),
     staleTime: 10000,
     refetchOnWindowFocus: false,
     retry: 1,
@@ -442,7 +442,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
  const { data: userPosts, isLoading: postsLoading } = useQuery<any[]>({
     queryKey: ["/api/posts", "user", userId],
     queryFn: async () => {
-      const r = await fetch(`/api/posts?userId=${userId}`, { credentials: "include" });
+      const r = await fetch(apiUrl(`/api/posts?userId=${userId}`), { credentials: "include" });
       const data = await r.json();
       return Array.isArray(data) ? data : [];
     },
@@ -450,12 +450,12 @@ function OtherUserProfile({ userId }: { userId: string }) {
 
   const { data: followStatus } = useQuery<{ following: boolean }>({
     queryKey: ["/api/users", userId, "follow-status"],
-    queryFn: () => fetch(`/api/users/${userId}/follow-status`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/users/${userId}/follow-status`), { credentials: "include" }).then(r => r.json()),
   });
 
   const { data: blockStatus } = useQuery<{ blocked: boolean }>({
     queryKey: ["/api/users", userId, "block-status"],
-    queryFn: () => fetch(`/api/users/${userId}/block-status`, { credentials: "include" }).then(r => r.json()),
+    queryFn: () => fetch(apiUrl(`/api/users/${userId}/block-status`), { credentials: "include" }).then(r => r.json()),
   });
 
   const [followLoading, setFollowLoading] = useState(false);
@@ -482,7 +482,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
     setFollowLoading(true);
     try {
       const method = isFollowing ? "DELETE" : "POST";
-      await fetch(`/api/users/${userId}/follow`, { method, credentials: "include" });
+      await fetch(apiUrl(`/api/users/${userId}/follow`), { method, credentials: "include" });
       qc.invalidateQueries({ queryKey: ["/api/users", userId, "follow-status"] });
       qc.invalidateQueries({ queryKey: ["/api/users", userId] });
       if (me?.id) qc.invalidateQueries({ queryKey: ["/api/users", me.id] });
@@ -498,7 +498,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
 
   const blockMutation = useMutation({
     mutationFn: () =>
-      fetch(`/api/users/${userId}/block`, { method: "POST", credentials: "include" }).then((r) => {
+      fetch(apiUrl(`/api/users/${userId}/block`), { method: "POST", credentials: "include" }).then((r) => {
         if (!r.ok) throw new Error("Block failed");
         return r.json();
       }),
@@ -513,7 +513,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
 
   const unblockMutation = useMutation({
     mutationFn: () =>
-      fetch(`/api/users/${userId}/block`, { method: "DELETE", credentials: "include" }).then((r) => {
+      fetch(apiUrl(`/api/users/${userId}/block`), { method: "DELETE", credentials: "include" }).then((r) => {
         if (!r.ok) throw new Error("Unblock failed");
         return r.json();
       }),
@@ -528,7 +528,7 @@ function OtherUserProfile({ userId }: { userId: string }) {
   const startMessage = async () => {
     setMsgLoading(true);
     try {
-      const res = await fetch("/api/direct-chats", {
+      const res = await fetch(apiUrl("/api/direct-chats"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -853,7 +853,7 @@ function OwnProfile() {
 const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   queryKey: ["/api/user/saved"],
   queryFn: async () => {
-    const res = await fetch("/api/user/saved", { credentials: "include" });
+    const res = await fetch(apiUrl("/api/user/saved"), { credentials: "include" });
     if (!res.ok) throw new Error("Failed to fetch saved posts");
     const data = await res.json();
     return Array.isArray(data) ? data : [];
@@ -870,7 +870,7 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   const { data: coinData } = useQuery<{ balance: number }>({
     queryKey: ["/api/coins/balance"],
     queryFn: async () => {
-      const res = await fetch("/api/coins/balance", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/coins/balance"), { credentials: "include" });
       return res.json();
     },
     enabled: !params.id,
@@ -879,7 +879,7 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   const { data: earningsData } = useQuery<{ gifts: any[]; totalEarnedCoins: number }>({
     queryKey: ["/api/users", user?.id, "gifts-received"],
     queryFn: async () => {
-      const res = await fetch(`/api/users/${user?.id}/gifts-received`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/users/${user?.id}/gifts-received`), { credentials: "include" });
       return res.json();
     },
     enabled: !params.id && !!user?.id,
@@ -888,7 +888,7 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   const { data: withdrawals = [], isLoading: withdrawalsLoading } = useQuery<any[]>({
     queryKey: ["/api/withdrawals/mine"],
     queryFn: async () => {
-      const res = await fetch("/api/withdrawals/mine", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/withdrawals/mine"), { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -953,7 +953,7 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
 
   const deleteBookMutation = useMutation({
     mutationFn: async (bookId: number) => {
-      const res = await fetch(`/api/books/${bookId}`, {
+      const res = await fetch(apiUrl(`/api/books/${bookId}`), {
         method: "DELETE",
         credentials: "include",
       });
@@ -980,7 +980,7 @@ const { data: savedPostsData, isLoading: savedLoading } = useQuery<any[]>({
   // "l?.filter is not a function" whenever the API returned something
   // other than a plain array, e.g. an error object or undefined) ──
   const myPosts = (Array.isArray(posts) ? posts : [])
-    .filter((p: any) => String(p.userId) === String(user?.id) && p.type !== "story")
+    .filter((p: any) => String(p.userId) === String(user?.id) && p.type !== "story" && p.type !== "live")
     .slice()
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -992,13 +992,82 @@ const engagementRate = totalViews > 0 ? (((totalLikes + totalComments) / totalVi
 
 const photoCount = myPosts.filter((p: any) => p.type === "post" || p.type === "image").length;
 const videoCount = myPosts.filter((p: any) => p.type === "video" || p.type === "reel").length;
-const liveCount = myPosts.filter((p: any) => p.type === "live").length;
-const totalContentCount = photoCount + videoCount + liveCount || 1;
+const totalContentCount = photoCount + videoCount || 1;
 const photoPercent = Math.round((photoCount / totalContentCount) * 100);
 const videoPercent = Math.round((videoCount / totalContentCount) * 100);
-const livePercent = Math.round((liveCount / totalContentCount) * 100);
   const [settingsPanel, setSettingsPanel] = useState<string | null>(null);
   const [accountPrivate, setAccountPrivate] = useState(false);
+
+  // ── Security → Change Password ──
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/change-password", {
+        currentPassword: currentPasswordInput,
+        newPassword: newPasswordInput,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ description: "Password updated." });
+      setCurrentPasswordInput("");
+      setNewPasswordInput("");
+      setConfirmPasswordInput("");
+      setSettingsPanel(null);
+    },
+    onError: (err: any) => {
+      toast({ variant: "destructive", description: err?.message || "Could not update password." });
+    },
+  });
+
+  // ── Security → Devices / Login Activity (same data, both entry points) ──
+  const { data: loginSessions = [], isLoading: sessionsLoading } = useQuery<any[]>({
+    queryKey: ["/api/sessions"],
+    enabled: settingsPanel === "Devices" || settingsPanel === "LoginActivity",
+  });
+  const revokeSessionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/sessions/${id}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/sessions"] });
+      toast({ description: "Device signed out." });
+    },
+    onError: (err: any) => {
+      toast({ variant: "destructive", description: err?.message || "Could not sign out that device." });
+    },
+  });
+
+  // ── Ads → Ad Topics / Hide Advertiser / Reset ──
+  const [newAdTopicInput, setNewAdTopicInput] = useState("");
+  const [newHiddenAdvertiserInput, setNewHiddenAdvertiserInput] = useState("");
+  const { data: adPrefs = [] } = useQuery<any[]>({
+    queryKey: ["/api/ad-preferences"],
+    enabled: settingsPanel === "AdTopics" || settingsPanel === "HideAdvertiser",
+  });
+  const addAdPrefMutation = useMutation({
+    mutationFn: async (vars: { type: string; value: string }) => {
+      const res = await apiRequest("POST", "/api/ad-preferences", vars);
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/ad-preferences"] }),
+    onError: (err: any) => toast({ variant: "destructive", description: err?.message || "Could not save." }),
+  });
+  const removeAdPrefMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/ad-preferences/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/ad-preferences"] }),
+  });
+  const resetAdPrefsMutation = useMutation({
+    mutationFn: async () => {
+      await Promise.all(adPrefs.map((p: any) => apiRequest("DELETE", `/api/ad-preferences/${p.id}`)));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/ad-preferences"] });
+      toast({ description: "Ad preferences reset." });
+    },
+  });
 
   // ── Own-profile ☰ menu (Share Profile / Blocked Accounts / Remove Account) ──
   const [ownMenuOpen, setOwnMenuOpen] = useState(false);
@@ -1133,7 +1202,7 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
   try {
     const formData = new FormData();
     formData.append("image", file);
-    const res = await fetch("/api/upload/profile-image", {
+    const res = await fetch(apiUrl("/api/upload/profile-image"), {
       method: "POST",
       body: formData,
       credentials: "include",
@@ -1423,7 +1492,7 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
     );
     if (!confirmed) return;
     try {
-      const res = await fetch("/api/profile/delete", {
+      const res = await fetch(apiUrl("/api/profile/delete"), {
         method: "DELETE",
         credentials: "include",
       });
@@ -1565,7 +1634,6 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
           {[
             { type: "Photos", count: photoCount, percent: `${photoPercent}%` },
             { type: "Videos", count: videoCount, percent: `${videoPercent}%` },
-            { type: "Live", count: liveCount, percent: `${livePercent}%` },
           ].map((item) => (
             <div key={item.type}>
               <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-400">
@@ -1728,11 +1796,88 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                   {/* ── SUB: SECURITY (new) ── */}
                   {settingsPanel === "Security" && (
                     <div className="p-5 space-y-3">
-                      <SettingRow icon={KeyRound} label="Change Password" sub="Password management" />
+                      <SettingRow icon={KeyRound} label="Change Password" sub="Password management" onClick={() => setSettingsPanel("ChangePassword")} />
                       <ToggleRow icon={Fingerprint} label="2FA" sub="Extra login security" checked={twoFA} onCheckedChange={setTwoFA} />
-                      <SettingRow icon={HistoryIcon} label="Login Activity" sub="View recent logins" />
-                      <SettingRow icon={Smartphone} label="Devices" sub="Manage logged-in devices" />
+                      <SettingRow icon={HistoryIcon} label="Login Activity" sub="View recent logins" onClick={() => setSettingsPanel("LoginActivity")} />
+                      <SettingRow icon={Smartphone} label="Devices" sub="Manage logged-in devices" onClick={() => setSettingsPanel("Devices")} />
                       <ToggleRow icon={ShieldAlert} label="Login Alerts" sub="New/suspicious login alerts" checked={loginAlerts} onCheckedChange={setLoginAlerts} />
+                    </div>
+                  )}
+
+                  {settingsPanel === "ChangePassword" && (
+                    <div className="p-5 space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Current password</Label>
+                        <input
+                          type="password"
+                          value={currentPasswordInput}
+                          onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                          className="w-full rounded-lg border border-border/40 bg-background px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">New password</Label>
+                        <input
+                          type="password"
+                          value={newPasswordInput}
+                          onChange={(e) => setNewPasswordInput(e.target.value)}
+                          className="w-full rounded-lg border border-border/40 bg-background px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Confirm new password</Label>
+                        <input
+                          type="password"
+                          value={confirmPasswordInput}
+                          onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                          className="w-full rounded-lg border border-border/40 bg-background px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={
+                          changePasswordMutation.isPending ||
+                          !currentPasswordInput ||
+                          newPasswordInput.length < 6 ||
+                          newPasswordInput !== confirmPasswordInput
+                        }
+                        onClick={() => changePasswordMutation.mutate()}
+                      >
+                        {changePasswordMutation.isPending ? "Updating..." : "Update password"}
+                      </Button>
+                      {newPasswordInput && newPasswordInput !== confirmPasswordInput && (
+                        <p className="text-xs text-destructive">Passwords do not match.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {(settingsPanel === "Devices" || settingsPanel === "LoginActivity") && (
+                    <div className="p-5 space-y-3">
+                      {sessionsLoading && (
+                        <p className="text-sm text-muted-foreground">Loading...</p>
+                      )}
+                      {!sessionsLoading && loginSessions.length === 0 && (
+                        <p className="text-sm text-muted-foreground">No login sessions found.</p>
+                      )}
+                      {loginSessions.map((s: any) => (
+                        <div key={s.id} className="flex items-center justify-between rounded-xl border border-border/40 px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium">{s.deviceInfo || "Unknown device"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {s.location || s.ipAddress || "Unknown location"} · {formatDistanceToNow(new Date(s.lastActive), { addSuffix: true })}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            disabled={revokeSessionMutation.isPending}
+                            onClick={() => revokeSessionMutation.mutate(s.id)}
+                          >
+                            Sign out
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -1770,10 +1915,77 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                   {settingsPanel === "AdsPrefs" && (
                     <div className="p-5 space-y-3">
                       <ToggleRow icon={Megaphone} label="Personalized Ads" sub="Interest-based advertising" checked={true} onCheckedChange={() => {}} />
-                      <SettingRow icon={Grid} label="Ad Topics" sub="Manage preferred ad categories" />
-                      <SettingRow icon={EyeOff} label="Hide Advertiser" sub="Hide unwanted advertisers" />
+                      <SettingRow icon={Grid} label="Ad Topics" sub="Manage preferred ad categories" onClick={() => setSettingsPanel("AdTopics")} />
+                      <SettingRow icon={EyeOff} label="Hide Advertiser" sub="Hide unwanted advertisers" onClick={() => setSettingsPanel("HideAdvertiser")} />
                       <SettingRow icon={HelpCircle} label="Why This Ad?" sub="Ad explanation" />
-                      <SettingRow icon={RefreshCw} label="Reset Ad Preferences" sub="Reset ad personalization" />
+                      <SettingRow
+                        icon={RefreshCw}
+                        label="Reset Ad Preferences"
+                        sub="Reset ad personalization"
+                        onClick={() => resetAdPrefsMutation.mutate()}
+                      />
+                    </div>
+                  )}
+
+                  {settingsPanel === "AdTopics" && (
+                    <div className="p-5 space-y-3">
+                      <div className="flex gap-2">
+                        <input
+                          value={newAdTopicInput}
+                          onChange={(e) => setNewAdTopicInput(e.target.value)}
+                          placeholder="e.g. Fashion, Sports, Tech"
+                          className="flex-1 rounded-lg border border-border/40 bg-background px-3 py-2 text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={!newAdTopicInput.trim() || addAdPrefMutation.isPending}
+                          onClick={() => {
+                            addAdPrefMutation.mutate({ type: "topic", value: newAdTopicInput.trim() });
+                            setNewAdTopicInput("");
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        {adPrefs.filter((p: any) => p.type === "topic").map((p: any) => (
+                          <div key={p.id} className="flex items-center justify-between rounded-xl border border-border/40 px-4 py-2">
+                            <span className="text-sm">{p.value}</span>
+                            <Button size="sm" variant="ghost" onClick={() => removeAdPrefMutation.mutate(p.id)}>Remove</Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {settingsPanel === "HideAdvertiser" && (
+                    <div className="p-5 space-y-3">
+                      <div className="flex gap-2">
+                        <input
+                          value={newHiddenAdvertiserInput}
+                          onChange={(e) => setNewHiddenAdvertiserInput(e.target.value)}
+                          placeholder="Advertiser name"
+                          className="flex-1 rounded-lg border border-border/40 bg-background px-3 py-2 text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={!newHiddenAdvertiserInput.trim() || addAdPrefMutation.isPending}
+                          onClick={() => {
+                            addAdPrefMutation.mutate({ type: "advertiser", value: newHiddenAdvertiserInput.trim() });
+                            setNewHiddenAdvertiserInput("");
+                          }}
+                        >
+                          Hide
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        {adPrefs.filter((p: any) => p.type === "advertiser").map((p: any) => (
+                          <div key={p.id} className="flex items-center justify-between rounded-xl border border-border/40 px-4 py-2">
+                            <span className="text-sm">{p.value}</span>
+                            <Button size="sm" variant="ghost" onClick={() => removeAdPrefMutation.mutate(p.id)}>Unhide</Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -1967,135 +2179,16 @@ const livePercent = Math.round((liveCount / totalContentCount) * 100);
                     </div>
                   )}
 
-                  {/* ── SUB: WITHDRAW ── */}
+                  {/* ── SUB: WITHDRAW — disabled, policy: no manual payout flow ── */}
                   {settingsPanel === "Withdraw" && (
-                    <div className="p-5 space-y-4">
-                      <div className="rounded-xl border border-white/10 bg-zinc-900/70 p-3 flex items-center justify-between">
-                        <span className="text-[11px] text-zinc-500">Available</span>
-                        <span className="text-sm font-black text-white">💰 {(coinData?.balance ?? 0).toLocaleString()} coins</span>
+                    <div className="p-8 flex flex-col items-center justify-center text-center gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                        <DollarSign className="w-7 h-7 text-emerald-400" />
                       </div>
-                      <p className="text-[10px] text-zinc-600 -mt-2">Minimum withdrawal: {MIN_WITHDRAW_COINS} coins (₹{(MIN_WITHDRAW_COINS / COINS_PER_RUPEE).toFixed(2)})</p>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Coins to withdraw</Label>
-                        <Input
-                          type="number"
-                          value={withdrawCoins}
-                          onChange={(e) => setWithdrawCoins(e.target.value)}
-                          placeholder={`e.g. ${MIN_WITHDRAW_COINS}`}
-                          className="bg-white/5 border-white/10 rounded-xl h-11"
-                        />
-                        <div className="flex gap-2 pt-1">
-                          {[MIN_WITHDRAW_COINS, 1000, 2500].map((amt) => (
-                            <button
-                              key={amt}
-                              onClick={() => setWithdrawCoins(String(amt))}
-                              className="flex-1 h-8 rounded-lg bg-white/5 border border-white/10 text-[11px] font-semibold text-zinc-300 hover:bg-white/10"
-                            >
-                              {amt}
-                            </button>
-                          ))}
-                        </div>
-                        {Number(withdrawCoins) > 0 && Number(withdrawCoins) < MIN_WITHDRAW_COINS && (
-                          <p className="text-[11px] text-orange-400 pt-1">Minimum withdrawal is {MIN_WITHDRAW_COINS} coins</p>
-                        )}
-                        {Number(withdrawCoins) >= MIN_WITHDRAW_COINS && (
-                          <p className="text-[11px] text-emerald-400 font-semibold pt-1">
-                            ≈ ₹{(Number(withdrawCoins) / COINS_PER_RUPEE).toFixed(2)}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-1">Payout method</p>
-                        <div className="flex gap-2">
-                          {(["upi", "bank"] as const).map((m) => (
-                            <button
-                              key={m}
-                              onClick={() => setWithdrawMethod(m)}
-                              className={`flex-1 h-10 rounded-xl text-sm font-semibold transition-colors ${
-                                withdrawMethod === m ? "bg-white text-black" : "bg-white/5 text-zinc-300 border border-white/10"
-                              }`}
-                            >
-                              {m === "upi" ? "UPI" : "Bank Transfer"}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {withdrawMethod === "upi" ? (
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">UPI ID</Label>
-                          <Input
-                            value={withdrawUpiId}
-                            onChange={(e) => setWithdrawUpiId(e.target.value)}
-                            placeholder="yourname@upi"
-                            className="bg-white/5 border-white/10 rounded-xl h-11"
-                          />
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Account Holder Name</Label>
-                            <Input value={withdrawBankName} onChange={(e) => setWithdrawBankName(e.target.value)} className="bg-white/5 border-white/10 rounded-xl h-11" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">Account Number</Label>
-                            <Input value={withdrawBankAcc} onChange={(e) => setWithdrawBankAcc(e.target.value)} className="bg-white/5 border-white/10 rounded-xl h-11" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-zinc-400 uppercase tracking-wide font-bold">IFSC Code</Label>
-                            <Input value={withdrawBankIfsc} onChange={(e) => setWithdrawBankIfsc(e.target.value.toUpperCase())} className="bg-white/5 border-white/10 rounded-xl h-11 font-mono" />
-                          </div>
-                        </div>
-                      )}
-
-                      <button
-                        onClick={() => withdrawMutation.mutate()}
-                        disabled={
-                          withdrawMutation.isPending ||
-                          !withdrawCoins ||
-                          Number(withdrawCoins) < MIN_WITHDRAW_COINS ||
-                          Number(withdrawCoins) > (coinData?.balance ?? 0) ||
-                          (withdrawMethod === "upi" ? !withdrawUpiId.trim() : !withdrawBankAcc.trim() || !withdrawBankIfsc.trim() || !withdrawBankName.trim())
-                        }
-                        className="w-full h-12 rounded-xl font-bold text-sm text-white disabled:opacity-40"
-                        style={{ background: "linear-gradient(135deg, #7c3aed, #db2777)", boxShadow: "0 0 20px rgba(124,58,237,0.4)" }}
-                      >
-                        {withdrawMutation.isPending ? "Submitting…" : "Request Withdrawal"}
-                      </button>
-
-                      <div className="pt-2">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 pb-2">History</p>
-                        {withdrawalsLoading ? (
-                          <div className="space-y-2">
-                            {Array(2).fill(0).map((_, i) => <div key={i} className="h-14 rounded-xl bg-white/5 animate-pulse" />)}
-                          </div>
-                        ) : withdrawals.length === 0 ? (
-                          <p className="text-[11px] text-zinc-600 text-center py-6">No withdrawal requests yet.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {withdrawals.map((w: any) => {
-                              const statusStyle: Record<string, string> = {
-                                pending: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-                                paid: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-                                rejected: "bg-red-500/15 text-red-400 border-red-500/30",
-                              };
-                              return (
-                                <div key={w.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/30">
-                                  <div>
-                                    <p className="text-sm font-semibold text-white">₹{Number(w.amount_inr).toFixed(2)}</p>
-                                    <p className="text-[10px] text-zinc-500">{w.coins} coins · {w.method?.toUpperCase()}</p>
-                                  </div>
-                                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${statusStyle[w.status] || statusStyle.pending}`}>
-                                    {w.status}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
+                      <p className="text-sm font-bold text-white">Upcoming Feature</p>
+                      <p className="text-[12px] text-zinc-500 max-w-[240px]">
+                        Withdrawals are coming soon. We're setting this up properly — check back later.
+                      </p>
                     </div>
                   )}
 

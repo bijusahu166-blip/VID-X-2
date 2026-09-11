@@ -49,3 +49,12 @@ export const isAuthenticated: RequestHandler = (req, res, next) => {
   }
   res.status(401).json({ message: "Unauthorized" });
 };
+
+// Guest-mode support: never blocks. Read-only routes (feed, stories) use
+// this so logged-out visitors — including Play Store / Uptodown reviewers —
+// can see content before signing in. Handlers get req.session.userId as
+// undefined for guests and must treat that as "no personal data" (no
+// hasLiked/hasSaved, no private posts), never as an error.
+export const optionalAuth: RequestHandler = (_req, _res, next) => {
+  next();
+};
