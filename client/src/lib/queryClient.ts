@@ -6,10 +6,12 @@ import { Capacitor } from "@capacitor/core";
 // real server, and fail silently. Every request needs this prefix.
 const API_BASE = Capacitor.isNativePlatform() ? "https://iqpartner.xyz" : "";
 
-function withApiBase(url: string): string {
+export function withApiBase(url: string): string {
   if (/^https?:\/\//i.test(url)) return url; // already absolute, leave it
   return `${API_BASE}${url}`;
 }
+// Alias — shorter name for use across the app's many raw fetch() calls.
+export const apiUrl = withApiBase;
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
